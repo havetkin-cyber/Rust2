@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -48,6 +49,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
@@ -58,11 +61,20 @@ fun main() {
     ChatJadro.init()
     ObrazkyJadro.init()
     Aktualizacie.skontroluj()
+    Ovladac.spusti()
     application {
         val stav = rememberWindowState(placement = WindowPlacement.Maximized, size = DpSize(1280.dp, 800.dp))
         Window(onCloseRequest = ::exitApplication, title = "Alexia AI", state = stav, onPreviewKeyEvent = {
             // Esc = späť
-            if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { naspat?.invoke(); naspat != null } else false
+            if (it.type != KeyEventType.KeyDown) false
+            else when {
+                it.key == Key.Escape -> { naspat?.invoke(); naspat != null }
+                it.key == Key.Tab && it.isCtrlPressed -> { prepni?.invoke(if (it.isShiftPressed) -1 else 1); true }
+                it.key == Key.PageDown -> { Ovladac.posun.tryEmit(500f); true }
+                it.key == Key.PageUp -> { Ovladac.posun.tryEmit(-500f); true }
+                it.key in listOf(Key.F1, Key.F2, Key.F3, Key.F4, Key.F5) -> { chodNa?.invoke(listOf(Key.F1, Key.F2, Key.F3, Key.F4, Key.F5).indexOf(it.key)); true }
+                else -> false
+            }
         }) {
             AlexiaTema { Appka() }
         }
@@ -71,13 +83,28 @@ fun main() {
 
 /** čo urobí Esc (späť do chatu) */
 private var naspat: (() -> Unit)? = null
+/** prepnutie záložky o +1 / −1 (Ctrl+Tab, L1/R1, L2/R2) alebo priamo F1–F5 */
+private var prepni: ((Int) -> Unit)? = null
+private var chodNa: ((Int) -> Unit)? = null
 
-private enum class Obrazovka { CHAT, MODELY, NASTAVENIA, OBRAZKY, VYLEPSIT }
+private enum class Obrazovka { CHAT, OBRAZKY, VYLEPSIT, MODELY, NASTAVENIA }
 
 @Composable
 private fun Appka() {
     var obrazovka by remember { mutableStateOf(Obrazovka.CHAT) }
     naspat = if (obrazovka != Obrazovka.CHAT) ({ obrazovka = Obrazovka.CHAT }) else null
+    val vsetky = Obrazovka.entries
+    prepni = { d -> obrazovka = vsetky[(obrazovka.ordinal + d + vsetky.size) % vsetky.size] }
+    chodNa = { i -> obrazovka = vsetky[i] }
+    LaunchedEffect(Unit) {
+        Ovladac.akcie.collect { a ->
+            when (a) {
+                Ovladac.Akcia.DALSIA -> prepni?.invoke(1)
+                Ovladac.Akcia.PREDOSLA -> prepni?.invoke(-1)
+                Ovladac.Akcia.SPAT -> naspat?.invoke()
+            }
+        }
+    }
     val snack = remember { SnackbarHostState() }
     val oznam = Platforma.oznam
     LaunchedEffect(oznam) { oznam?.let { snack.showSnackbar(it); Platforma.oznam = null } }
@@ -100,7 +127,9 @@ private fun Appka() {
     ) {
         // na širokej obrazovke obsah v strede, aby sa dobre čítal
         Aktualizacia()
-        Box(Modifier.fillMaxHeight().widthIn(max = 960.dp).fillMaxWidth().align(Alignment.TopCenter)) {
+        Column(Modifier.fillMaxHeight().widthIn(max = 960.dp).fillMaxWidth().align(Alignment.TopCenter)) {
+        Zalozky(obrazovka) { obrazovka = it }
+        Box(Modifier.weight(1f)) {
         when (obrazovka) {
             Obrazovka.CHAT -> ChatObrazovka(
                 naModely = { obrazovka = Obrazovka.MODELY },
@@ -114,9 +143,53 @@ private fun Appka() {
             Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
         }
         }
+        }
         SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(16.dp))
         Platforma.ziadostOVyber?.let { z -> VyberSuboru(z) { Platforma.ziadostOVyber = null } }
     }
+}
+
+// ---------------------------------------------------------------- záložky (ako v hre: L1/R1)
+
+@Composable
+private fun Zalozky(aktivna: Obrazovka, zvol: (Obrazovka) -> Unit) {
+    val polozky = listOf(
+        Triple(Obrazovka.CHAT, Icons.Default.Forum, "chat"),
+        Triple(Obrazovka.OBRAZKY, Icons.Default.Image, "obrazky"),
+        Triple(Obrazovka.VYLEPSIT, Icons.Default.AutoFixHigh, "vylepsit_kratko"),
+        Triple(Obrazovka.MODELY, Icons.Default.Memory, "modely"),
+        Triple(Obrazovka.NASTAVENIA, Icons.Default.Tune, "nastavenia"),
+    )
+    val vsetky = Obrazovka.entries
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Tlacidlo("L1") { zvol(vsetky[(aktivna.ordinal - 1 + vsetky.size) % vsetky.size]) }
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
+            polozky.forEach { (o, ikona, kluc) ->
+                val je = o == aktivna
+                Row(
+                    Modifier.padding(horizontal = 3.dp).clip(RoundedCornerShape(50))
+                        .background(if (je) Farby.prechod else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)))
+                        .clickable { zvol(o) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(ikona, null, tint = if (je) Color.White else Farby.tlmene, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(T(kluc), color = if (je) Color.White else Farby.tlmene, fontSize = 14.sp, fontWeight = if (je) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                }
+            }
+        }
+        Tlacidlo("R1") { zvol(vsetky[(aktivna.ordinal + 1) % vsetky.size]) }
+    }
+}
+
+/** malé „tlačidlo ovládača“ na okraji záložiek */
+@Composable
+private fun Tlacidlo(nazov: String, klik: () -> Unit) {
+    Box(
+        Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, Farby.okraj, RoundedCornerShape(8.dp)).background(Farby.plocha)
+            .clickable(onClick = klik).padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(nazov, color = Farby.text, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
 }
 
 // ---------------------------------------------------------------- spoločné prvky
@@ -187,6 +260,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
     val o = ObrazkyJadro
     val posledny = j.spravy.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(j.spravy.size, posledny) { if (j.spravy.isNotEmpty()) zoznam.scrollToItem(j.spravy.lastIndex, Int.MAX_VALUE / 2) }
+    PosunOvladacom(zoznam)
 
     Column(Modifier.fillMaxSize()) {
         val pod = when (j.stav) {
@@ -197,10 +271,6 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
         }
         Hlavicka(T("app_name"), pod) {
             IconButton(onClick = { j.novyChat() }, enabled = j.spravy.isNotEmpty()) { Icon(Icons.Default.AddComment, T("novy_chat"), tint = Farby.text) }
-            IconButton(onClick = naVylepsit) { Icon(Icons.Default.AutoFixHigh, T("vylepsit"), tint = Farby.text) }
-            IconButton(onClick = naObrazky) { Icon(Icons.Default.Image, T("obrazky"), tint = Farby.text) }
-            IconButton(onClick = naModely) { Icon(Icons.Default.Memory, T("modely"), tint = Farby.text) }
-            IconButton(onClick = naNastavenia) { Icon(Icons.Default.Tune, T("nastavenia"), tint = Farby.text) }
         }
 
         Box(Modifier.weight(1f)) {
@@ -214,6 +284,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                         else BublinaAI(s.text, pise = j.generuje && i == j.spravy.lastIndex, posledna = i == j.spravy.lastIndex && !j.generuje)
                     }
                 }
+                Posuvnik(zoznam)
             }
         }
 
@@ -452,7 +523,7 @@ private fun ModelyObrazovka(spat: () -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("modely"), spat = spat)
-        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PosuvnyZoznam {
             priebeh?.let { p ->
                 item {
                     Karta {
@@ -549,7 +620,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
     fun uloz() { n.uloz(); j.aktualizujVzorkovanie() }
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("nastavenia"), spat = spat)
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PosuvnyStlpec {
             Karta {
                 Text(T("nast_system"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
@@ -693,7 +764,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     }
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("obrazky"), pod, spat = spat)
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PosuvnyStlpec {
             priebehStahovania?.let { p ->
                 Karta {
                     Text("${T("stahujem")} ${(p * 100).roundToInt()} %", color = Farby.text, fontWeight = FontWeight.SemiBold)
@@ -898,7 +969,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("vylepsit"), spat = spat)
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PosuvnyStlpec {
             Karta {
                 if (obrVstup == null) {
                     if (vstup != null) { Text(T("vyl_neotvori", vstup.name), color = Farby.cervena, fontSize = 13.sp); Spacer(Modifier.height(6.dp)) }

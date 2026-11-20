@@ -75,7 +75,8 @@ fun VyberSuboru(z: ZiadostOVyber, zavri: () -> Unit) {
             }
             Box(Modifier.weight(1f)) {
                 if (polozky.isEmpty()) Text(T("pr_prazdny", z.pripony.joinToString(", ") { it.uppercase() }), color = Farby.tlmene, modifier = Modifier.padding(16.dp))
-                LazyColumn {
+                val st = androidx.compose.foundation.lazy.rememberLazyListState(); PosunOvladacom(st)
+                LazyColumn(state = st) {
                     items(polozky, key = { it.absolutePath }) { f ->
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {
@@ -91,6 +92,7 @@ fun VyberSuboru(z: ZiadostOVyber, zavri: () -> Unit) {
                         }
                     }
                 }
+                Posuvnik(st)
             }
         }
     }

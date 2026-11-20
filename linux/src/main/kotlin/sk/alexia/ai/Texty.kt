@@ -14,6 +14,8 @@ object T {
     }
 
     private val sk = mapOf(
+        "chat" to "Chat",
+        "vylepsit_kratko" to "Vylepšiť",
         "chat_obr_rezim" to "Kresliť obrázok",
         "chat_obr_popis" to "Popíš obrázok… (napr. mačka na streche pri západe slnka)",
         "chat_obr_ziadny" to "Najprv si v Obrázkoch stiahni a vyber obrázkový model.",
@@ -125,6 +127,8 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "chat" to "Chat",
+        "vylepsit_kratko" to "Enhance",
         "chat_obr_rezim" to "Draw an image",
         "chat_obr_popis" to "Describe the image… (e.g. a cat on a roof at sunset)",
         "chat_obr_ziadny" to "First download and pick an image model in Images.",

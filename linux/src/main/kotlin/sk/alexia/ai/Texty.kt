@@ -14,6 +14,18 @@ object T {
     }
 
     private val sk = mapOf(
+        "chat_obr_rezim" to "Kresliť obrázok",
+        "chat_obr_popis" to "Popíš obrázok… (napr. mačka na streche pri západe slnka)",
+        "chat_obr_ziadny" to "Najprv si v Obrázkoch stiahni a vyber obrázkový model.",
+        "chat_obr_nacitavam" to "Načítavam obrázkový model…",
+        "chat_obr_kreslim" to "Kreslím… %1\$d %%",
+        "chat_obr_chyba" to "Obrázok sa nenašiel (bol zmazaný).",
+        "vyl_neotvori" to "Fotku %1\$s sa nepodarilo otvoriť. Skús JPG alebo PNG.",
+        "pr_obrazky" to "Obrázky",
+        "pr_stiahnute" to "Stiahnuté",
+        "pr_plocha" to "Plocha",
+        "pr_domov" to "Domov",
+        "pr_prazdny" to "Tu nie sú priečinky ani súbory (%1\$s).",
         "obr_suborov" to "%1\$d súbory",
         "ram_na_hrane" to "Na hrane 16 GB – zavri ostatné appky, pobeží pomalšie.",
         "akt_nadpis" to "Nová verzia %1\$s",
@@ -113,6 +125,18 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "chat_obr_rezim" to "Draw an image",
+        "chat_obr_popis" to "Describe the image… (e.g. a cat on a roof at sunset)",
+        "chat_obr_ziadny" to "First download and pick an image model in Images.",
+        "chat_obr_nacitavam" to "Loading image model…",
+        "chat_obr_kreslim" to "Drawing… %1\$d %%",
+        "chat_obr_chyba" to "Image not found (it was deleted).",
+        "vyl_neotvori" to "Could not open %1\$s. Try JPG or PNG.",
+        "pr_obrazky" to "Pictures",
+        "pr_stiahnute" to "Downloads",
+        "pr_plocha" to "Desktop",
+        "pr_domov" to "Home",
+        "pr_prazdny" to "No folders or files here (%1\$s).",
         "obr_suborov" to "%1\$d files",
         "ram_na_hrane" to "At the limit of 16 GB – close other apps, it will run slower.",
         "akt_nadpis" to "New version %1\$s",

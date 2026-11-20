@@ -72,10 +72,10 @@ object ObrazkyJadro {
     }
 
     /** načíta model; jazykový model sa najprv uvoľní, aby sa zmestili do pamäte */
-    fun nacitaj(cesta: String) {
-        if (nacitany == cesta && stav == StavModelu.PRIPRAVENY) return
+    fun nacitaj(cesta: String, uvolnitChat: Boolean = true) {
+        if (nacitany == cesta && (stav == StavModelu.PRIPRAVENY || stav == StavModelu.NACITAVA)) return
         aktivnyModel = cesta
-        ChatJadro.uvolniPamat()
+        if (uvolnitChat) ChatJadro.uvolniPamat()
         stav = StavModelu.NACITAVA; chyba = ""
         val vl = ChatJadro.nastavenia.vlakna
         vlakno.execute {
@@ -103,6 +103,35 @@ object ObrazkyJadro {
 
     fun generuj(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float) {
         if (generuje || stav != StavModelu.PRIPRAVENY || prompt.isBlank()) return
+        spust(prompt, negativny, rozmer, kroky, cfg) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
+    }
+
+    /** veľkosť obrázkového modelu na disku */
+    private fun velkost(cesta: String): Long =
+        Katalog.obrazky.find { "sada:" + it.id == cesta }?.let { s -> s.subory.values.sumOf { suborSady(s, it).length() } } ?: File(cesta).length()
+
+    /**
+     * Obrázok pre chat. Ak sa jazykový aj obrázkový model zmestia spolu do pamäte, ostanú načítané oba (rýchle).
+     * Inak sa chat na chvíľu uvoľní a po obrázku sa znova načíta.
+     */
+    fun nakresliDoChatu(popis: String, hotovo: (File?, String) -> Unit) {
+        val cesta = aktivnyModel
+        val mam = cesta != null && (aktivnaSada()?.let { mamSadu(it) } ?: File(cesta).exists())
+        if (!mam) { hotovo(null, T("chat_obr_ziadny")); return }
+        if (generuje) return
+        val spolu = ChatJadro.velkostNacitaneho() + velkost(cesta!!)
+        val uvolnit = spolu > LIMIT_SPOLU
+        if (uvolnit) ChatJadro.uvolniPamat()
+        nacitaj(cesta, uvolnitChat = false)
+        val s = aktivnaSada()
+        spust(popis, "", s?.rozmer ?: 512, s?.kroky ?: 20, s?.cfg ?: 7f) { f, e ->
+            hotovo(f, e)
+            if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
+        }
+    }
+
+    /** spustí tvorbu na vlákne sd (po prípadnom načítaní modelu, ktoré je v rade pred ňou) */
+    private fun spust(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
         val seed = (Math.random() * Int.MAX_VALUE).toLong()
         // priebeh čítame z iného vlákna, kým generovanie beží
@@ -116,25 +145,31 @@ object ObrazkyJadro {
             }
         }.apply { isDaemon = true }.start()
         vlakno.execute {
-            val r = IntArray(2)
-            val metoda = aktivnaSada()?.metoda ?: "euler_a"
-            val px = Sd.generujEx(h, prompt.trim(), negativny.trim(), rozmer, rozmer, kroky, cfg, seed, metoda, r)
             var subor: File? = null; var e = ""
-            if (px != null) {
-                runCatching {
-                    val img = BufferedImage(r[0], r[1], BufferedImage.TYPE_INT_RGB)
-                    img.setRGB(0, 0, r[0], r[1], px, 0, r[0])
-                    subor = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
-                    ImageIO.write(img, "png", subor!!)
-                }.onFailure { e = it.message ?: "Obrázok sa nepodarilo uložiť" }
-            } else e = Sd.chyba()
+            if (h == 0L) e = Sd.chyba().ifBlank { "Obrázkový model sa nenačítal" }
+            else {
+                val r = IntArray(2)
+                val metoda = aktivnaSada()?.metoda ?: "euler_a"
+                val px = Sd.generujEx(h, prompt.trim(), negativny.trim(), rozmer, rozmer, kroky, cfg, seed, metoda, r)
+                if (px != null) {
+                    runCatching {
+                        val img = BufferedImage(r[0], r[1], BufferedImage.TYPE_INT_RGB)
+                        img.setRGB(0, 0, r[0], r[1], px, 0, r[0])
+                        subor = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
+                        ImageIO.write(img, "png", subor!!)
+                    }.onFailure { e = it.message ?: "Obrázok sa nepodarilo uložiť" }
+                } else e = Sd.chyba()
+            }
             Platforma.naHlavnom {
                 generuje = false; priebeh = 0f
-                subor?.let { posledny = it; galeria.add(0, it) }
-                if (subor == null) chyba = e
+                subor?.let { galeria.add(0, it) }
+                hotovo(subor, e)
             }
         }
     }
+
+    /** chat + obrázky spolu do ~10 GB, aby na 16 GB ostalo miesto pre systém */
+    private const val LIMIT_SPOLU = 10_000L * 1024 * 1024
 
     fun zrus() { if (h != 0L) Sd.zrus(h) }
 

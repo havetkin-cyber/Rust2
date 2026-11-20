@@ -5,8 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import java.awt.FileDialog
-import java.awt.Frame
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -31,12 +29,10 @@ object Platforma {
     var oznam by mutableStateOf<String?>(null)
     fun oznam(t: String) { naHlavnom { oznam = t } }
 
-    /** systémové okno na výber súboru */
-    fun vyberSubor(nadpis: String): File? {
-        val d = FileDialog(null as Frame?, nadpis, FileDialog.LOAD)
-        d.isVisible = true
-        return if (d.file != null) File(d.directory, d.file) else null
-    }
+    /** výber súboru priamo v okne appky (systémové okno sa na SteamOS často neukáže) */
+    var ziadostOVyber by mutableStateOf<ZiadostOVyber?>(null)
+    fun vyberSubor(nadpis: String, pripony: Set<String>, hotovo: (File) -> Unit) { ziadostOVyber = ZiadostOVyber(nadpis, pripony, hotovo) }
+    val PRIPONY_FOTIEK = setOf("jpg", "jpeg", "png", "bmp", "gif")
 
     fun nacitajObrazok(f: File, zmensenie: Int = 1): ImageBitmap? = runCatching {
         val img = ImageIO.read(f) ?: return null

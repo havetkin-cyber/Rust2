@@ -115,6 +115,7 @@ private fun Appka() {
         }
         }
         SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        Platforma.ziadostOVyber?.let { z -> VyberSuboru(z) { Platforma.ziadostOVyber = null } }
     }
 }
 
@@ -182,6 +183,8 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
     val j = ChatJadro
     val zoznam = rememberLazyListState()
     var vstup by remember { mutableStateOf("") }
+    var rezimObrazka by remember { mutableStateOf(false) }
+    val o = ObrazkyJadro
     val posledny = j.spravy.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(j.spravy.size, posledny) { if (j.spravy.isNotEmpty()) zoznam.scrollToItem(j.spravy.lastIndex, Int.MAX_VALUE / 2) }
 
@@ -207,6 +210,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                 LazyColumn(state = zoznam, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     itemsIndexed(j.spravy) { i, s ->
                         if (s.rola == "user") BublinaPouzivatel(s.text)
+                        else if (s.jeObrazkova) BublinaObrazok(s)
                         else BublinaAI(s.text, pise = j.generuje && i == j.spravy.lastIndex, posledna = i == j.spravy.lastIndex && !j.generuje)
                     }
                 }
@@ -219,9 +223,12 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                 .border(1.dp, Farby.okraj, RoundedCornerShape(28.dp)).padding(start = 6.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(onClick = { rezimObrazka = !rezimObrazka }) {
+                Icon(Icons.Default.Brush, T("chat_obr_rezim"), tint = if (rezimObrazka) Farby.ruzova else Farby.tlmene)
+            }
             TextField(
                 value = vstup, onValueChange = { vstup = it },
-                placeholder = { Text(T(if (j.stav == StavModelu.PRIPRAVENY) "napis_spravu" else "ziadny_model_kratko"), color = Farby.tlmene) },
+                placeholder = { Text(T(if (rezimObrazka) "chat_obr_popis" else if (j.stav == StavModelu.PRIPRAVENY) "napis_spravu" else "ziadny_model_kratko"), color = Farby.tlmene) },
                 modifier = Modifier.weight(1f), maxLines = 6,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
@@ -229,12 +236,13 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                     cursorColor = Farby.ruzova, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text,
                 ),
             )
-            val moze = j.stav == StavModelu.PRIPRAVENY && vstup.isNotBlank()
+            val jeObr = rezimObrazka || popisObrazka(vstup) != null
+            val moze = vstup.isNotBlank() && (if (jeObr) !o.generuje else j.stav == StavModelu.PRIPRAVENY && !j.generuje)
             Box(
                 Modifier.size(44.dp).clip(CircleShape)
                     .background(if (j.generuje) Brush.linearGradient(listOf(Farby.cervena, Farby.cervena)) else if (moze) Farby.prechod else Brush.linearGradient(listOf(Farby.plocha2, Farby.plocha2)))
                     .clickable(enabled = j.generuje || moze) {
-                        if (j.generuje) j.zastav() else { j.posli(vstup); vstup = "" }
+                        if (j.generuje) j.zastav() else { j.posli(vstup, rezimObrazka); vstup = "" }
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -354,6 +362,42 @@ private fun BublinaAI(text: String, pise: Boolean, posledna: Boolean) {
 }
 
 @Composable
+private fun BublinaObrazok(s: Sprava) {
+    val o = ObrazkyJadro
+    val cesta = s.obrazok
+    val obr = remember(cesta) { cesta?.let { Platforma.nacitajObrazok(File(it)) } }
+    val ulozene = T("obr_ulozene"); val neulozene = T("obr_neulozene")
+    Row(Modifier.fillMaxWidth()) {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(Farby.prechod), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Brush, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            when {
+                obr != null -> {
+                    Image(obr, null, Modifier.widthIn(max = 480.dp).fillMaxWidth().aspectRatio(obr.width.toFloat() / obr.height).clip(RoundedCornerShape(16.dp)), contentScale = ContentScale.Fit)
+                    Row(Modifier.padding(top = 2.dp)) {
+                        IconButton(onClick = { Platforma.oznam(if (o.ulozDoGalerie(File(cesta!!))) ulozene else neulozene) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.SaveAlt, T("obr_ulozit"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+                s.text.isNotEmpty() -> Text(s.text, color = Farby.cervena, fontSize = 14.sp)
+                cesta != null -> Text(T("chat_obr_chyba"), color = Farby.tlmene, fontSize = 14.sp)
+                else -> Column(Modifier.widthIn(max = 480.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Farby.plocha).padding(14.dp)) {
+                    val nacitava = o.stav == StavModelu.NACITAVA
+                    Text(T(if (nacitava) "chat_obr_nacitavam" else "chat_obr_kreslim", (o.priebeh * 100).roundToInt()), color = Farby.text, fontSize = 14.sp)
+                    Spacer(Modifier.height(8.dp))
+                    if (nacitava || o.priebeh <= 0f) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    else LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    TextButton(onClick = { o.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun Bodky() {
     val t = rememberInfiniteTransition(label = "bodky")
     Row(Modifier.padding(vertical = 8.dp)) {
@@ -397,11 +441,12 @@ private fun ModelyObrazovka(spat: () -> Unit) {
     val nadpisVyberu = T("zo_suboru")
     fun vyberZoSuboru() {
         if (priebeh != null) return
-        val f = Platforma.vyberSubor(nadpisVyberu) ?: return
+        Platforma.vyberSubor(nadpisVyberu, setOf("gguf")) { f ->
         priebeh = 0f; cinnost = textKopirujem; zrusit = false
         thread {
             val r = runCatching { Modely.importuj(f, priebeh = { p -> priebeh = p }) }
             Platforma.naHlavnom { hotovo(r.getOrNull(), r.exceptionOrNull()) }
+        }
         }
     }
 
@@ -618,11 +663,12 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     val nadpisVyberu = T("zo_suboru")
     fun vyberZoSuboru() {
         if (priebehStahovania != null) return
-        val f = Platforma.vyberSubor(nadpisVyberu) ?: return
+        Platforma.vyberSubor(nadpisVyberu, setOf("gguf", "safetensors")) { f ->
         priebehStahovania = 0f; zrusit = false
         thread {
             val r = runCatching { Modely.importuj(f, { p -> priebehStahovania = p }, o.priecinokModelov(), true) }
             Platforma.naHlavnom { hotovo(r.getOrNull(), r.exceptionOrNull()) }
+        }
         }
     }
     // prvý model sa načíta sám
@@ -855,10 +901,11 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Karta {
                 if (obrVstup == null) {
+                    if (vstup != null) { Text(T("vyl_neotvori", vstup.name), color = Farby.cervena, fontSize = 13.sp); Spacer(Modifier.height(6.dp)) }
                     Text(T("vyl_prazdne"), color = Farby.tlmene)
                     Spacer(Modifier.height(10.dp))
                     GradientTlacidlo(T("vyl_vybrat"), Icons.Default.AddPhotoAlternate) {
-                        Platforma.vyberSubor(nadpisVyberu)?.let { v.vstup = it }
+                        Platforma.vyberSubor(nadpisVyberu, Platforma.PRIPONY_FOTIEK) { v.vstup = it; v.vysledok = null }
                     }
                 } else {
                     val ukaz = if (obrVysledok != null && poVylepseni) obrVysledok else obrVstup
@@ -875,7 +922,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                             Text("${obrVstup.width}×${obrVstup.height}", color = Farby.tlmene, fontSize = 12.sp)
                         }
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { Platforma.vyberSubor(nadpisVyberu)?.let { v.vstup = it } }, enabled = !v.pracuje) { Text(T("vyl_ina"), color = Farby.ruzova) }
+                        TextButton(onClick = { Platforma.vyberSubor(nadpisVyberu, Platforma.PRIPONY_FOTIEK) { v.vstup = it; v.vysledok = null } }, enabled = !v.pracuje) { Text(T("vyl_ina"), color = Farby.ruzova) }
                     }
                     if (vysledok != null) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

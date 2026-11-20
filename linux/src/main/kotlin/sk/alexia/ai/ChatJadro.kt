@@ -9,8 +9,16 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.Executors
 
-class Sprava(val rola: String, text: String) {
+/** jeObrazkova = žiadosť o obrázok alebo hotový obrázok v chate; jazykovému modelu sa neposiela */
+class Sprava(val rola: String, text: String, val jeObrazkova: Boolean = false, obrazok: String? = null) {
     var text by mutableStateOf(text)
+    var obrazok by mutableStateOf(obrazok)
+}
+
+/** "/obrazok mačka", "nakresli mačku", "draw a cat" → popis obrázka, inak null */
+fun popisObrazka(t: String): String? {
+    val m = Regex("^\\s*(/obr[aá]zok|/obr|/img|/image|nakresli|namaľuj|vytvor obr[aá]zok|draw|generate image)[\\s:,]+(.+)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t)
+    return m?.groupValues?.get(2)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 enum class StavModelu { ZIADNY, NACITAVA, PRIPRAVENY, CHYBA }
@@ -79,23 +87,42 @@ object ChatJadro {
 
     fun aktualizujVzorkovanie() { vlakno.execute { if (h != 0L) nastavVzorkovanie(h) } }
 
+    /** veľkosť práve načítaného jazykového modelu (0 = žiadny) */
+    fun velkostNacitaneho(): Long = nacitany?.let { File(it).length() } ?: 0L
+
     fun nazovModelu(): String = nacitany?.let { File(it).nameWithoutExtension } ?: ""
 
-    fun posli(text: String) {
-        if (generuje || stav != StavModelu.PRIPRAVENY || text.isBlank()) return
+    fun posli(text: String, obrazok: Boolean = false) {
+        if (text.isBlank()) return
+        val popis = if (obrazok) text.trim() else popisObrazka(text)
+        if (popis != null) { nakresli(text.trim(), popis); return }
+        if (generuje || stav != StavModelu.PRIPRAVENY) return
         spravy += Sprava("user", text.trim())
         generuj()
+    }
+
+    /** obrázok priamo v chate – kreslí ho obrázkový model (Obrázky) */
+    private fun nakresli(text: String, popis: String) {
+        if (ObrazkyJadro.generuje) return
+        spravy += Sprava("user", text, jeObrazkova = true)
+        val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
+        ObrazkyJadro.nakresliDoChatu(popis) { f, e ->
+            if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"
+            ulozChat()
+        }
     }
 
     /** znova vygeneruje poslednú odpoveď */
     fun znova() {
         if (generuje || stav != StavModelu.PRIPRAVENY) return
-        if (spravy.lastOrNull()?.rola == "assistant") spravy.removeAt(spravy.lastIndex)
+        val p = spravy.lastOrNull() ?: return
+        if (p.jeObrazkova) return
+        if (p.rola == "assistant") spravy.removeAt(spravy.lastIndex)
         if (spravy.lastOrNull()?.rola == "user") generuj()
     }
 
     private fun generuj() {
-        val historia = spravy.map { it.rola to it.text }.toMutableList()
+        val historia = spravy.filter { !it.jeObrazkova }.map { it.rola to it.text }.toMutableList()
         val sys = nastavenia.systemovyPrompt.trim()
         val odpoved = Sprava("assistant", ""); spravy += odpoved
         generuje = true; tokenovZaSekundu = 0f
@@ -164,14 +191,14 @@ object ChatJadro {
     private fun suborChatu() = File(Platforma.priecinok, "chat.json")
 
     private fun ulozChat() {
-        val a = JSONArray(); spravy.forEach { a.put(JSONObject().put("r", it.rola).put("t", it.text)) }
+        val a = JSONArray(); spravy.forEach { a.put(JSONObject().put("r", it.rola).put("t", it.text).put("k", it.jeObrazkova).apply { it.obrazok?.let { o -> put("o", o) } }) }
         runCatching { suborChatu().writeText(a.toString()) }
     }
 
     private fun nacitajChat() {
         runCatching {
             val a = JSONArray(suborChatu().readText())
-            for (i in 0 until a.length()) a.getJSONObject(i).let { spravy += Sprava(it.getString("r"), it.getString("t")) }
+            for (i in 0 until a.length()) a.getJSONObject(i).let { spravy += Sprava(it.getString("r"), it.getString("t"), it.optBoolean("k"), it.optString("o").ifEmpty { null }) }
         }
     }
 }

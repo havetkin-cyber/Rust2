@@ -14,6 +14,11 @@ object T {
     }
 
     private val sk = mapOf(
+        "kl_karta" to "Klávesnica na obrazovke",
+        "kl_posun" to "Posunúť pole s textom nad klávesnicu",
+        "kl_vyska" to "Výška klávesnice: %1\$d %% obrazovky",
+        "kl_otvorit" to "Otvoriť klávesnicu Steamu pri ťuknutí do poľa",
+        "kl_info" to "Ak pole stále zakrýva klávesnica, zväčši výšku. Klávesnicu Steamu otvoríš aj cez Steam + X.",
         "akt_karta" to "Aktualizácie",
         "akt_skontrolovat" to "Skontrolovať a stiahnuť aktualizácie",
         "akt_najnovsia" to "Máš najnovšiu verziu (%1\$s).",
@@ -156,6 +161,11 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "kl_karta" to "On-screen keyboard",
+        "kl_posun" to "Move the text field above the keyboard",
+        "kl_vyska" to "Keyboard height: %1\$d %% of the screen",
+        "kl_otvorit" to "Open the Steam keyboard when tapping a field",
+        "kl_info" to "If the keyboard still covers the field, increase the height. You can also open the Steam keyboard with Steam + X.",
         "akt_karta" to "Updates",
         "akt_skontrolovat" to "Check and download updates",
         "akt_najnovsia" to "You have the latest version (%1\$s).",

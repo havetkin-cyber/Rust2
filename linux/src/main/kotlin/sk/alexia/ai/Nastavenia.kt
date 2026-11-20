@@ -20,6 +20,9 @@ class Nastavenia {
     var vlakna by mutableIntStateOf(p.getProperty("vlakna")?.toIntOrNull() ?: predvoleneVlakna())
     var aktivnyModel by mutableStateOf(p.getProperty("model"))
     var aktivnyObrazkovyModel by mutableStateOf(p.getProperty("obrazkovyModel"))
+    var posunKlavesnica by mutableStateOf(p.getProperty("posunKlavesnica")?.let { it == "true" } ?: Klavesnica.jeSteamOS)
+    var vyskaKlavesnice by mutableIntStateOf(p.getProperty("vyskaKlavesnice")?.toIntOrNull() ?: 42)
+    var otvoritKlavesnicu by mutableStateOf(p.getProperty("otvoritKlavesnicu") == "true")
 
     init { p.getProperty("anglicky")?.let { T.anglicky = it == "true" } ?: run { T.anglicky = false } }
 
@@ -30,6 +33,9 @@ class Nastavenia {
         p.setProperty("maxTokenov", maxTokenov.toString())
         p.setProperty("vlakna", vlakna.toString())
         p.setProperty("anglicky", T.anglicky.toString())
+        p.setProperty("posunKlavesnica", posunKlavesnica.toString())
+        p.setProperty("vyskaKlavesnice", vyskaKlavesnice.toString())
+        p.setProperty("otvoritKlavesnicu", otvoritKlavesnicu.toString())
         aktivnyModel?.let { p.setProperty("model", it) } ?: p.remove("model")
         aktivnyObrazkovyModel?.let { p.setProperty("obrazkovyModel", it) } ?: p.remove("obrazkovyModel")
         runCatching { subor.outputStream().use { p.store(it, "Alexia AI") } }

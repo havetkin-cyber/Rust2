@@ -119,7 +119,7 @@ private fun Appka() {
             else -> {}
         }
     }
-    Box(
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(Farby.pozadie)
@@ -127,7 +127,10 @@ private fun Appka() {
     ) {
         // na širokej obrazovke obsah v strede, aby sa dobre čítal
         Aktualizacia()
-        Column(Modifier.fillMaxHeight().widthIn(max = 960.dp).fillMaxWidth().align(Alignment.TopCenter)) {
+        val n = ChatJadro.nastavenia
+        val spodok by androidx.compose.animation.core.animateDpAsState(
+            if (n.posunKlavesnica && Klavesnica.pise) maxHeight * (n.vyskaKlavesnice / 100f) else 0.dp, label = "klavesnica")
+        Column(Modifier.fillMaxHeight().widthIn(max = 960.dp).fillMaxWidth().align(Alignment.TopCenter).padding(bottom = spodok)) {
         Zalozky(obrazovka) { obrazovka = it }
         Box(Modifier.weight(1f)) {
         when (obrazovka) {
@@ -261,6 +264,8 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
     val posledny = j.spravy.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(j.spravy.size, posledny) { if (j.spravy.isNotEmpty()) zoznam.scrollToItem(j.spravy.lastIndex, Int.MAX_VALUE / 2) }
     PosunOvladacom(zoznam)
+    // klávesnica sa otvorila → posledná správa ostane viditeľná
+    LaunchedEffect(Klavesnica.pise) { if (Klavesnica.pise && j.spravy.isNotEmpty()) { kotlinx.coroutines.delay(250); zoznam.scrollToItem(j.spravy.lastIndex, Int.MAX_VALUE / 2) } }
 
     Column(Modifier.fillMaxSize()) {
         val pod = when (j.stav) {
@@ -300,7 +305,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
             TextField(
                 value = vstup, onValueChange = { vstup = it },
                 placeholder = { Text(T(if (rezimObrazka) "chat_obr_popis" else if (j.stav == StavModelu.PRIPRAVENY) "napis_spravu" else "ziadny_model_kratko"), color = Farby.tlmene) },
-                modifier = Modifier.weight(1f), maxLines = 6,
+                modifier = Modifier.weight(1f).nadKlavesnicou(), maxLines = 6,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent,
@@ -586,7 +591,7 @@ private fun ModelyObrazovka(spat: () -> Unit) {
                     Text(T("modely_vlastny"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
-                        value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.fillMaxWidth().nadKlavesnicou(),
                         placeholder = { Text("https://huggingface.co/…/model.gguf", color = Farby.tlmene, fontSize = 13.sp) },
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
@@ -628,11 +633,28 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(rucne = true) }
             }
             Karta {
+                Text(T("kl_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Row(Modifier.fillMaxWidth().clickable { n.posunKlavesnica = !n.posunKlavesnica; n.uloz() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("kl_posun"), color = Farby.text, modifier = Modifier.weight(1f))
+                    Switch(checked = n.posunKlavesnica, onCheckedChange = { n.posunKlavesnica = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+                if (n.posunKlavesnica) {
+                    Text(T("kl_vyska", n.vyskaKlavesnice), color = Farby.text, fontSize = 14.sp)
+                    Slider(value = n.vyskaKlavesnice.toFloat(), onValueChange = { n.vyskaKlavesnice = it.roundToInt() }, onValueChangeFinished = { n.uloz() }, valueRange = 20f..60f,
+                        colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                }
+                Row(Modifier.fillMaxWidth().clickable { n.otvoritKlavesnicu = !n.otvoritKlavesnicu; n.uloz() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("kl_otvorit"), color = Farby.text, modifier = Modifier.weight(1f))
+                    Switch(checked = n.otvoritKlavesnicu, onCheckedChange = { n.otvoritKlavesnicu = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+                Text(T("kl_info"), color = Farby.tlmene, fontSize = 12.sp)
+            }
+            Karta {
                 Text(T("nast_system"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = n.systemovyPrompt, onValueChange = { n.systemovyPrompt = it; n.uloz() },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp).nadKlavesnicou(),
                     placeholder = { Text(T("nast_system_hint"), color = Farby.tlmene, fontSize = 13.sp) },
                     shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
@@ -820,7 +842,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
 
                 Karta {
                     OutlinedTextField(
-                        value = prompt, onValueChange = { prompt = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp),
+                        value = prompt, onValueChange = { prompt = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp).nadKlavesnicou(),
                         placeholder = { Text(T("obr_prompt_hint"), color = Farby.tlmene, fontSize = 13.sp) },
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
@@ -834,7 +856,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         }
                     }
                     if (pozadie == "vlastne") OutlinedTextField(
-                        value = vlastnePozadie, onValueChange = { vlastnePozadie = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        value = vlastnePozadie, onValueChange = { vlastnePozadie = it }, modifier = Modifier.fillMaxWidth().nadKlavesnicou(), singleLine = true,
                         placeholder = { Text(T("poz_vlastne_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                     )
@@ -845,7 +867,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     AnimatedVisibility(viac) {
                         Column {
                             if (o.aktivnaSada()?.negativny != false) OutlinedTextField(
-                                value = negativny, onValueChange = { negativny = it }, modifier = Modifier.fillMaxWidth(),
+                                value = negativny, onValueChange = { negativny = it }, modifier = Modifier.fillMaxWidth().nadKlavesnicou(),
                                 label = { Text(T("obr_negativny")) }, shape = RoundedCornerShape(14.dp),
                                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                             )
@@ -949,7 +971,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                 Text(T("obr_vlastny"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.fillMaxWidth().nadKlavesnicou(),
                     placeholder = { Text("https://huggingface.co/…/model.gguf", color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                 )

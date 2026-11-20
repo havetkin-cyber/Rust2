@@ -29,6 +29,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -68,38 +71,73 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Obrazovka { CHAT, MODELY, NASTAVENIA, OBRAZKY }
+private enum class Obrazovka { CHAT, OBRAZKY, VYLEPSIT, MODELY, NASTAVENIA }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun Appka() {
     var obrazovka by remember { mutableStateOf(Obrazovka.CHAT) }
     BackHandler(obrazovka != Obrazovka.CHAT) { obrazovka = Obrazovka.CHAT }
-    // v pamäti je vždy len jeden model: obrázky alebo chat
+    // v pamäti je vždy len jeden model: obrázky, vylepšenie alebo chat
     LaunchedEffect(obrazovka) {
         when (obrazovka) {
-            Obrazovka.OBRAZKY -> ObrazkyJadro.aktivnyModel?.let { if (File(it).exists()) ObrazkyJadro.nacitaj(it) }
-            Obrazovka.CHAT -> { ObrazkyJadro.uvolniPamat(); ChatJadro.obnov() }
+            Obrazovka.OBRAZKY -> { VylepsenieJadro.uvolniPamat(); ObrazkyJadro.aktivnyModel?.let { if (File(it).exists()) ObrazkyJadro.nacitaj(it) } }
+            Obrazovka.CHAT -> { ObrazkyJadro.uvolniPamat(); VylepsenieJadro.uvolniPamat(); ChatJadro.obnov() }
+            Obrazovka.VYLEPSIT -> ObrazkyJadro.uvolniPamat()
             else -> {}
         }
     }
+    val n = ChatJadro.nastavenia
     Box(
         Modifier
             .fillMaxSize()
             .background(Farby.pozadie)
-            .background(Brush.radialGradient(listOf(Farby.fialova.copy(alpha = 0.16f), Color.Transparent), radius = 900f))
-            .systemBarsPadding()
-            .imePadding(),
+            .background(Brush.radialGradient(listOf(Farby.fialova.copy(alpha = 0.16f), Color.Transparent), radius = 900f)),
     ) {
-        Aktualizacia()
-        when (obrazovka) {
-            Obrazovka.CHAT -> ChatObrazovka(
-                naModely = { obrazovka = Obrazovka.MODELY },
-                naNastavenia = { obrazovka = Obrazovka.NASTAVENIA },
-                naObrazky = { obrazovka = Obrazovka.OBRAZKY },
+        // pozadie chatu (obrázok, ktorý si vytvoril)
+        if (obrazovka == Obrazovka.CHAT && n.pozadieChatu != null) {
+            val bmp = remember(n.pozadieChatu, n.pozadieVerzia) { n.pozadieChatu?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() } }
+            if (bmp != null) {
+                Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = n.stmavenie / 100f)))
+            }
+        }
+        Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+            Aktualizacia()
+            Box(Modifier.weight(1f)) {
+                when (obrazovka) {
+                    Obrazovka.CHAT -> ChatObrazovka(naModely = { obrazovka = Obrazovka.MODELY })
+                    Obrazovka.MODELY -> ModelyObrazovka { obrazovka = Obrazovka.CHAT }
+                    Obrazovka.NASTAVENIA -> NastaveniaObrazovka { obrazovka = Obrazovka.CHAT }
+                    Obrazovka.OBRAZKY -> ObrazkyObrazovka { obrazovka = Obrazovka.CHAT }
+                    Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
+                }
+            }
+            // spodné záložky (pri písaní sa skryjú, aby nezaberali miesto nad klávesnicou)
+            if (!WindowInsets.isImeVisible) Zalozky(obrazovka) { obrazovka = it }
+        }
+    }
+}
+
+@Composable
+private fun Zalozky(aktivna: Obrazovka, zvol: (Obrazovka) -> Unit) {
+    val polozky = listOf(
+        Triple(Obrazovka.CHAT, Icons.Default.Forum, "chat"),
+        Triple(Obrazovka.OBRAZKY, Icons.Default.Image, "obrazky"),
+        Triple(Obrazovka.VYLEPSIT, Icons.Default.AutoFixHigh, "vylepsit_kratko"),
+        Triple(Obrazovka.MODELY, Icons.Default.Memory, "modely"),
+        Triple(Obrazovka.NASTAVENIA, Icons.Default.Tune, "nastavenia"),
+    )
+    NavigationBar(containerColor = Farby.plocha.copy(alpha = 0.96f), tonalElevation = 0.dp, windowInsets = WindowInsets(0)) {
+        polozky.forEach { (o, ikona, kluc) ->
+            NavigationBarItem(
+                selected = o == aktivna, onClick = { zvol(o) },
+                icon = { Icon(ikona, null) }, label = { Text(T(kluc), fontSize = 11.sp, maxLines = 1) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color.White, selectedTextColor = Farby.ruzova, indicatorColor = Farby.fialova,
+                    unselectedIconColor = Farby.tlmene, unselectedTextColor = Farby.tlmene,
+                ),
             )
-            Obrazovka.MODELY -> ModelyObrazovka { obrazovka = Obrazovka.CHAT }
-            Obrazovka.NASTAVENIA -> NastaveniaObrazovka { obrazovka = Obrazovka.CHAT }
-            Obrazovka.OBRAZKY -> ObrazkyObrazovka { obrazovka = Obrazovka.CHAT }
         }
     }
 }
@@ -164,10 +202,12 @@ private fun Karta(modifier: Modifier = Modifier, obsah: @Composable ColumnScope.
 // ---------------------------------------------------------------- chat
 
 @Composable
-private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObrazky: () -> Unit) {
+private fun ChatObrazovka(naModely: () -> Unit) {
     val j = ChatJadro
+    val o = ObrazkyJadro
     val zoznam = rememberLazyListState()
     var vstup by remember { mutableStateOf("") }
+    var rezimObrazka by remember { mutableStateOf(false) }
     val posledny = j.spravy.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(j.spravy.size, posledny) { if (j.spravy.isNotEmpty()) zoznam.scrollToItem(j.spravy.lastIndex, Int.MAX_VALUE / 2) }
 
@@ -180,9 +220,6 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
         }
         Hlavicka(stringResource(R.string.app_name), pod) {
             IconButton(onClick = { j.novyChat() }, enabled = j.spravy.isNotEmpty()) { Icon(Icons.Default.AddComment, stringResource(R.string.novy_chat), tint = Farby.text) }
-            IconButton(onClick = naObrazky) { Icon(Icons.Default.Image, stringResource(R.string.obrazky), tint = Farby.text) }
-            IconButton(onClick = naModely) { Icon(Icons.Default.Memory, stringResource(R.string.modely), tint = Farby.text) }
-            IconButton(onClick = naNastavenia) { Icon(Icons.Default.Tune, stringResource(R.string.nastavenia), tint = Farby.text) }
         }
 
         Box(Modifier.weight(1f)) {
@@ -192,6 +229,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                 LazyColumn(state = zoznam, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     itemsIndexed(j.spravy) { i, s ->
                         if (s.rola == "user") BublinaPouzivatel(s.text)
+                        else if (s.jeObrazkova) BublinaObrazok(s)
                         else BublinaAI(s.text, pise = j.generuje && i == j.spravy.lastIndex, posledna = i == j.spravy.lastIndex && !j.generuje)
                     }
                 }
@@ -204,9 +242,12 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                 .border(1.dp, Farby.okraj, RoundedCornerShape(28.dp)).padding(start = 6.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(onClick = { rezimObrazka = !rezimObrazka }) {
+                Icon(Icons.Default.Brush, T("chat_obr_rezim"), tint = if (rezimObrazka) Farby.ruzova else Farby.tlmene)
+            }
             TextField(
                 value = vstup, onValueChange = { vstup = it },
-                placeholder = { Text(stringResource(if (j.stav == StavModelu.PRIPRAVENY) R.string.napis_spravu else R.string.ziadny_model_kratko), color = Farby.tlmene) },
+                placeholder = { Text(if (rezimObrazka) T("chat_obr_popis") else stringResource(if (j.stav == StavModelu.PRIPRAVENY) R.string.napis_spravu else R.string.ziadny_model_kratko), color = Farby.tlmene, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 modifier = Modifier.weight(1f), maxLines = 6,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
@@ -214,12 +255,13 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                     cursorColor = Farby.ruzova, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text,
                 ),
             )
-            val moze = j.stav == StavModelu.PRIPRAVENY && vstup.isNotBlank()
+            val jeObr = rezimObrazka || popisObrazka(vstup) != null
+            val moze = vstup.isNotBlank() && (if (jeObr) !o.generuje else j.stav == StavModelu.PRIPRAVENY && !j.generuje)
             Box(
                 Modifier.size(44.dp).clip(CircleShape)
                     .background(if (j.generuje) Brush.linearGradient(listOf(Farby.cervena, Farby.cervena)) else if (moze) Farby.prechod else Brush.linearGradient(listOf(Farby.plocha2, Farby.plocha2)))
                     .clickable(enabled = j.generuje || moze) {
-                        if (j.generuje) j.zastav() else { j.posli(vstup); vstup = "" }
+                        if (j.generuje) j.zastav() else { j.posli(vstup, rezimObrazka); vstup = "" }
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -319,8 +361,15 @@ private fun BublinaAI(text: String, pise: Boolean, posledna: Boolean) {
             if (odpoved.isEmpty() && pise) {
                 Bodky()
             } else {
-                SelectionContainer {
-                    Text(odpoved + if (pise) " ▍" else "", color = Farby.text, fontSize = 15.sp, lineHeight = 22.sp)
+                val kusy = remember(odpoved) { rozdelKod(odpoved) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    kusy.forEachIndexed { i, k ->
+                        val koniec = if (pise && i == kusy.lastIndex) " ▍" else ""
+                        if (k.jazyk != null) BlokKodu(k.text, k.jazyk)
+                        else if (k.text.isNotBlank() || koniec.isNotEmpty()) SelectionContainer {
+                            Text(k.text.trim('\n') + koniec, color = Farby.text, fontSize = 15.sp, lineHeight = 22.sp)
+                        }
+                    }
                 }
             }
             if (!pise && odpoved.isNotEmpty()) {
@@ -328,11 +377,92 @@ private fun BublinaAI(text: String, pise: Boolean, posledna: Boolean) {
                     IconButton(onClick = { schranka.setText(AnnotatedString(odpoved)); Toast.makeText(context, skopirovane, Toast.LENGTH_SHORT).show() }, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.ContentCopy, stringResource(R.string.kopirovat), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
                     }
+                    IconButton(onClick = { if (Hlas.hovori == text) Hlas.zastav() else Hlas.hovor(odpoved) }, modifier = Modifier.size(32.dp)) {
+                        Icon(if (Hlas.hovori == text) Icons.Default.StopCircle else Icons.Default.VolumeUp, T("hlas_precitat"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
+                    }
                     if (posledna) {
                         IconButton(onClick = { ChatJadro.znova() }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Refresh, stringResource(R.string.znova), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/** kus odpovede: obyčajný text (jazyk = null) alebo kód medzi ``` */
+private class KusTextu(val text: String, val jazyk: String?)
+
+private fun rozdelKod(t: String): List<KusTextu> {
+    val z = mutableListOf<KusTextu>(); var i = 0
+    while (i < t.length) {
+        val a = t.indexOf("```", i)
+        if (a < 0) { z += KusTextu(t.substring(i), null); break }
+        if (a > i) z += KusTextu(t.substring(i, a), null)
+        val riadok = t.indexOf('\n', a + 3)
+        if (riadok < 0) { z += KusTextu("", t.substring(a + 3).trim()); break }
+        val jazyk = t.substring(a + 3, riadok).trim()
+        val b = t.indexOf("```", riadok + 1)
+        if (b < 0) { z += KusTextu(t.substring(riadok + 1), jazyk); break }
+        z += KusTextu(t.substring(riadok + 1, b).trimEnd('\n'), jazyk)
+        i = b + 3
+    }
+    return z
+}
+
+/** tmavé okno s kódom ako vo VS Code – s názvom jazyka a tlačidlom Kopírovať */
+@Composable
+private fun BlokKodu(kod: String, jazyk: String) {
+    val schranka = LocalClipboardManager.current
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF1E1E1E)).border(1.dp, Color(0xFF333333), RoundedCornerShape(12.dp))) {
+        Row(Modifier.fillMaxWidth().background(Color(0xFF2D2D2D)).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(jazyk.ifBlank { "kód" }, color = Color(0xFF9CDCFE), fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, modifier = Modifier.weight(1f))
+            TextButton(onClick = { schranka.setText(AnnotatedString(kod)); Platforma.oznam(T("skopirovane")) }) {
+                Icon(Icons.Default.ContentCopy, null, tint = Color(0xFFCCCCCC), modifier = Modifier.size(14.dp)); Spacer(Modifier.width(6.dp))
+                Text(T("kopirovat"), color = Color(0xFFCCCCCC), fontSize = 12.sp)
+            }
+        }
+        SelectionContainer {
+            Text(kod, color = Color(0xFFD4D4D4), fontSize = 13.sp, lineHeight = 19.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, softWrap = false,
+                modifier = Modifier.horizontalScroll(rememberScrollState()).padding(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun BublinaObrazok(s: Sprava) {
+    val o = ObrazkyJadro
+    val c = LocalContext.current
+    val cesta = s.obrazok
+    val obr = remember(cesta) { cesta?.let { android.graphics.BitmapFactory.decodeFile(it)?.asImageBitmap() } }
+    Row(Modifier.fillMaxWidth()) {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(Farby.prechod), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Brush, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            when {
+                obr != null -> {
+                    Image(obr, null, Modifier.fillMaxWidth().aspectRatio(obr.width.toFloat() / obr.height).clip(RoundedCornerShape(16.dp)), contentScale = ContentScale.Fit)
+                    Row(Modifier.padding(top = 2.dp)) {
+                        if (android.os.Build.VERSION.SDK_INT >= 29) IconButton(onClick = { Platforma.oznam(c.getString(if (o.ulozDoGalerie(File(cesta!!))) R.string.obr_ulozene else R.string.obr_neulozene)) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.SaveAlt, T("obr_ulozit"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
+                        }
+                        IconButton(onClick = { o.nastavPozadieChatu(File(cesta!!)) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Wallpaper, T("poz_chat_tlacidlo"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+                s.text.isNotEmpty() -> Text(s.text, color = Farby.cervena, fontSize = 14.sp)
+                cesta != null -> Text(T("chat_obr_chyba"), color = Farby.tlmene, fontSize = 14.sp)
+                else -> Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Farby.plocha).padding(14.dp)) {
+                    val nacitava = o.stav == StavModelu.NACITAVA
+                    Text(T(if (nacitava) "chat_obr_nacitavam" else "chat_obr_kreslim", (o.priebeh * 100).roundToInt()), color = Farby.text, fontSize = 14.sp)
+                    Spacer(Modifier.height(8.dp))
+                    if (nacitava || o.priebeh <= 0f) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    else LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    if (!ChatJadro.nastavenia.vzdialene) TextButton(onClick = { o.zrus() }) { Text(stringResource(R.string.zrusit), color = Farby.tlmene) }
                 }
             }
         }
@@ -460,7 +590,7 @@ private fun ModelyObrazovka(spat: () -> Unit) {
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                     )
                     Spacer(Modifier.height(10.dp))
-                    GradientTlacidlo(stringResource(R.string.stiahnut), Icons.Default.Download, enabled = priebeh == null && odkaz.startsWith("http")) { stiahni(odkaz) }
+                    GradientTlacidlo(stringResource(R.string.stiahnut), Icons.Default.Download, enabled = priebeh == null && (odkaz.trim().startsWith("http") || odkaz.contains("huggingface.co") || odkaz.contains("hf.co"))) { stiahni(odkaz) }
                 }
             }
             item { Text(stringResource(R.string.modely_info), color = Farby.tlmene, fontSize = 12.sp) }
@@ -489,6 +619,48 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Hlavicka(stringResource(R.string.nastavenia), spat = spat)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Karta { PrepojenieKarta() }
+            Karta {
+                Text(T("hlas_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Text(T("hlas_jazyk"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("auto", "sk", "en").forEach { k ->
+                        FilterChip(selected = n.jazykOdpovedi == k, onClick = { n.jazykOdpovedi = k; n.uloz() }, label = { Text(T("jazyk_$k")) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                Text(T("hlas_jazyk_info"), color = Farby.tlmene, fontSize = 12.sp)
+                Row(Modifier.fillMaxWidth().clickable { n.citatNahlas = !n.citatNahlas; n.uloz() }.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("hlas_citat"), color = Farby.text, modifier = Modifier.weight(1f))
+                    Switch(checked = n.citatNahlas, onCheckedChange = { n.citatNahlas = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+                Text(T("hlas_android"), color = Farby.tlmene, fontSize = 12.sp)
+            }
+            Karta {
+                val c = LocalContext.current
+                Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(c, rucne = true) }
+            }
+            Karta {
+                Text(T("poz_chat_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                val bmp = remember(n.pozadieChatu, n.pozadieVerzia) { n.pozadieChatu?.let { android.graphics.BitmapFactory.decodeFile(it, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 })?.asImageBitmap() } }
+                if (bmp == null) Text(T("poz_chat_ziadne"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                else {
+                    Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(140.dp).clip(RoundedCornerShape(14.dp))) {
+                        Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = n.stmavenie / 100f)))
+                        Text(stringResource(R.string.ahoj_nadpis), color = Farby.text, modifier = Modifier.align(Alignment.Center))
+                    }
+                    Text(T("poz_chat_stmavenie", n.stmavenie), color = Farby.text, fontSize = 14.sp)
+                    Slider(value = n.stmavenie.toFloat(), onValueChange = { n.stmavenie = it.roundToInt() }, onValueChangeFinished = { n.uloz() }, valueRange = 0f..90f,
+                        colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                    OutlinedButton(onClick = { ObrazkyJadro.zrusPozadieChatu() }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene); Spacer(Modifier.width(6.dp)); Text(T("poz_chat_zrusit"), color = Farby.tlmene)
+                    }
+                }
+            }
             Karta {
                 Text(stringResource(R.string.nast_system), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
@@ -550,6 +722,17 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     var modely by remember { mutableStateOf(o.modely()) }
     var prompt by remember { mutableStateOf("") }
     var negativny by remember { mutableStateOf("blurry, low quality, deformed") }
+    var pozadie by remember { mutableStateOf("bez") }
+    var vlastnePozadie by remember { mutableStateOf("") }
+    fun popisSPozadim(): String {
+        val p = when (pozadie) {
+            "bez" -> ""
+            "vlastne" -> vlastnePozadie.trim()
+            "nahodne" -> POZADIA.filter { it.first !in setOf("bez", "nahodne", "vlastne") }.random().second
+            else -> POZADIA.first { it.first == pozadie }.second
+        }
+        return if (p.isEmpty()) prompt else "${prompt.trim().trimEnd(',', '.')}, background: $p"
+    }
     var rozmer by remember { mutableIntStateOf(384) }
     var kroky by remember { mutableIntStateOf(20) }
     var cfg by remember { mutableFloatStateOf(7f) }
@@ -624,6 +807,9 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                                     Toast.makeText(c, if (o.ulozDoGalerie(f)) ulozene else neulozene, Toast.LENGTH_SHORT).show()
                                 }
                             }
+                            OutlinedButton(onClick = { o.nastavPozadieChatu(f) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                                Icon(Icons.Default.Wallpaper, T("poz_chat_tlacidlo"), tint = Farby.text)
+                            }
                             OutlinedButton(onClick = { o.zmazObrazok(f) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                                 Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.zmazat), color = Farby.tlmene)
                             }
@@ -639,6 +825,18 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                     )
                     Text(stringResource(R.string.obr_anglicky), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    Text(T("poz_nadpis"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        POZADIA.forEach { (id, _) ->
+                            FilterChip(selected = pozadie == id, onClick = { pozadie = id }, label = { Text(T("poz_$id")) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                        }
+                    }
+                    if (pozadie == "vlastne") OutlinedTextField(
+                        value = vlastnePozadie, onValueChange = { vlastnePozadie = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        placeholder = { Text(T("poz_vlastne_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
+                    )
                     TextButton(onClick = { viac = !viac }) {
                         Text(stringResource(R.string.obr_viac), color = Farby.ruzova)
                         Icon(if (viac) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
@@ -674,7 +872,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         TextButton(onClick = { o.zrus() }) { Text(stringResource(R.string.zrusit), color = Farby.tlmene) }
                     } else {
                         GradientTlacidlo(stringResource(R.string.obr_vytvorit), Icons.Default.AutoAwesome, Modifier.fillMaxWidth(),
-                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generuj(prompt, negativny, rozmer, kroky, cfg) }
+                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generuj(popisSPozadim(), negativny, rozmer, kroky, cfg) }
                         Text(stringResource(R.string.obr_cas), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     }
                     if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
@@ -739,7 +937,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                 )
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    GradientTlacidlo(stringResource(R.string.stiahnut), Icons.Default.Download, enabled = priebehStahovania == null && odkaz.startsWith("http")) { stiahni(odkaz) }
+                    GradientTlacidlo(stringResource(R.string.stiahnut), Icons.Default.Download, enabled = priebehStahovania == null && (odkaz.trim().startsWith("http") || odkaz.contains("huggingface.co") || odkaz.contains("hf.co"))) { stiahni(odkaz) }
                     OutlinedButton(onClick = { vyber.launch(arrayOf("*/*")) }, enabled = priebehStahovania == null, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                         Icon(Icons.Default.FolderOpen, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.zo_suboru_kratko), color = Farby.text)
                     }
@@ -759,6 +957,9 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         GradientTlacidlo(stringResource(R.string.obr_ulozit), Icons.Default.SaveAlt) {
                             Toast.makeText(c, if (o.ulozDoGalerie(f)) ulozene else neulozene, Toast.LENGTH_SHORT).show()
                         }
+                    }
+                    OutlinedButton(onClick = { o.nastavPozadieChatu(f) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.Wallpaper, T("poz_chat_tlacidlo"), tint = Farby.text)
                     }
                     OutlinedButton(onClick = { o.zmazObrazok(f); detail = null }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                         Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene)
@@ -783,3 +984,190 @@ private fun Aktualizacia() {
         dismissButton = { TextButton(onClick = { Aktualizacie.preskoc(c) }) { Text(stringResource(R.string.akt_neskor), color = Farby.tlmene) } },
     )
 }
+
+/** pozadia pre tvorbu obrázkov: id → anglický popis */
+private val POZADIA = listOf(
+    "bez" to "", "nahodne" to "",
+    "priroda" to "outdoors in nature, green meadow, sunny day",
+    "les" to "in a forest, tall trees, soft sunlight through leaves",
+    "plaz" to "on a sandy beach, turquoise sea, blue sky",
+    "hory" to "mountains, alpine landscape, clear sky",
+    "vidiek" to "countryside village, fields, old houses",
+    "mesto" to "city street, modern buildings",
+    "noc" to "city at night, neon lights, bokeh",
+    "zapad" to "golden hour sunset sky",
+    "zima" to "snowy winter landscape",
+    "izba" to "cozy room interior, warm light",
+    "studio" to "plain studio backdrop, soft studio lighting",
+    "vesmir" to "outer space, stars and colorful nebula",
+    "scifi" to "futuristic sci-fi city, spaceships, glowing lights",
+    "cyberpunk" to "cyberpunk street at night, neon signs, rain",
+    "fantasy" to "magical fantasy landscape, castle, glowing forest",
+    "vesmirna_lod" to "inside a futuristic spaceship, control panels",
+    "pust" to "desert dunes, hot sun",
+    "more" to "underwater world, coral reef, fish",
+    "postapo" to "post-apocalyptic ruined city, dust, overgrown buildings",
+    "dzungla" to "tropical jungle, waterfall",
+    "vlastne" to "",
+)
+
+// ---------------------------------------------------------------- prepojenie: model z Legion Go S / PC
+
+@Composable
+private fun PrepojenieKarta() {
+    val n = ChatJadro.nastavenia
+    val j = ChatJadro
+    var najdene by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
+    var hlada by remember { mutableStateOf(false) }
+    val farbyPola = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(T("siet_pouzit"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Text(T("siet_pouzit_info"), color = Farby.tlmene, fontSize = 12.sp)
+        }
+        Switch(checked = n.vzdialene, onCheckedChange = { j.nastavVzdialene(it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+    }
+    if (n.vzdialene) {
+        Text(T("siet_mobil_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(value = n.vzdialenaAdresa, onValueChange = { n.vzdialenaAdresa = it.trim(); n.uloz() }, singleLine = true,
+            modifier = Modifier.fillMaxWidth(), label = { Text(T("siet_adresa_pole")) },
+            placeholder = { Text("192.168.0.10:${Klient.PORT}", color = Farby.tlmene) }, shape = RoundedCornerShape(14.dp), colors = farbyPola)
+        Spacer(Modifier.height(6.dp))
+        OutlinedTextField(value = n.vzdialenyPin, onValueChange = { n.vzdialenyPin = it.filter { c -> c.isDigit() }; n.uloz() }, singleLine = true,
+            modifier = Modifier.fillMaxWidth(), label = { Text(T("siet_pin")) }, shape = RoundedCornerShape(14.dp), colors = farbyPola,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            GradientTlacidlo(T("siet_pripojit"), Icons.Default.Link, enabled = j.stav != StavModelu.NACITAVA) { j.pripoj() }
+            OutlinedButton(onClick = {
+                hlada = true
+                thread { val r = Klient.najdi(); Platforma.naHlavnom { najdene = r; hlada = false } }
+            }, enabled = !hlada, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                Icon(Icons.Default.Search, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(T(if (hlada) "siet_hladam" else "siet_najst"), color = Farby.text)
+            }
+        }
+        najdene?.let { z ->
+            if (z.isEmpty()) Text(T("siet_nic"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            z.forEach { (adr, meno) ->
+                Row(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Farby.plocha2)
+                    .clickable { n.vzdialenaAdresa = adr; n.uloz(); najdene = null }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Computer, null, tint = Farby.ruzova); Spacer(Modifier.width(10.dp))
+                    Column { Text(meno, color = Farby.text); Text(adr, color = Farby.tlmene, fontSize = 12.sp) }
+                }
+            }
+        }
+        val stavText = when (j.stav) {
+            StavModelu.PRIPRAVENY -> T("siet_pripojene", j.vzdialeneMeno, j.vzdialenyModel)
+            StavModelu.NACITAVA -> T("siet_pripajam")
+            StavModelu.CHYBA -> j.chyba
+            StavModelu.ZIADNY -> ""
+        }
+        if (stavText.isNotBlank()) Text(stavText, color = if (j.stav == StavModelu.PRIPRAVENY) Farby.zelena else if (j.stav == StavModelu.CHYBA) Farby.cervena else Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+    }
+    Text(T("siet_internet"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+}
+
+// ---------------------------------------------------------------- vylepšenie fotky
+
+@Composable
+private fun VylepsenieObrazovka(spat: () -> Unit) {
+    val v = VylepsenieJadro
+    val c = LocalContext.current
+    var poVylepseni by remember { mutableStateOf(true) }
+    val vyber = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? -> if (uri != null) v.nastavVstup(uri) }
+    fun vybrat() = vyber.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    val vstup = v.vstup; val vysledok = v.vysledok
+    val obrVstup = remember(vstup) { vstup?.let { nahlad(it) } }
+    val obrVysledok = remember(vysledok) { vysledok?.let { nahlad(it) } }
+
+    Column(Modifier.fillMaxSize()) {
+        Hlavicka(T("vylepsit"), spat = spat)
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Karta {
+                if (obrVstup == null) {
+                    if (vstup != null) { Text(T("vyl_neotvori", ""), color = Farby.cervena, fontSize = 13.sp); Spacer(Modifier.height(6.dp)) }
+                    Text(T("vyl_prazdne"), color = Farby.tlmene)
+                    Spacer(Modifier.height(10.dp))
+                    GradientTlacidlo(T("vyl_vybrat"), Icons.Default.AddPhotoAlternate) { vybrat() }
+                } else {
+                    val ukaz = if (obrVysledok != null && poVylepseni) obrVysledok else obrVstup
+                    Image(ukaz, null, Modifier.fillMaxWidth().aspectRatio(ukaz.width.toFloat() / ukaz.height).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (obrVysledok != null) {
+                            listOf(false to T("vyl_pred"), true to T("vyl_po")).forEach { (po, nazov) ->
+                                FilterChip(selected = poVylepseni == po, onClick = { poVylepseni = po }, label = { Text(nazov) },
+                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { vybrat() }, enabled = !v.pracuje) { Text(T("vyl_ina"), color = Farby.ruzova) }
+                    }
+                    if (vysledok != null) {
+                        Text("→ ${v.rozmerVysledku.first}×${v.rozmerVysledku.second}", color = Farby.tlmene, fontSize = 12.sp)
+                        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (android.os.Build.VERSION.SDK_INT >= 29) GradientTlacidlo(T("obr_ulozit"), Icons.Default.SaveAlt) {
+                                Platforma.oznam(c.getString(if (ObrazkyJadro.ulozDoGalerie(vysledok)) R.string.obr_ulozene else R.string.obr_neulozene))
+                            }
+                        }
+                    }
+                }
+            }
+            Karta {
+                Text(T("vyl_zvacsenie"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1 to T("vyl_bez"), 2 to "2×", 4 to "4×", VylepsenieJadro.K4 to "4K").forEach { (n, nazov) ->
+                        FilterChip(selected = v.nasobok == n, onClick = { v.nasobok = n }, label = { Text(nazov) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                if (v.nasobok > 1 && !v.mamModel()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(T("vyl_model", VylepsenieJadro.MB), color = Farby.tlmene, fontSize = 13.sp)
+                    Spacer(Modifier.height(6.dp))
+                    val p = v.priebehStahovania
+                    if (p != null) {
+                        Text("${T("stahujem")} ${(p * 100).roundToInt()} %", color = Farby.text, fontSize = 13.sp)
+                        LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    } else GradientTlacidlo(T("stiahnut"), Icons.Default.Download) { v.stiahniModel() }
+                }
+                Spacer(Modifier.height(10.dp))
+                listOf(
+                    Triple(T("vyl_jas"), v.autoJas) { b: Boolean -> v.autoJas = b },
+                    Triple(T("vyl_farby"), v.farby) { b: Boolean -> v.farby = b },
+                    Triple(T("vyl_ostrost"), v.doostrit) { b: Boolean -> v.doostrit = b },
+                ).forEach { (nazov, hodnota, zmen) ->
+                    Row(Modifier.fillMaxWidth().clickable { zmen(!hodnota) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(nazov, color = Farby.text, modifier = Modifier.weight(1f))
+                        Switch(checked = hodnota, onCheckedChange = zmen, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                if (v.pracuje) {
+                    Text(v.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                } else {
+                    GradientTlacidlo(T("vyl_spustit"), Icons.Default.AutoFixHigh, Modifier.fillMaxWidth(),
+                        enabled = v.vstup != null && (v.nasobok == 1 || v.mamModel()) && v.priebehStahovania == null) { poVylepseni = true; v.vylepsi() }
+                    if (v.nasobok >= 4) Text(T("vyl_cas_mobil"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+                if (v.chyba.isNotBlank()) Text(v.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Info, null, tint = Farby.tlmene, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                Text(T("vyl_info"), color = Farby.tlmene, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+/** náhľad fotky zmenšený na max ~2048 px (veľké 4K súbory by zbytočne zaberali pamäť) */
+private fun nahlad(f: File): androidx.compose.ui.graphics.ImageBitmap? = runCatching {
+    val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeFile(f.path, o)
+    var vz = 1; while (maxOf(o.outWidth, o.outHeight) / vz > 2048) vz *= 2
+    android.graphics.BitmapFactory.decodeFile(f.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = vz })?.asImageBitmap()
+}.getOrNull()

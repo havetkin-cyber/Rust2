@@ -19,6 +19,8 @@ class Nastavenia {
     var maxTokenov by mutableIntStateOf(p.getProperty("maxTokenov", "1024").toIntOrNull() ?: 1024)
     var vlakna by mutableIntStateOf(p.getProperty("vlakna")?.toIntOrNull() ?: predvoleneVlakna())
     var aktivnyModel by mutableStateOf(p.getProperty("model"))
+    var citatNahlas by mutableStateOf(p.getProperty("citatNahlas") == "true")
+    var jazykOdpovedi by mutableStateOf(p.getProperty("jazykOdpovedi") ?: if (java.util.Locale.getDefault().language in setOf("sk", "cs")) "sk" else "auto")
     var aktivnyObrazkovyModel by mutableStateOf(p.getProperty("obrazkovyModel"))
     var posunKlavesnica by mutableStateOf(p.getProperty("posunKlavesnica")?.let { it == "true" } ?: Klavesnica.jeSteamOS)
     var vyskaKlavesnice by mutableIntStateOf(p.getProperty("vyskaKlavesnice")?.toIntOrNull() ?: 42)
@@ -49,6 +51,8 @@ class Nastavenia {
         pozadieChatu?.let { p.setProperty("pozadieChatu", it) } ?: p.remove("pozadieChatu")
         p.setProperty("stmavenie", stmavenie.toString())
         p.setProperty("pinServera", pinServera)
+        p.setProperty("jazykOdpovedi", jazykOdpovedi)
+        p.setProperty("citatNahlas", citatNahlas.toString())
         p.setProperty("zdielat", zdielat.toString())
         p.setProperty("vzdialene", vzdialene.toString())
         p.setProperty("vzdialenaAdresa", vzdialenaAdresa)
@@ -56,6 +60,12 @@ class Nastavenia {
         aktivnyModel?.let { p.setProperty("model", it) } ?: p.remove("model")
         aktivnyObrazkovyModel?.let { p.setProperty("obrazkovyModel", it) } ?: p.remove("obrazkovyModel")
         runCatching { subor.outputStream().use { p.store(it, "Alexia AI") } }
+    }
+
+    /** systémový prompt + jazyk odpovedí (nastavuje používateľ; "auto" = nič nepridá) */
+    fun systemSJazykom(): String {
+        val j = when (jazykOdpovedi) { "sk" -> "Odpovedaj vždy po slovensky."; "en" -> "Always answer in English."; else -> "" }
+        return listOf(systemovyPrompt.trim(), j).filter { it.isNotEmpty() }.joinToString("\n")
     }
 
     companion object {

@@ -20,7 +20,8 @@ set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(sdcpp)
 
-add_library(alexiasd SHARED sd_jni.cpp)
+# sd_linux.cpp = sd_jni.cpp + vylepšenie fotky (Real-ESRGAN) a viacsúborové modely – rovnaký kód ako na počítači
+add_library(alexiasd SHARED ${CMAKE_CURRENT_LIST_DIR}/../../../../linux/native/sd/sd_linux.cpp)
 target_compile_options(alexiasd PRIVATE -O3)
 target_link_libraries(alexiasd stable-diffusion android log)
 target_link_options(alexiasd PRIVATE -Wl,--gc-sections -Wl,--exclude-libs,ALL)

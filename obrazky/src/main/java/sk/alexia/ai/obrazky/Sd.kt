@@ -13,4 +13,12 @@ object Sd {
     /** ARGB pixely alebo null; skutočná šírka a výška sa zapíšu do [rozmer] */
     external fun generuj(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, seed: Long, rozmer: IntArray): IntArray?
     external fun uvolni(h: Long)
+
+    // vylepšenie fotky (Real-ESRGAN) – obsah sa nemení, len sa zväčší
+    external fun upscalerNacitaj(cesta: String, vlakna: Int): Long
+    external fun upscalerNasobok(h: Long): Int
+    external fun zvacsi(h: Long, argb: IntArray, sirka: Int, vyska: Int, rozmer: IntArray): IntArray?
+    external fun upscalerUvolni(h: Long)
+    external fun nacitajViac(kluce: Array<String>, hodnoty: Array<String>, vlakna: Int, fa: Boolean): Long
+    external fun generujEx(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, seed: Long, metoda: String, rozmer: IntArray): IntArray?
 }

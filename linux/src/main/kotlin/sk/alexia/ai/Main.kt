@@ -443,6 +443,9 @@ private fun BublinaAI(text: String, pise: Boolean, posledna: Boolean) {
                     IconButton(onClick = { schranka.setText(AnnotatedString(odpoved)); Platforma.oznam(skopirovane) }, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.ContentCopy, T("kopirovat"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
                     }
+                    IconButton(onClick = { if (Hlas.hovori == text) Hlas.zastav() else Hlas.hovor(odpoved) }, modifier = Modifier.size(32.dp)) {
+                        Icon(if (Hlas.hovori == text) Icons.Default.StopCircle else Icons.Default.VolumeUp, T("hlas_precitat"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
+                    }
                     if (posledna) {
                         IconButton(onClick = { ChatJadro.znova() }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Refresh, T("znova"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
@@ -687,6 +690,29 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
         Hlavicka(T("nastavenia"), spat = spat)
         PosuvnyStlpec {
             Karta { PrepojenieKarta() }
+            Karta {
+                Text(T("hlas_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Text(T("hlas_jazyk"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("auto", "sk", "en").forEach { k ->
+                        FilterChip(selected = n.jazykOdpovedi == k, onClick = { n.jazykOdpovedi = k; n.uloz() }, label = { Text(T("jazyk_$k")) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                Text(T("hlas_jazyk_info"), color = Farby.tlmene, fontSize = 12.sp)
+                Row(Modifier.fillMaxWidth().clickable { n.citatNahlas = !n.citatNahlas; n.uloz() }.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("hlas_citat"), color = Farby.text, modifier = Modifier.weight(1f))
+                    Switch(checked = n.citatNahlas, onCheckedChange = { n.citatNahlas = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+                Text(T("hlas_lili", Hlas.MB), color = Farby.tlmene, fontSize = 12.sp)
+                val p = Hlas.priebeh
+                when {
+                    p != null -> LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    Hlas.mam() -> Text(T("hlas_mam"), color = Farby.zelena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                    else -> GradientTlacidlo(T("hlas_stiahnut"), Icons.Default.Download, Modifier.padding(top = 6.dp)) { Hlas.stiahni() }
+                }
+                if (Hlas.chyba.isNotBlank()) Text(Hlas.chyba, color = Farby.cervena, fontSize = 13.sp)
+            }
             Karta {
                 Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))

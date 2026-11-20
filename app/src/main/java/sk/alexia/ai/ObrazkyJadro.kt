@@ -50,7 +50,7 @@ object ObrazkyJadro {
     }
 
     fun priecinokModelov() = File(app.filesDir, "obrazkove-modely").apply { mkdirs() }
-    private fun priecinokObrazkov() = File(app.filesDir, "obrazky").apply { mkdirs() }
+    fun priecinokObrazkov() = File(app.filesDir, "obrazky").apply { mkdirs() }
     fun modely(): List<File> = priecinokModelov().listFiles { f -> f.isFile && f.name.endsWith(".gguf", true) || f.name.endsWith(".safetensors", true) }
         ?.filter { it.isFile }?.sortedBy { it.name.lowercase() } ?: emptyList()
 
@@ -62,10 +62,10 @@ object ObrazkyJadro {
     fun jeAktivny(f: File) = aktivnyModel == f.path
 
     /** načíta model; jazykový model sa najprv uvoľní, aby sa zmestili do pamäte */
-    fun nacitaj(cesta: String) {
+    fun nacitaj(cesta: String, uvolnitChat: Boolean = true) {
         if (nacitany == cesta && stav == StavModelu.PRIPRAVENY) return
         aktivnyModel = cesta
-        ChatJadro.uvolniPamat()
+        if (uvolnitChat) ChatJadro.uvolniPamat()
         stav = StavModelu.NACITAVA; chyba = ""
         val vl = ChatJadro.nastavenia.vlakna
         vlakno.execute {
@@ -89,30 +89,81 @@ object ObrazkyJadro {
 
     fun generuj(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float) {
         if (generuje || stav != StavModelu.PRIPRAVENY || prompt.isBlank()) return
+        spust(prompt, negativny, rozmer, kroky, cfg) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
+    }
+
+    /**
+     * Obrázok pre chat. Ak sa jazykový aj obrázkový model zmestia do RAM (do ~45 %), ostanú oba;
+     * inak sa chat na chvíľu uvoľní a po obrázku sa znova načíta.
+     */
+    fun nakresliDoChatu(popis: String, hotovo: (File?, String) -> Unit) {
+        val cesta = aktivnyModel
+        if (cesta == null || !File(cesta).exists()) { hotovo(null, T("chat_obr_ziadny")); return }
+        if (generuje) return
+        val uvolnit = ChatJadro.velkostNacitaneho() + File(cesta).length() > Platforma.ramBajtov() * 45 / 100
+        if (uvolnit) ChatJadro.uvolniPamat()
+        nacitaj(cesta, uvolnitChat = false)
+        spust(popis, "blurry, low quality, deformed", 384, 20, 7f) { f, e ->
+            hotovo(f, e)
+            if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
+        }
+    }
+
+    /** obrázok nakreslí iné zariadenie (prepojenie v sieti) */
+    fun nakresliNaDialku(adresa: String, pin: String, popis: String, hotovo: (File?, String) -> Unit) {
+        if (generuje) return
+        generuje = true; priebeh = 0f
+        Thread {
+            val f = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
+            val r = runCatching { Klient.obrazok(adresa, pin, popis, f) }
+            hlavne.post {
+                generuje = false
+                r.onSuccess { galeria.add(0, f); hotovo(f, "") }
+                r.onFailure { f.delete(); hotovo(null, it.message ?: "Spojenie zlyhalo") }
+            }
+        }.start()
+    }
+
+    private fun spust(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
         val seed = (Math.random() * Int.MAX_VALUE).toLong()
-        // priebeh čítame z iného vlákna, kým generovanie beží
         val sledovac = object : Runnable {
             override fun run() { if (generuje) { priebeh = Sd.priebeh(); hlavne.postDelayed(this, 300) } }
         }
         hlavne.postDelayed(sledovac, 300)
         vlakno.execute {
-            val r = IntArray(2)
-            val px = Sd.generuj(h, prompt.trim(), negativny.trim(), rozmer, rozmer, kroky, cfg, seed, r)
             var subor: File? = null; var e = ""
-            if (px != null) {
-                runCatching {
-                    val bmp = Bitmap.createBitmap(px, r[0], r[1], Bitmap.Config.ARGB_8888)
-                    subor = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
-                    subor!!.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                }.onFailure { e = it.message ?: "Obrázok sa nepodarilo uložiť" }
-            } else e = Sd.chyba()
+            if (h == 0L) e = Sd.chyba().ifBlank { "Obrázkový model sa nenačítal" }
+            else {
+                val r = IntArray(2)
+                val px = Sd.generuj(h, prompt.trim(), negativny.trim(), rozmer, rozmer, kroky, cfg, seed, r)
+                if (px != null) {
+                    runCatching {
+                        val bmp = Bitmap.createBitmap(px, r[0], r[1], Bitmap.Config.ARGB_8888)
+                        subor = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
+                        subor!!.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    }.onFailure { e = it.message ?: "Obrázok sa nepodarilo uložiť" }
+                } else e = Sd.chyba()
+            }
             hlavne.post {
                 generuje = false; priebeh = 0f
-                subor?.let { posledny = it; galeria.add(0, it) }
-                if (subor == null) chyba = e
+                subor?.let { galeria.add(0, it) }
+                hotovo(subor, e)
             }
         }
+    }
+
+    /** obrázok ako pozadie chatu – skopíruje sa, takže zmazanie z galérie pozadie nepokazí */
+    fun nastavPozadieChatu(f: File) {
+        val n = ChatJadro.nastavenia
+        val ok = runCatching { f.copyTo(File(app.filesDir, "pozadie-chatu.png"), overwrite = true) }.getOrNull()
+        if (ok != null) { n.pozadieChatu = ok.path; n.pozadieVerzia++; n.uloz(); Platforma.oznam(T("poz_chat_nastavene")) }
+    }
+
+    fun zrusPozadieChatu() {
+        val n = ChatJadro.nastavenia
+        n.pozadieChatu?.let { File(it).delete() }
+        n.pozadieChatu = null; n.pozadieVerzia++; n.uloz()
     }
 
     fun zrus() { if (h != 0L) Sd.zrus(h) }

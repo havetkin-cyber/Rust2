@@ -23,21 +23,31 @@ object Aktualizacie {
     var novaVerzia by mutableStateOf<String?>(null)
     private var skontrolovane = false
 
-    fun skontroluj(c: Context) {
-        if (skontrolovane) return
-        skontrolovane = true
+    var kontroluje by mutableStateOf(false)
+        private set
+
+    /** rucne = z Nastavení: ukáže aj preskočenú verziu a napíše, keď je appka aktuálna */
+    fun skontroluj(c: Context, rucne: Boolean = false) {
+        if (skontrolovane && !rucne) return
+        if (kontroluje) return
+        skontrolovane = true; kontroluje = true
         val moja = runCatching { PackageInfoCompat.getLongVersionCode(c.packageManager.getPackageInfo(c.packageName, 0)) }.getOrDefault(0L)
         val preskocena = c.getSharedPreferences("aktualizacie", Context.MODE_PRIVATE).getLong("preskocit", 0L)
         thread {
-            runCatching {
+            val r = runCatching {
                 val k = URL(API).openConnection() as HttpURLConnection
                 k.connectTimeout = 10_000; k.readTimeout = 10_000
                 k.setRequestProperty("Accept", "application/vnd.github+json")
                 k.setRequestProperty("User-Agent", "AlexiaAI")
                 val tag = JSONObject(k.inputStream.bufferedReader().readText()).getString("tag_name")   // v1.0.N
                 val n = tag.substringAfterLast('.').toLong()
-                if (n > moja && n > preskocena) { val v = tag.removePrefix("v"); android.os.Handler(android.os.Looper.getMainLooper()).post { novaVerzia = v } }
+                val v = tag.removePrefix("v")
+                Platforma.naHlavnom {
+                    if (n > moja && (rucne || n > preskocena)) novaVerzia = v
+                    else if (rucne) Platforma.oznam(T("akt_najnovsia", "1.0.$moja"))
+                }
             }
+            Platforma.naHlavnom { kontroluje = false; if (rucne) r.onFailure { Platforma.oznam(T("akt_nepodarilo")) } }
         }
     }
 

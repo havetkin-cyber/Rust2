@@ -135,7 +135,7 @@ object ChatJadro {
 
     /** pre server: vygeneruje odpoveď cudziemu zariadeniu; vráti null alebo text chyby */
     fun generujPreSiet(spravy: List<Pair<String, String>>, maxTok: Int, kus: (ByteArray) -> Boolean): String? {
-        val sys = nastavenia.systemovyPrompt.trim()
+        val sys = nastavenia.systemSJazykom()
         return vlakno.submit<String?> {
             if (h == 0L) return@submit T("siet_server_bez_modelu")
             val historia = spravy.toMutableList()
@@ -188,7 +188,7 @@ object ChatJadro {
 
     private fun generuj() {
         val historia = spravy.filter { !it.jeObrazkova }.map { it.rola to it.text }.toMutableList()
-        val sys = nastavenia.systemovyPrompt.trim()
+        val sys = nastavenia.systemSJazykom()
         val odpoved = Sprava("assistant", ""); spravy += odpoved
         generuje = true; tokenovZaSekundu = 0f
         val maxTok = nastavenia.maxTokenov
@@ -211,6 +211,7 @@ object ChatJadro {
                     generuje = false
                     if (e != null && odpoved.text.isEmpty()) odpoved.text = "⚠ $e"
                     ulozChat()
+                    Hlas.poOdpovedi(odpoved.text)
                 }
             }.start()
             return
@@ -238,6 +239,7 @@ object ChatJadro {
                 generuje = false
                 if (chybaText.isNotEmpty() && odpoved.text.isEmpty()) odpoved.text = "⚠ $chybaText"
                 ulozChat()
+                Hlas.poOdpovedi(odpoved.text)
             }
         }
     }

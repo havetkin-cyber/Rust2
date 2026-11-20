@@ -180,6 +180,19 @@ object ObrazkyJadro {
         vlakno.execute { f.delete() }
     }
 
+    /** obrázok ako pozadie chatu – skopíruje sa, takže zmazanie z galérie pozadie nepokazí */
+    fun nastavPozadieChatu(f: File) {
+        val n = ChatJadro.nastavenia
+        val ok = runCatching { f.copyTo(File(Platforma.priecinok, "pozadie-chatu.png"), overwrite = true) }.getOrNull()
+        if (ok != null) { n.pozadieChatu = ok.path; n.pozadieVerzia++; n.uloz(); Platforma.oznam(T("poz_chat_nastavene")) }
+    }
+
+    fun zrusPozadieChatu() {
+        val n = ChatJadro.nastavenia
+        n.pozadieChatu?.let { File(it).delete() }
+        n.pozadieChatu = null; n.pozadieVerzia++; n.uloz()
+    }
+
     /** uloží kópiu do ~/Pictures/Alexia AI */
     fun ulozDoGalerie(f: File): Boolean = runCatching {
         val dir = File(Platforma.obrazkyPouzivatela, "Alexia AI").apply { mkdirs() }

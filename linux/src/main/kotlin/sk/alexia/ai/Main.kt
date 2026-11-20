@@ -125,6 +125,15 @@ private fun Appka() {
             .background(Farby.pozadie)
             .background(Brush.radialGradient(listOf(Farby.fialova.copy(alpha = 0.16f), Color.Transparent), radius = 900f))
     ) {
+        // pozadie chatu (obrázok, ktorý si vytvoril)
+        val nn = ChatJadro.nastavenia
+        if (obrazovka == Obrazovka.CHAT && nn.pozadieChatu != null) {
+            val bmp = remember(nn.pozadieChatu, nn.pozadieVerzia) { nn.pozadieChatu?.let { Platforma.nacitajObrazok(File(it)) } }
+            if (bmp != null) {
+                Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = nn.stmavenie / 100f)))
+            }
+        }
         // na širokej obrazovke obsah v strede, aby sa dobre čítal
         Aktualizacia()
         val n = ChatJadro.nastavenia
@@ -456,6 +465,9 @@ private fun BublinaObrazok(s: Sprava) {
                         IconButton(onClick = { Platforma.oznam(if (o.ulozDoGalerie(File(cesta!!))) ulozene else neulozene) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.SaveAlt, T("obr_ulozit"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
                         }
+                        IconButton(onClick = { o.nastavPozadieChatu(File(cesta!!)) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Wallpaper, T("poz_chat_tlacidlo"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
                 s.text.isNotEmpty() -> Text(s.text, color = Farby.cervena, fontSize = 14.sp)
@@ -631,6 +643,24 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
                 if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(rucne = true) }
+            }
+            Karta {
+                Text(T("poz_chat_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                val bmp = remember(n.pozadieChatu, n.pozadieVerzia) { n.pozadieChatu?.let { Platforma.nacitajObrazok(File(it), 4) } }
+                if (bmp == null) Text(T("poz_chat_ziadne"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                else {
+                    Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(140.dp).clip(RoundedCornerShape(14.dp))) {
+                        Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = n.stmavenie / 100f)))
+                        Text(T("ahoj_nadpis"), color = Farby.text, modifier = Modifier.align(Alignment.Center))
+                    }
+                    Text(T("poz_chat_stmavenie", n.stmavenie), color = Farby.text, fontSize = 14.sp)
+                    Slider(value = n.stmavenie.toFloat(), onValueChange = { n.stmavenie = it.roundToInt() }, onValueChangeFinished = { n.uloz() }, valueRange = 0f..90f,
+                        colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                    OutlinedButton(onClick = { ObrazkyJadro.zrusPozadieChatu() }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene); Spacer(Modifier.width(6.dp)); Text(T("poz_chat_zrusit"), color = Farby.tlmene)
+                    }
+                }
             }
             Karta {
                 Text(T("kl_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
@@ -833,6 +863,9 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                                     Platforma.oznam(if (o.ulozDoGalerie(f)) ulozene else neulozene)
                                 }
                             }
+                            OutlinedButton(onClick = { o.nastavPozadieChatu(f) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                                Icon(Icons.Default.Wallpaper, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(T("poz_chat_tlacidlo"), color = Farby.text)
+                            }
                             OutlinedButton(onClick = { o.zmazObrazok(f) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                                 Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene); Spacer(Modifier.width(6.dp)); Text(T("zmazat"), color = Farby.tlmene)
                             }
@@ -997,6 +1030,9 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         GradientTlacidlo(T("obr_ulozit"), Icons.Default.SaveAlt) {
                             Platforma.oznam(if (o.ulozDoGalerie(f)) ulozene else neulozene)
                         }
+                    }
+                    OutlinedButton(onClick = { o.nastavPozadieChatu(f) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.Wallpaper, T("poz_chat_tlacidlo"), tint = Farby.text)
                     }
                     OutlinedButton(onClick = { o.zmazObrazok(f); detail = null }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                         Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene)

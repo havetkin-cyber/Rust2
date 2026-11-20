@@ -14,6 +14,12 @@ object T {
     }
 
     private val sk = mapOf(
+        "poz_chat_tlacidlo" to "Pozadie chatu",
+        "poz_chat_nastavene" to "Nastavené ako pozadie chatu",
+        "poz_chat_karta" to "Pozadie chatu",
+        "poz_chat_ziadne" to "Žiadne. V Obrázkoch alebo v chate pri obrázku ťukni na „Pozadie chatu“.",
+        "poz_chat_stmavenie" to "Stmavenie: %1\$d %%",
+        "poz_chat_zrusit" to "Odstrániť pozadie",
         "kl_karta" to "Klávesnica na obrazovke",
         "kl_posun" to "Posunúť pole s textom nad klávesnicu",
         "kl_vyska" to "Výška klávesnice: %1\$d %% obrazovky",
@@ -161,6 +167,12 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "poz_chat_tlacidlo" to "Chat background",
+        "poz_chat_nastavene" to "Set as chat background",
+        "poz_chat_karta" to "Chat background",
+        "poz_chat_ziadne" to "None. In Images or in the chat, tap “Chat background” on an image.",
+        "poz_chat_stmavenie" to "Dimming: %1\$d %%",
+        "poz_chat_zrusit" to "Remove background",
         "kl_karta" to "On-screen keyboard",
         "kl_posun" to "Move the text field above the keyboard",
         "kl_vyska" to "Keyboard height: %1\$d %% of the screen",

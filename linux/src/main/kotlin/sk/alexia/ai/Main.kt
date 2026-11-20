@@ -426,8 +426,15 @@ private fun BublinaAI(text: String, pise: Boolean, posledna: Boolean) {
             if (odpoved.isEmpty() && pise) {
                 Bodky()
             } else {
-                SelectionContainer {
-                    Text(odpoved + if (pise) " ▍" else "", color = Farby.text, fontSize = 15.sp, lineHeight = 22.sp)
+                val kusy = remember(odpoved) { rozdelKod(odpoved) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    kusy.forEachIndexed { i, k ->
+                        val koniec = if (pise && i == kusy.lastIndex) " ▍" else ""
+                        if (k.jazyk != null) BlokKodu(k.text, k.jazyk)
+                        else if (k.text.isNotBlank() || koniec.isNotEmpty()) SelectionContainer {
+                            Text(k.text.trim('\n') + koniec, color = Farby.text, fontSize = 15.sp, lineHeight = 22.sp)
+                        }
+                    }
                 }
             }
             if (!pise && odpoved.isNotEmpty()) {
@@ -481,6 +488,46 @@ private fun BublinaObrazok(s: Sprava) {
                     TextButton(onClick = { o.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
                 }
             }
+        }
+    }
+}
+
+/** kus odpovede: obyčajný text (jazyk = null) alebo kód medzi ``` */
+private class KusTextu(val text: String, val jazyk: String?)
+
+private fun rozdelKod(t: String): List<KusTextu> {
+    val z = mutableListOf<KusTextu>(); var i = 0
+    while (i < t.length) {
+        val a = t.indexOf("```", i)
+        if (a < 0) { z += KusTextu(t.substring(i), null); break }
+        if (a > i) z += KusTextu(t.substring(i, a), null)
+        val riadok = t.indexOf('\n', a + 3)
+        if (riadok < 0) { z += KusTextu("", t.substring(a + 3).trim()); break } // ešte píše prvý riadok
+        val jazyk = t.substring(a + 3, riadok).trim()
+        val b = t.indexOf("```", riadok + 1)
+        if (b < 0) { z += KusTextu(t.substring(riadok + 1), jazyk); break } // kód sa ešte píše
+        z += KusTextu(t.substring(riadok + 1, b).trimEnd('\n'), jazyk)
+        i = b + 3
+    }
+    return z
+}
+
+/** tmavé okno s kódom ako vo VS Code – s názvom jazyka a tlačidlom Kopírovať */
+@Composable
+private fun BlokKodu(kod: String, jazyk: String) {
+    val schranka = LocalClipboardManager.current
+    val skopirovane = T("skopirovane")
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF1E1E1E)).border(1.dp, Color(0xFF333333), RoundedCornerShape(12.dp))) {
+        Row(Modifier.fillMaxWidth().background(Color(0xFF2D2D2D)).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(jazyk.ifBlank { "kód" }, color = Color(0xFF9CDCFE), fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, modifier = Modifier.weight(1f))
+            TextButton(onClick = { schranka.setText(AnnotatedString(kod)); Platforma.oznam(skopirovane) }) {
+                Icon(Icons.Default.ContentCopy, null, tint = Color(0xFFCCCCCC), modifier = Modifier.size(14.dp)); Spacer(Modifier.width(6.dp))
+                Text(T("kopirovat"), color = Color(0xFFCCCCCC), fontSize = 12.sp)
+            }
+        }
+        SelectionContainer {
+            Text(kod, color = Color(0xFFD4D4D4), fontSize = 13.sp, lineHeight = 19.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, softWrap = false,
+                modifier = Modifier.horizontalScroll(rememberScrollState()).padding(12.dp))
         }
     }
 }

@@ -67,4 +67,8 @@
     <string name="obr_vlastny">Vlastný model (.gguf / .safetensors)</string>
     <string name="zo_suboru_kratko">Zo súboru</string>
     <string name="obr_info">Funguje Stable Diffusion 1.x/2.x vo formáte GGUF alebo safetensors. Obrázky sú len v appke, kým ich neuložíš do galérie. Pri tvorbe obrázkov sa chatový model dočasne uvoľní z pamäte.</string>
+    <string name="akt_nadpis">Nová verzia %1$s</string>
+    <string name="akt_text">Ťukni na Stiahnuť – APK sa stiahne v prehliadači, potom ho otvor a nainštaluj cez súčasnú verziu. Chat, modely aj obrázky ostanú.</string>
+    <string name="akt_stiahnut">Stiahnuť</string>
+    <string name="akt_neskor">Preskočiť</string>
 </resources>

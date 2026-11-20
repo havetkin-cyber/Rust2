@@ -69,5 +69,6 @@ jobs:
           ls -la AlexiaAI-x86_64.AppImage
           # pridá ZIP k najnovšiemu vydaniu (tam, kde je aj APK)
           TAG=$(gh release view --json tagName -q .tagName)
-          gh release upload "$TAG" AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage --clobber
+          echo "1.1.${{ github.run_number }}" > linux-verzia.txt
+          gh release upload "$TAG" AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage linux-verzia.txt --clobber
           echo "Pridané k vydaniu $TAG"

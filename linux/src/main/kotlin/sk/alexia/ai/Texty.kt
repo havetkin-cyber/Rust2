@@ -14,6 +14,12 @@ object T {
     }
 
     private val sk = mapOf(
+        "akt_nadpis" to "Nová verzia %1\$s",
+        "akt_text_appimage" to "Alexia AI sa stiahne a vymení sama, potom sa znova spustí. Chat, modely aj obrázky ostanú.",
+        "akt_text_zip" to "Nový ZIP sa otvorí v prehliadači. Rozbaľ ho cez starý priečinok – chat, modely aj obrázky ostanú.",
+        "akt_teraz" to "Teraz máš verziu %1\$s.",
+        "akt_aktualizovat" to "Aktualizovať",
+        "akt_neskor" to "Preskočiť",
         "vylepsit" to "Vylepšiť fotku",
         "vyl_vybrat" to "Vybrať fotku",
         "vyl_ina" to "Iná fotka",
@@ -105,6 +111,12 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "akt_nadpis" to "New version %1\$s",
+        "akt_text_appimage" to "Alexia AI will download and replace itself, then restart. Chats, models and images stay.",
+        "akt_text_zip" to "The new ZIP opens in your browser. Extract it over the old folder – chats, models and images stay.",
+        "akt_teraz" to "You have version %1\$s.",
+        "akt_aktualizovat" to "Update",
+        "akt_neskor" to "Skip",
         "vylepsit" to "Enhance photo",
         "vyl_vybrat" to "Choose photo",
         "vyl_ina" to "Another photo",

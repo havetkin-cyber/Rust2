@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         ChatJadro.init(this)
         ObrazkyJadro.init(this)
+        Aktualizacie.skontroluj(this)
         setContent { AlexiaTema { Appka() } }
     }
 }
@@ -89,6 +90,7 @@ private fun Appka() {
             .systemBarsPadding()
             .imePadding(),
     ) {
+        Aktualizacia()
         when (obrazovka) {
             Obrazovka.CHAT -> ChatObrazovka(
                 naModely = { obrazovka = Obrazovka.MODELY },
@@ -765,4 +767,19 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun Aktualizacia() {
+    val c = LocalContext.current
+    val v = Aktualizacie.novaVerzia ?: return
+    AlertDialog(
+        onDismissRequest = { Aktualizacie.novaVerzia = null },
+        containerColor = Farby.plocha,
+        icon = { Icon(Icons.Default.SystemUpdate, null, tint = Farby.ruzova) },
+        title = { Text(stringResource(R.string.akt_nadpis, v), color = Farby.text) },
+        text = { Text(stringResource(R.string.akt_text), color = Farby.tlmene) },
+        confirmButton = { TextButton(onClick = { Aktualizacie.stiahni(c) }) { Text(stringResource(R.string.akt_stiahnut), color = Farby.ruzova) } },
+        dismissButton = { TextButton(onClick = { Aktualizacie.preskoc(c) }) { Text(stringResource(R.string.akt_neskor), color = Farby.tlmene) } },
+    )
 }

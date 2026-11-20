@@ -57,6 +57,7 @@ import androidx.compose.ui.window.rememberWindowState
 fun main() {
     ChatJadro.init()
     ObrazkyJadro.init()
+    Aktualizacie.skontroluj()
     application {
         val stav = rememberWindowState(placement = WindowPlacement.Maximized, size = DpSize(1280.dp, 800.dp))
         Window(onCloseRequest = ::exitApplication, title = "Alexia AI", state = stav, onPreviewKeyEvent = {
@@ -96,6 +97,7 @@ private fun Appka() {
             .background(Brush.radialGradient(listOf(Farby.fialova.copy(alpha = 0.16f), Color.Transparent), radius = 900f))
     ) {
         // na širokej obrazovke obsah v strede, aby sa dobre čítal
+        Aktualizacia()
         Box(Modifier.fillMaxHeight().widthIn(max = 960.dp).fillMaxWidth().align(Alignment.TopCenter)) {
         when (obrazovka) {
             Obrazovka.CHAT -> ChatObrazovka(
@@ -888,4 +890,29 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun Aktualizacia() {
+    val v = Aktualizacie.novaVerzia ?: return
+    val p = Aktualizacie.priebeh
+    AlertDialog(
+        onDismissRequest = { if (p == null) Aktualizacie.novaVerzia = null },
+        containerColor = Farby.plocha,
+        icon = { Icon(Icons.Default.SystemUpdate, null, tint = Farby.ruzova) },
+        title = { Text(T("akt_nadpis", v), color = Farby.text) },
+        text = {
+            Column {
+                Text(T(if (Aktualizacie.samaSaVymeni) "akt_text_appimage" else "akt_text_zip"), color = Farby.tlmene)
+                Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                if (p != null) {
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                }
+                if (Aktualizacie.chyba.isNotBlank()) Text(Aktualizacie.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        },
+        confirmButton = { TextButton(onClick = { Aktualizacie.aktualizuj() }, enabled = p == null) { Text(T("akt_aktualizovat"), color = Farby.ruzova) } },
+        dismissButton = { if (p == null) TextButton(onClick = { Aktualizacie.preskoc() }) { Text(T("akt_neskor"), color = Farby.tlmene) } },
+    )
 }

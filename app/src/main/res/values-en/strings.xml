@@ -67,4 +67,8 @@
     <string name="obr_vlastny">Custom model (.gguf / .safetensors)</string>
     <string name="zo_suboru_kratko">From file</string>
     <string name="obr_info">Works with Stable Diffusion 1.x/2.x in GGUF or safetensors. Images stay in the app until you save them. The chat model is unloaded from memory while creating images.</string>
+    <string name="akt_nadpis">New version %1$s</string>
+    <string name="akt_text">Tap Download – the APK downloads in your browser; open it to install over this version. Chats, models and images stay.</string>
+    <string name="akt_stiahnut">Download</string>
+    <string name="akt_neskor">Skip</string>
 </resources>

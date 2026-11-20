@@ -905,7 +905,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                     Text(T("vyl_prazdne"), color = Farby.tlmene)
                     Spacer(Modifier.height(10.dp))
                     GradientTlacidlo(T("vyl_vybrat"), Icons.Default.AddPhotoAlternate) {
-                        Platforma.vyberSubor(nadpisVyberu, Platforma.PRIPONY_FOTIEK) { v.vstup = it; v.vysledok = null }
+                        Platforma.vyberSubor(nadpisVyberu, Platforma.PRIPONY_FOTIEK) { v.vstup = it }
                     }
                 } else {
                     val ukaz = if (obrVysledok != null && poVylepseni) obrVysledok else obrVstup
@@ -922,7 +922,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                             Text("${obrVstup.width}×${obrVstup.height}", color = Farby.tlmene, fontSize = 12.sp)
                         }
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { Platforma.vyberSubor(nadpisVyberu, Platforma.PRIPONY_FOTIEK) { v.vstup = it; v.vysledok = null } }, enabled = !v.pracuje) { Text(T("vyl_ina"), color = Farby.ruzova) }
+                        TextButton(onClick = { Platforma.vyberSubor(nadpisVyberu, Platforma.PRIPONY_FOTIEK) { v.vstup = it } }, enabled = !v.pracuje) { Text(T("vyl_ina"), color = Farby.ruzova) }
                     }
                     if (vysledok != null) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

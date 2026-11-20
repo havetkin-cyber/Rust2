@@ -26,7 +26,11 @@ object VylepsenieJadro {
     private val vlakno = Executors.newSingleThreadExecutor { Thread(it, "vylepsenie") }
     private var h = 0L
 
-    var vstup by mutableStateOf<File?>(null)
+    private var _vstup by mutableStateOf<File?>(null)
+    /** nová fotka zmaže starý výsledok */
+    var vstup: File?
+        get() = _vstup
+        set(v) { _vstup = v; vysledok = null }
     var vysledok by mutableStateOf<File?>(null)
         private set
     var pracuje by mutableStateOf(false)

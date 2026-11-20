@@ -19,4 +19,8 @@ object Sd {
     external fun upscalerNasobok(h: Long): Int
     external fun zvacsi(h: Long, argb: IntArray, sirka: Int, vyska: Int, rozmer: IntArray): IntArray?
     external fun upscalerUvolni(h: Long)
+
+    // modely z viacerých súborov (Z-Image, FLUX…) a generovanie so zvoleným samplerom
+    external fun nacitajViac(kluce: Array<String>, hodnoty: Array<String>, vlakna: Int, fa: Boolean): Long
+    external fun generujEx(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, seed: Long, metoda: String, rozmer: IntArray): IntArray?
 }

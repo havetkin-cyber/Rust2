@@ -14,6 +14,8 @@ object T {
     }
 
     private val sk = mapOf(
+        "obr_suborov" to "%1\$d súbory",
+        "ram_na_hrane" to "Na hrane 16 GB – zavri ostatné appky, pobeží pomalšie.",
         "akt_nadpis" to "Nová verzia %1\$s",
         "akt_text_appimage" to "Alexia AI sa stiahne a vymení sama, potom sa znova spustí. Chat, modely aj obrázky ostanú.",
         "akt_text_zip" to "Nový ZIP sa otvorí v prehliadači. Rozbaľ ho cez starý priečinok – chat, modely aj obrázky ostanú.",
@@ -75,11 +77,11 @@ object T {
         "novy_chat" to "Nový chat",
         "obr_anglicky" to "Tip: modely rozumejú najlepšie po anglicky.",
         "obr_bez_modelu" to "Na obrázky treba model",
-        "obr_bez_modelu_info" to "Stiahni si model nižšie (raz, ~1,6–1,8 GB). Potom už všetko beží offline.",
-        "obr_cas" to "Na grafike Legion Go S to trvá zhruba 20–90 sekúnd podľa veľkosti a krokov.",
+        "obr_bez_modelu_info" to "Stiahni si model nižšie – odporúčame Z-Image Turbo (realistické fotky). Sťahuje sa raz, potom všetko beží offline.",
+        "obr_cas" to "Na grafike Legion Go S: SD 1.5 ~20–60 s, Z-Image Turbo ~1–3 min, FLUX ~3–6 min (podľa veľkosti).",
         "obr_cfg" to "Presnosť podľa popisu: %1\$.1f",
         "obr_galeria" to "TVOJE OBRÁZKY",
-        "obr_info" to "Funguje Stable Diffusion 1.x/2.x vo formáte GGUF alebo safetensors. Obrázky sú v appke, kým ich neuložíš do priečinka Obrázky. Pri tvorbe obrázkov sa chatový model dočasne uvoľní z pamäte.",
+        "obr_info" to "Funguje Stable Diffusion 1.x/2.x/XL (jeden súbor GGUF alebo safetensors) a modely z katalógu – Z-Image Turbo a FLUX.1 schnell. Obrázky sú v appke, kým ich neuložíš do priečinka Obrázky. Pri tvorbe obrázkov sa chatový model dočasne uvoľní z pamäte.",
         "obr_kroky" to "Kroky: %1\$d (viac = kvalitnejšie, pomalšie)",
         "obr_modely" to "MODELY NA OBRÁZKY",
         "obr_negativny" to "Čo na obrázku nechceš",
@@ -111,6 +113,8 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "obr_suborov" to "%1\$d files",
+        "ram_na_hrane" to "At the limit of 16 GB – close other apps, it will run slower.",
         "akt_nadpis" to "New version %1\$s",
         "akt_text_appimage" to "Alexia AI will download and replace itself, then restart. Chats, models and images stay.",
         "akt_text_zip" to "The new ZIP opens in your browser. Extract it over the old folder – chats, models and images stay.",
@@ -172,11 +176,11 @@ object T {
         "novy_chat" to "New chat",
         "obr_anglicky" to "Tip: models understand English best.",
         "obr_bez_modelu" to "Images need a model",
-        "obr_bez_modelu_info" to "Download a model below (once, ~1.6–1.8 GB). After that everything runs offline.",
-        "obr_cas" to "On the Legion Go S graphics this takes about 20–90 seconds depending on size and steps.",
+        "obr_bez_modelu_info" to "Download a model below – Z-Image Turbo is recommended (realistic photos). Downloaded once, then everything runs offline.",
+        "obr_cas" to "On the Legion Go S GPU: SD 1.5 ~20–60 s, Z-Image Turbo ~1–3 min, FLUX ~3–6 min (depending on size).",
         "obr_cfg" to "Prompt strength: %1\$.1f",
         "obr_galeria" to "YOUR IMAGES",
-        "obr_info" to "Works with Stable Diffusion 1.x/2.x in GGUF or safetensors. Images stay in the app until you save them to Pictures. The chat model is unloaded from memory while creating images.",
+        "obr_info" to "Works with Stable Diffusion 1.x/2.x/XL (single GGUF or safetensors file) and catalog models – Z-Image Turbo and FLUX.1 schnell. Images stay in the app until you save them to Pictures. The chat model is unloaded from memory while creating images.",
         "obr_kroky" to "Steps: %1\$d (more = better, slower)",
         "obr_modely" to "IMAGE MODELS",
         "obr_negativny" to "What you don't want in the image",

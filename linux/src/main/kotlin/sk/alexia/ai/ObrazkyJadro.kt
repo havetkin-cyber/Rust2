@@ -13,12 +13,6 @@ import java.util.concurrent.Executors
 
 /** Tvorba obrázkov z textu (stable-diffusion.cpp), offline. Obrázky sú len v priečinku appky, kým ich neuložíš do galérie. */
 object ObrazkyJadro {
-    val odporucane = listOf(
-        OdporucanyModel("Stable Diffusion 1.5 (Q8_0)", "lepšia kvalita",
-            "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf", 1760),
-        OdporucanyModel("Stable Diffusion 1.5 (Q4_0)", "menší, trochu horšia kvalita",
-            "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf", 1570),
-    )
 
     private val vlakno = Executors.newSingleThreadExecutor { Thread(it, "sd").apply { priority = Thread.MAX_PRIORITY } }
     private var h = 0L
@@ -54,6 +48,29 @@ object ObrazkyJadro {
 
     fun jeAktivny(f: File) = aktivnyModel == f.path
 
+    // ---- modely z viacerých súborov (katalóg)
+    fun priecinokSady(s: ObrazkovaSada) = File(priecinokModelov(), s.id)
+    fun suborSady(s: ObrazkovaSada, url: String) = File(priecinokSady(s), url.substringAfterLast('/'))
+    fun mamSadu(s: ObrazkovaSada) = s.subory.values.all { suborSady(s, it).let { f -> f.exists() && f.length() > 1024 } }
+    fun sady(): List<ObrazkovaSada> = Katalog.obrazky.filter { mamSadu(it) }
+    fun aktivnaSada(): ObrazkovaSada? = aktivnyModel?.takeIf { it.startsWith("sada:") }?.let { id -> Katalog.obrazky.find { "sada:" + it.id == id } }
+    fun jeAktivna(s: ObrazkovaSada) = aktivnyModel == "sada:" + s.id
+
+    /** stiahne chýbajúce súbory sady jeden po druhom; priebeh(0..1, "2/3 ae.safetensors") */
+    fun stiahniSadu(s: ObrazkovaSada, priebeh: (Float, String) -> Unit, zrusene: () -> Boolean) {
+        val chyba = s.subory.values.filter { u -> !suborSady(s, u).exists() }
+        priecinokSady(s).mkdirs()
+        chyba.forEachIndexed { i, u ->
+            val popis = "${i + 1}/${chyba.size} ${u.substringAfterLast('/')}"
+            Modely.stiahni(u, { p -> priebeh(p, popis) }, zrusene, priecinokSady(s), true)
+        }
+    }
+
+    fun zmazSadu(s: ObrazkovaSada) {
+        if (jeAktivna(s)) { uvolniPamat(); aktivnyModel = null; stav = StavModelu.ZIADNY }
+        vlakno.execute { priecinokSady(s).deleteRecursively() }
+    }
+
     /** načíta model; jazykový model sa najprv uvoľní, aby sa zmestili do pamäte */
     fun nacitaj(cesta: String) {
         if (nacitany == cesta && stav == StavModelu.PRIPRAVENY) return
@@ -63,7 +80,11 @@ object ObrazkyJadro {
         val vl = ChatJadro.nastavenia.vlakna
         vlakno.execute {
             if (h != 0L) { Sd.uvolni(h); h = 0L }
-            val novy = Sd.nacitaj(cesta, vl)
+            val sada = Katalog.obrazky.find { "sada:" + it.id == cesta }
+            val novy = if (sada != null) {
+                val k = sada.subory.keys.toTypedArray()
+                Sd.nacitajViac(k, k.map { suborSady(sada, sada.subory.getValue(it)).absolutePath }.toTypedArray(), vl, sada.fa)
+            } else Sd.nacitaj(cesta, vl)
             val e = if (novy == 0L) Sd.chyba() else ""
             h = novy
             Platforma.naHlavnom {
@@ -96,7 +117,8 @@ object ObrazkyJadro {
         }.apply { isDaemon = true }.start()
         vlakno.execute {
             val r = IntArray(2)
-            val px = Sd.generuj(h, prompt.trim(), negativny.trim(), rozmer, rozmer, kroky, cfg, seed, r)
+            val metoda = aktivnaSada()?.metoda ?: "euler_a"
+            val px = Sd.generujEx(h, prompt.trim(), negativny.trim(), rozmer, rozmer, kroky, cfg, seed, metoda, r)
             var subor: File? = null; var e = ""
             if (px != null) {
                 runCatching {

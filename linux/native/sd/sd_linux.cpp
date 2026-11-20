@@ -60,3 +60,61 @@ F(jintArray, zvacsi)(JNIEnv* env, jobject, jlong h, jintArray argb, jint w, jint
 }
 
 F(void, upscalerUvolni)(JNIEnv*, jobject, jlong h) { if (h) sd_upscaler_free((sd_upscaler_t*)h); }
+
+// ---------------------------------------------------------------- modely z viacerých súborov (Z-Image, FLUX…)
+// kľúče: model_path, diffusion_model_path, vae_path, llm_path, clip_l_path, clip_g_path, t5xxl_path
+F(jlong, nacitajViac)(JNIEnv* env, jobject, jobjectArray kluce, jobjectArray hodnoty, jint vlakna, jboolean fa) {
+    static bool init = false;
+    if (!init) { sd_set_log_callback(logovanie, nullptr); sd_set_progress_callback(priebeh, nullptr); init = true; }
+    g_chyba.clear();
+    sd_ctx_opt_t* o = sd_ctx_opt_create();
+    bool v = o && ok(sd_opt_set_int(o, "n_threads", vlakna));
+    for (jsize i = 0, n = env->GetArrayLength(kluce); v && i < n; i++) {
+        auto jk = (jstring)env->GetObjectArrayElement(kluce, i); auto jh = (jstring)env->GetObjectArrayElement(hodnoty, i);
+        std::string k = jstr(env, jk), h = jstr(env, jh);
+        env->DeleteLocalRef(jk); env->DeleteLocalRef(jh);
+        v = ok(sd_opt_set_string(o, k.c_str(), h.c_str()));
+    }
+    if (v && fa) v = ok(sd_opt_set_bool(o, "diffusion_flash_attn", true));
+    sd_ctx_t* ctx = nullptr;
+    v = v && ok(sd_ctx_create(o, &ctx));
+    sd_opt_free(o);
+    if (!v || !ctx) { if (g_chyba.empty()) g_chyba = "Model sa nedá načítať"; return 0; }
+    if (!sd_ctx_supports_image_generation(ctx)) { sd_ctx_free(ctx); g_chyba = "Tento model nevie tvoriť obrázky"; return 0; }
+    return (jlong)ctx;
+}
+
+// ako generuj, ale so zvoleným samplerom ("" alebo "auto" = predvolený pre model)
+F(jintArray, generujEx)(JNIEnv* env, jobject, jlong h, jstring prompt, jstring negativny, jint w, jint v,
+                        jint kroky, jfloat cfg, jlong seed, jstring metoda, jintArray rozmer) {
+    auto* ctx = (sd_ctx_t*)h; g_chyba.clear(); g_krok = 0; g_krokov = kroky;
+    sd_cancel_generation(ctx, SD_CANCEL_RESET);
+    std::string p = jstr(env, prompt), n = jstr(env, negativny), m = jstr(env, metoda);
+    sd_img_gen_opt_t* o = sd_img_gen_opt_create();
+    sd_result_t* res = nullptr;
+    bool good = o && ok(sd_opt_set_string(o, "prompt", p.c_str()))
+                  && (n.empty() || ok(sd_opt_set_string(o, "negative_prompt", n.c_str())))
+                  && ok(sd_opt_set_int(o, "width", w)) && ok(sd_opt_set_int(o, "height", v))
+                  && ok(sd_opt_set_int(o, "seed", seed))
+                  && ok(sd_opt_set_int(o, "sample.steps", kroky))
+                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg))
+                  && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
+                  && ok(sd_generate_image(ctx, o, &res));
+    sd_opt_free(o);
+    if (!good || !res || sd_result_get_image_count(res) == 0) { sd_result_free(res); if (g_chyba.empty()) g_chyba = "Obrázok sa nepodarilo vytvoriť"; return nullptr; }
+    const sd_tensor_t* img = sd_result_get_image(res, 0);
+    int64_t c = sd_tensor_dim(img, 0), sw = sd_tensor_dim(img, 1), sv = sd_tensor_dim(img, 2);
+    const auto* d = (const uint8_t*)sd_tensor_data(img);
+    if (sd_tensor_type(img) != SD_TENSOR_U8 || c < 3 || !d) { sd_result_free(res); g_chyba = "Neočakávaný formát obrázka"; return nullptr; }
+    std::vector<jint> px((size_t)(sw * sv));
+    for (int64_t i = 0; i < sw * sv; i++) {
+        const uint8_t* q = d + i * c;
+        px[(size_t)i] = (jint)(0xFF000000u | ((uint32_t)q[0] << 16) | ((uint32_t)q[1] << 8) | q[2]);
+    }
+    sd_result_free(res);
+    jint r[2] = {(jint)sw, (jint)sv}; env->SetIntArrayRegion(rozmer, 0, 2, r);
+    jintArray out = env->NewIntArray((jsize)px.size());
+    env->SetIntArrayRegion(out, 0, (jsize)px.size(), px.data());
+    g_krok = g_krokov.load();
+    return out;
+}

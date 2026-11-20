@@ -84,7 +84,9 @@ private fun Appka() {
     // v pamäti je vždy len jeden model: obrázky alebo chat
     LaunchedEffect(obrazovka) {
         when (obrazovka) {
-            Obrazovka.OBRAZKY -> ObrazkyJadro.aktivnyModel?.let { if (File(it).exists()) ObrazkyJadro.nacitaj(it) }
+            Obrazovka.OBRAZKY -> ObrazkyJadro.aktivnyModel?.let { m ->
+                if (File(m).exists() || ObrazkyJadro.aktivnaSada()?.let { ObrazkyJadro.mamSadu(it) } == true) ObrazkyJadro.nacitaj(m)
+            }
             Obrazovka.CHAT -> { ObrazkyJadro.uvolniPamat(); VylepsenieJadro.uvolniPamat(); ChatJadro.obnov() }
             Obrazovka.VYLEPSIT -> ObrazkyJadro.uvolniPamat()
             else -> {}
@@ -455,6 +457,7 @@ private fun ModelyObrazovka(spat: () -> Unit) {
                         Column(Modifier.weight(1f)) {
                             Text(m.nazov, color = Farby.text, fontWeight = FontWeight.SemiBold)
                             Text("${m.popis} · ~${m.mb} MB", color = Farby.tlmene, fontSize = 12.sp)
+                            if (m.ram == "na hrane") Text(T("ram_na_hrane"), color = Color(0xFFFFB74D), fontSize = 12.sp)
                         }
                         if (uz) Icon(Icons.Default.DownloadDone, null, tint = Farby.zelena)
                         else GradientTlacidlo(T("stiahnut"), Icons.Default.Download, enabled = priebeh == null) { stiahni(m.url) }
@@ -570,6 +573,8 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
 private fun ObrazkyObrazovka(spat: () -> Unit) {
     val o = ObrazkyJadro
     var modely by remember { mutableStateOf(o.modely()) }
+    var sady by remember { mutableStateOf(o.sady()) }
+    var popisStahovania by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
     var negativny by remember { mutableStateOf("blurry, low quality, deformed") }
     var rozmer by remember { mutableIntStateOf(384) }
@@ -585,9 +590,22 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     val neulozene = T("obr_neulozene")
 
     fun hotovo(f: File?, e: Throwable?) {
-        priebehStahovania = null; modely = o.modely()
+        priebehStahovania = null; popisStahovania = ""; modely = o.modely(); sady = o.sady()
         if (f != null) o.nacitaj(f.path)
         if (e != null && e !is InterruptedException) Platforma.oznam("$chybaPrefix: ${e.message}")
+    }
+    /** predvolené nastavenia podľa modelu (Z-Image ~8 krokov a presnosť 1, SD 1.5 20 krokov a 7…) */
+    fun pouziSadu(s: ObrazkovaSada) { kroky = s.kroky; cfg = s.cfg; rozmer = s.rozmer; o.nacitaj("sada:" + s.id) }
+    fun stiahniSadu(s: ObrazkovaSada) {
+        if (priebehStahovania != null) return
+        priebehStahovania = 0f; zrusit = false
+        thread {
+            val r = runCatching { o.stiahniSadu(s, { p, t -> Platforma.naHlavnom { priebehStahovania = p; popisStahovania = t } }, { zrusit }) }
+            Platforma.naHlavnom {
+                hotovo(null, r.exceptionOrNull())
+                if (r.isSuccess) pouziSadu(s)
+            }
+        }
     }
     fun stiahni(url: String) {
         if (priebehStahovania != null) return
@@ -608,12 +626,21 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
         }
     }
     // prvý model sa načíta sám
-    LaunchedEffect(modely) {
-        if (o.stav == StavModelu.ZIADNY && modely.isNotEmpty()) o.nacitaj((modely.find { o.jeAktivny(it) } ?: modely.first()).path)
+    LaunchedEffect(modely, sady) {
+        if (o.stav != StavModelu.ZIADNY) return@LaunchedEffect
+        val aktivna = sady.find { o.jeAktivna(it) }
+        when {
+            aktivna != null -> pouziSadu(aktivna)
+            modely.any { o.jeAktivny(it) } -> o.nacitaj(modely.first { o.jeAktivny(it) }.path)
+            sady.isNotEmpty() -> pouziSadu(sady.first())
+            modely.isNotEmpty() -> o.nacitaj(modely.first().path)
+        }
     }
+    // pri prvom otvorení nastav hodnoty podľa aktívneho modelu
+    LaunchedEffect(Unit) { o.aktivnaSada()?.let { kroky = it.kroky; cfg = it.cfg; rozmer = it.rozmer } }
 
     val pod = when (o.stav) {
-        StavModelu.PRIPRAVENY -> o.aktivnyModel?.let { File(it).nameWithoutExtension }
+        StavModelu.PRIPRAVENY -> o.aktivnaSada()?.nazov ?: o.aktivnyModel?.let { File(it).nameWithoutExtension }
         StavModelu.NACITAVA -> T("nacitavam_model")
         StavModelu.CHYBA -> T("chyba_modelu")
         StavModelu.ZIADNY -> T("ziadny_model_kratko")
@@ -624,13 +651,14 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
             priebehStahovania?.let { p ->
                 Karta {
                     Text("${T("stahujem")} ${(p * 100).roundToInt()} %", color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    if (popisStahovania.isNotBlank()) Text(popisStahovania, color = Farby.tlmene, fontSize = 12.sp)
                     Spacer(Modifier.height(10.dp))
                     LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                     TextButton(onClick = { zrusit = true }) { Text(T("zrusit"), color = Farby.tlmene) }
                 }
             }
 
-            if (modely.isEmpty()) {
+            if (modely.isEmpty() && sady.isEmpty()) {
                 Karta {
                     Text(T("obr_bez_modelu"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
@@ -669,7 +697,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     }
                     AnimatedVisibility(viac) {
                         Column {
-                            OutlinedTextField(
+                            if (o.aktivnaSada()?.negativny != false) OutlinedTextField(
                                 value = negativny, onValueChange = { negativny = it }, modifier = Modifier.fillMaxWidth(),
                                 label = { Text(T("obr_negativny")) }, shape = RoundedCornerShape(14.dp),
                                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
@@ -677,13 +705,13 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                             Spacer(Modifier.height(10.dp))
                             Text(T("obr_rozmer"), color = Farby.text, fontSize = 14.sp)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf(256, 384, 512).forEach { r ->
+                                listOf(256, 384, 512, 768, 1024).forEach { r ->
                                     FilterChip(selected = rozmer == r, onClick = { rozmer = r }, label = { Text("${r}×$r") },
                                         colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                                 }
                             }
                             Text(T("obr_kroky", kroky), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
-                            Slider(value = kroky.toFloat(), onValueChange = { kroky = it.roundToInt() }, valueRange = 4f..40f,
+                            Slider(value = kroky.toFloat(), onValueChange = { kroky = it.roundToInt() }, valueRange = 1f..40f,
                                 colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
                             Text(T("obr_cfg", cfg), color = Farby.text, fontSize = 14.sp)
                             Slider(value = cfg, onValueChange = { cfg = (it * 2).roundToInt() / 2f }, valueRange = 1f..12f,
@@ -723,6 +751,24 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
 
             // modely na obrázky
             Text(T("obr_modely"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+            sady.forEach { sd ->
+                val aktivny = o.jeAktivna(sd)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                        .background(if (aktivny) Farby.prechodJemny else Brush.linearGradient(listOf(Farby.plocha, Farby.plocha)))
+                        .border(1.dp, if (aktivny) Farby.fialova else Farby.okraj, RoundedCornerShape(18.dp))
+                        .clickable(enabled = !aktivny && !o.generuje) { pouziSadu(sd) }.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(if (aktivny) Icons.Default.CheckCircle else Icons.Default.Image, null, tint = if (aktivny) Farby.zelena else Farby.tlmene)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(sd.nazov, color = Farby.text, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (aktivny && o.stav == StavModelu.NACITAVA) T("nacitavam_model") else sd.popis, color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    IconButton(onClick = { o.zmazSadu(sd); sady = sady - sd }, enabled = !o.generuje) { Icon(Icons.Default.DeleteOutline, T("zmazat"), tint = Farby.tlmene) }
+                }
+            }
             modely.forEach { f ->
                 val aktivny = o.jeAktivny(f)
                 Row(
@@ -741,15 +787,14 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     IconButton(onClick = { o.zmazModel(f); modely = modely - f }, enabled = !o.generuje) { Icon(Icons.Default.DeleteOutline, T("zmazat"), tint = Farby.tlmene) }
                 }
             }
-            o.odporucane.forEach { m ->
-                val uz = modely.any { it.name.equals(Modely.posledny(m.url), ignoreCase = true) }
-                if (!uz) Karta {
+            Katalog.obrazky.filter { k -> sady.none { it.id == k.id } }.forEach { k ->
+                Karta {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(m.nazov, color = Farby.text, fontWeight = FontWeight.SemiBold)
-                            Text("${m.popis} · ~${m.mb} MB", color = Farby.tlmene, fontSize = 12.sp)
+                            Text(k.nazov, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                            Text("${k.popis} · ~${"%.1f".format(k.mb / 1000.0)} GB" + (if (k.subory.size > 1) " · ${T("obr_suborov", k.subory.size)}" else ""), color = Farby.tlmene, fontSize = 12.sp)
                         }
-                        GradientTlacidlo(T("stiahnut"), Icons.Default.Download, enabled = priebehStahovania == null) { stiahni(m.url) }
+                        GradientTlacidlo(T("stiahnut"), Icons.Default.Download, enabled = priebehStahovania == null) { stiahniSadu(k) }
                     }
                 }
             }

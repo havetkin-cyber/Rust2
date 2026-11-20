@@ -1,0 +1,46 @@
+{
+  "text": [
+    {"nazov": "Qwen2.5 1.5B", "popis": "rýchly, nenáročný", "mb": 1070, "ram": "pohodlne",
+     "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_0.gguf"},
+    {"nazov": "Llama 3.2 3B", "popis": "malý a šikovný (Meta)", "mb": 2020, "ram": "pohodlne",
+     "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"},
+    {"nazov": "Qwen2.5 3B", "popis": "dobrý pomer rýchlosti a kvality", "mb": 2000, "ram": "pohodlne",
+     "url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_0.gguf"},
+    {"nazov": "Qwen3 4B Instruct 2507", "popis": "najlepší malý model, dobre po slovensky", "mb": 2500, "ram": "pohodlne",
+     "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"},
+    {"nazov": "Gemma 3 4B", "popis": "Google, dobré jazyky", "mb": 2500, "ram": "pohodlne",
+     "url": "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf"},
+    {"nazov": "Phi-4 mini", "popis": "Microsoft, logika a matematika", "mb": 2500, "ram": "pohodlne",
+     "url": "https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf"},
+    {"nazov": "Qwen2.5 7B", "popis": "múdry, univerzálny", "mb": 4700, "ram": "pohodlne",
+     "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf"},
+    {"nazov": "Mistral 7B v0.3", "popis": "osvedčený, rýchly 7B", "mb": 4400, "ram": "pohodlne",
+     "url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"},
+    {"nazov": "Llama 3.1 8B", "popis": "Meta, silný univerzálny", "mb": 4900, "ram": "pohodlne",
+     "url": "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"},
+    {"nazov": "Qwen3 8B", "popis": "premýšľa pred odpoveďou, veľmi múdry", "mb": 5000, "ram": "pohodlne",
+     "url": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"},
+    {"nazov": "Gemma 3 12B", "popis": "najmúdrejší, pomalší", "mb": 7300, "ram": "na hrane",
+     "url": "https://huggingface.co/bartowski/google_gemma-3-12b-it-GGUF/resolve/main/google_gemma-3-12b-it-Q4_K_M.gguf"},
+    {"nazov": "Qwen2.5 14B", "popis": "maximum pre 16 GB, pomalý", "mb": 9000, "ram": "na hrane",
+     "url": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf"}
+  ],
+  "obrazky": [
+    {"id": "sd15", "nazov": "Stable Diffusion 1.5", "popis": "rýchly, základná kvalita", "mb": 1760,
+     "kroky": 20, "cfg": 7.0, "rozmer": 512, "metoda": "euler_a", "fa": false, "negativny": true,
+     "subory": {"model_path": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf"}},
+    {"id": "zimage", "nazov": "Z-Image Turbo (6B)", "popis": "odporúčaný – realistické fotky, ~8 krokov", "mb": 6500,
+     "kroky": 8, "cfg": 1.0, "rozmer": 768, "metoda": "auto", "fa": true, "negativny": false,
+     "subory": {
+       "diffusion_model_path": "https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/main/z_image_turbo-Q4_0.gguf",
+       "llm_path": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+       "vae_path": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors"}},
+    {"id": "flux-schnell", "nazov": "FLUX.1 schnell (12B)", "popis": "špičková kvalita, náročný – na hrane 16 GB", "mb": 10000,
+     "kroky": 4, "cfg": 1.0, "rozmer": 768, "metoda": "auto", "fa": true, "negativny": false,
+     "subory": {
+       "diffusion_model_path": "https://huggingface.co/leejet/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-q4_0.gguf",
+       "t5xxl_path": "https://huggingface.co/second-state/stable-diffusion-3.5-large-GGUF/resolve/main/t5xxl-Q4_0.gguf",
+       "clip_l_path": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors",
+       "vae_path": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors"}}
+  ]
+}

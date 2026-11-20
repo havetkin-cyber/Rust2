@@ -4,20 +4,11 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class OdporucanyModel(val nazov: String, val popis: String, val url: String, val mb: Int)
+data class OdporucanyModel(val nazov: String, val popis: String, val url: String, val mb: Int, val ram: String = "")
 
 /** Modely GGUF v priečinku appky (~/.local/share/AlexiaAI/modely). */
 object Modely {
-    val odporucane = listOf(
-        OdporucanyModel("Qwen2.5 0.5B", "najrýchlejší",
-            "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf", 430),
-        OdporucanyModel("Qwen2.5 1.5B", "dobrý pomer rýchlosti a kvality",
-            "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_0.gguf", 1070),
-        OdporucanyModel("Qwen2.5 3B", "múdrejší, stále rýchly na grafike",
-            "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_0.gguf", 2000),
-        OdporucanyModel("Qwen2.5 7B", "najmúdrejší, pre 16 GB RAM",
-            "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_0.gguf", 4400),
-    )
+    val odporucane get() = Katalog.text
 
     fun priecinok() = File(Platforma.priecinok, "modely").apply { mkdirs() }
 

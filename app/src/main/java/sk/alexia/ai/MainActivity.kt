@@ -383,7 +383,7 @@ private fun ModelyObrazovka(spat: () -> Unit) {
         if (uri == null || priebeh != null) return@rememberLauncherForActivityResult
         priebeh = 0f; cinnost = textKopirujem; zrusit = false
         thread {
-            val r = runCatching { Modely.importuj(c, uri) { p -> priebeh = p } }
+            val r = runCatching { Modely.importuj(c, uri, priebeh = { p -> priebeh = p }) }
             (c as ComponentActivity).runOnUiThread { hotovo(r.getOrNull(), r.exceptionOrNull()) }
         }
     }

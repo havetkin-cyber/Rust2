@@ -36,8 +36,10 @@ object Platforma {
 
     fun nacitajObrazok(f: File, zmensenie: Int = 1): ImageBitmap? = runCatching {
         val img = ImageIO.read(f) ?: return null
-        if (zmensenie <= 1) return img.toComposeImageBitmap()
-        val w = maxOf(1, img.width / zmensenie); val h = maxOf(1, img.height / zmensenie)
+        // 4K/8K obrázky na obrazovke zobrazíme zmenšené (súbor ostáva v plnej veľkosti)
+        val zm = if (zmensenie <= 1 && maxOf(img.width, img.height) > 4096) (maxOf(img.width, img.height) + 2047) / 2048 else zmensenie
+        if (zm <= 1) return img.toComposeImageBitmap()
+        val w = maxOf(1, img.width / zm); val h = maxOf(1, img.height / zm)
         val m = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
         m.createGraphics().apply { drawImage(img, 0, 0, w, h, null); dispose() }
         m.toComposeImageBitmap()

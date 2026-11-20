@@ -33,6 +33,9 @@ object VylepsenieJadro {
         set(v) { _vstup = v; vysledok = null }
     var vysledok by mutableStateOf<File?>(null)
         private set
+    /** skutočný rozmer výsledku (náhľad môže byť zmenšený) */
+    var rozmerVysledku by mutableStateOf(0 to 0)
+        private set
     var pracuje by mutableStateOf(false)
         private set
     var cinnost by mutableStateOf("")
@@ -42,7 +45,9 @@ object VylepsenieJadro {
     var chyba by mutableStateOf("")
         private set
 
-    var nasobok by mutableStateOf(2)          // 1 = bez zväčšenia, 2, 4
+    var nasobok by mutableStateOf(2)          // 1 = bez zväčšenia, 2, 4, K4 = 4K, K8 = 8K
+    const val K4 = 40
+    const val K8 = 80
     var autoJas by mutableStateOf(true)
     var farby by mutableStateOf(true)
     var doostrit by mutableStateOf(false)
@@ -90,24 +95,28 @@ object VylepsenieJadro {
             val r = runCatching {
                 var img = ImageIO.read(f) ?: throw IllegalStateException(T("vyl_nie_obrazok"))
                 img = naRgb(img)
-                if (nas > 1) {
+                if (nas == 2 || nas == 4) {
                     // veľké fotky najprv zmenšíme, aby výsledok mal rozumnú veľkosť (max ~6000 px)
                     val limit = if (nas == 4) 1500 else 1500 * 2
                     val dlhsia = max(img.width, img.height)
                     if (dlhsia > limit) img = zmen(img, limit.toDouble() / dlhsia)
-                    // pre 2× najprv zmenšíme na polovicu limitu → AI 4× → výsledok je 2× pôvodnej
+                    // pre 2× najprv zmenšíme na polovicu → AI 4× → výsledok je 2× pôvodnej
                     val pred = if (nas == 2) zmen(img, 0.5) else img
-                    Platforma.naHlavnom { cinnost = T("vyl_zvacsujem") }
-                    if (h == 0L) {
-                        h = Sd.upscalerNacitaj(model().absolutePath, ChatJadro.nastavenia.vlakna)
-                        if (h == 0L) throw IllegalStateException(Sd.chyba())
-                    }
-                    val px = pred.getRGB(0, 0, pred.width, pred.height, null, 0, pred.width)
-                    val roz = IntArray(2)
-                    val out = Sd.zvacsi(h, px, pred.width, pred.height, roz) ?: throw IllegalStateException(Sd.chyba())
-                    val v = BufferedImage(roz[0], roz[1], BufferedImage.TYPE_INT_RGB)
-                    v.setRGB(0, 0, roz[0], roz[1], out, 0, roz[0])
+                    val v = aiX4(pred, "")
                     img = if (nas == 2) zmen(v, img.width * 2.0 / v.width) else v
+                } else if (nas == K4 || nas == K8) {
+                    // cieľ: dlhšia strana 3840 (4K) alebo 7680 (8K); AI 4× aj dvakrát po sebe
+                    val ciel = if (nas == K4) 3840 else 7680
+                    var priechod = 1
+                    while (max(img.width, img.height) < ciel && priechod <= 2) {
+                        val d = max(img.width, img.height)
+                        // aby sme neprestrelili cieľ (zbytočne obrovský medzivýsledok), vstup zmenšíme na cieľ/4
+                        val vstupAi = if (d * 4 > ciel) zmen(img, ciel / 4.0 / d) else img
+                        img = aiX4(vstupAi, if (nas == K8) " ($priechod/2)" else "")
+                        priechod++
+                    }
+                    val d = max(img.width, img.height)
+                    if (d != ciel) img = zmen(img, ciel.toDouble() / d)
                 }
                 Platforma.naHlavnom { cinnost = T("vyl_upravujem") }
                 if (jas) img = autoJasKontrast(img)
@@ -115,6 +124,8 @@ object VylepsenieJadro {
                 if (ostr) img = doostri(img)
                 val ciel = File(File(Platforma.priecinok, "obrazky").apply { mkdirs() }, "alexia_vylepsene_${System.currentTimeMillis()}.png")
                 ImageIO.write(img, "png", ciel)
+                val rr = img.width to img.height
+                Platforma.naHlavnom { rozmerVysledku = rr }
                 ciel
             }
             Platforma.naHlavnom {
@@ -123,6 +134,19 @@ object VylepsenieJadro {
                 r.onFailure { chyba = it.message ?: T("vyl_zlyhalo") }
             }
         }
+    }
+
+    /** jeden priechod Real-ESRGAN (4×) */
+    private fun aiX4(pred: BufferedImage, popis: String): BufferedImage {
+        Platforma.naHlavnom { cinnost = T("vyl_zvacsujem") + popis }
+        if (h == 0L) {
+            h = Sd.upscalerNacitaj(model().absolutePath, ChatJadro.nastavenia.vlakna)
+            if (h == 0L) throw IllegalStateException(Sd.chyba())
+        }
+        val px = pred.getRGB(0, 0, pred.width, pred.height, null, 0, pred.width)
+        val roz = IntArray(2)
+        val out = Sd.zvacsi(h, px, pred.width, pred.height, roz) ?: throw IllegalStateException(Sd.chyba())
+        return BufferedImage(roz[0], roz[1], BufferedImage.TYPE_INT_RGB).apply { setRGB(0, 0, roz[0], roz[1], out, 0, roz[0]) }
     }
 
     fun uvolniPamat() {

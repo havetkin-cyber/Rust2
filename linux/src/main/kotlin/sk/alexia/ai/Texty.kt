@@ -14,6 +14,8 @@ object T {
     }
 
     private val sk = mapOf(
+        "vyl_cas_4k" to "4K = dlhšia strana 3840 px. Môže to trvať niekoľko minút.",
+        "vyl_cas_8k" to "8K = dlhšia strana 7680 px. AI zväčšuje dvakrát po sebe, môže to trvať 10 a viac minút a súbor bude veľký (desiatky MB).",
         "poz_chat_tlacidlo" to "Pozadie chatu",
         "poz_chat_nastavene" to "Nastavené ako pozadie chatu",
         "poz_chat_karta" to "Pozadie chatu",
@@ -167,6 +169,8 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "vyl_cas_4k" to "4K = longer side 3840 px. It can take a few minutes.",
+        "vyl_cas_8k" to "8K = longer side 7680 px. The AI upscales twice, it can take 10+ minutes and the file will be large (tens of MB).",
         "poz_chat_tlacidlo" to "Chat background",
         "poz_chat_nastavene" to "Set as chat background",
         "poz_chat_karta" to "Chat background",

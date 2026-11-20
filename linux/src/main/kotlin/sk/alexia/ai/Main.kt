@@ -1150,7 +1150,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                                 FilterChip(selected = poVylepseni == po, onClick = { poVylepseni = po }, label = { Text(nazov) },
                                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                             }
-                            Text("${obrVstup.width}×${obrVstup.height} → ${obrVysledok.width}×${obrVysledok.height}", color = Farby.tlmene, fontSize = 12.sp)
+                            Text("${obrVstup.width}×${obrVstup.height} → ${v.rozmerVysledku.first}×${v.rozmerVysledku.second}", color = Farby.tlmene, fontSize = 12.sp)
                         } else {
                             Text("${obrVstup.width}×${obrVstup.height}", color = Farby.tlmene, fontSize = 12.sp)
                         }
@@ -1171,7 +1171,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                 Text(T("vyl_zvacsenie"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(1 to T("vyl_bez"), 2 to "2×", 4 to "4×").forEach { (n, nazov) ->
+                    listOf(1 to T("vyl_bez"), 2 to "2×", 4 to "4×", VylepsenieJadro.K4 to "4K", VylepsenieJadro.K8 to "8K").forEach { (n, nazov) ->
                         FilterChip(selected = v.nasobok == n, onClick = { v.nasobok = n }, label = { Text(nazov) },
                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                     }
@@ -1205,6 +1205,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                 } else {
                     GradientTlacidlo(T("vyl_spustit"), Icons.Default.AutoFixHigh, Modifier.fillMaxWidth(),
                         enabled = v.vstup != null && (v.nasobok == 1 || v.mamModel()) && v.priebehStahovania == null) { poVylepseni = true; v.vylepsi() }
+                    if (v.nasobok == VylepsenieJadro.K4 || v.nasobok == VylepsenieJadro.K8) Text(T(if (v.nasobok == VylepsenieJadro.K8) "vyl_cas_8k" else "vyl_cas_4k"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     if (v.nasobok == 4) Text(T("vyl_cas"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                 }
                 if (v.chyba.isNotBlank()) Text(v.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))

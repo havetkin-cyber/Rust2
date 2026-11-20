@@ -1,7 +1,15 @@
 // Alexia AI – tvorba obrázkov v mobile cez stable-diffusion.cpp (MIT), úplne offline.
 // Len text -> obrázok (žiadna úprava fotiek).
 #include <jni.h>
+#ifdef __ANDROID__
 #include <android/log.h>
+#else
+// Linux (SteamOS): log na stderr
+#include <cstdio>
+#define ANDROID_LOG_INFO 4
+#define ANDROID_LOG_WARN 5
+#define __android_log_print(l, tag, ...) (fprintf(stderr, "[%s] ", tag), fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n"))
+#endif
 #include <atomic>
 #include <string>
 #include <vector>

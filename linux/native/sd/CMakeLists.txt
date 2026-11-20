@@ -1,0 +1,31 @@
+# Alexia AI pre Linux (SteamOS) – obrázky: stable-diffusion.cpp s Vulkanom
+cmake_minimum_required(VERSION 3.22)
+project(alexiasd C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+find_package(JNI REQUIRED)
+
+include(FetchContent)
+FetchContent_Declare(sdggml
+    URL https://github.com/leejet/ggml/archive/eeda9ec48fc84a3df0bb9dcc19ae9053075a2539.tar.gz)
+FetchContent_Populate(sdggml)
+FetchContent_Declare(sdcpp
+    URL https://github.com/leejet/stable-diffusion.cpp/archive/532d2c15c430a785a712b2d94281f04e733008a4.tar.gz)
+set(SD_GGML_SOURCE_DIR "${sdggml_SOURCE_DIR}" CACHE PATH "" FORCE)
+set(SD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SD_WEBP OFF CACHE BOOL "" FORCE)
+set(SD_WEBM OFF CACHE BOOL "" FORCE)
+set(SD_VULKAN ON CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+set(GGML_AVX2 ON CACHE BOOL "" FORCE)
+set(GGML_FMA ON CACHE BOOL "" FORCE)
+set(GGML_F16C ON CACHE BOOL "" FORCE)
+set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(sdcpp)
+
+add_library(alexiasd SHARED ${CMAKE_CURRENT_LIST_DIR}/../../../obrazky/src/main/cpp/sd_jni.cpp)
+target_include_directories(alexiasd PRIVATE ${JNI_INCLUDE_DIRS})
+target_compile_options(alexiasd PRIVATE -O3)
+target_link_libraries(alexiasd stable-diffusion)
+target_link_options(alexiasd PRIVATE -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,--no-undefined)

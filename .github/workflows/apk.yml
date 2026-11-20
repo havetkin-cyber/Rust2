@@ -33,3 +33,53 @@ jobs:
           gh release create "v$V" AlexiaAI.apk --latest --target "$GITHUB_SHA" \
             --title "Alexia AI $V" \
             --notes "Lokálny AI chat (llama.cpp) – beží offline v mobile. Stiahni AlexiaAI.apk a nainštaluj."
+
+  linux:
+    # Linux / SteamOS (x86_64, Vulkan pre grafiku AMD). Ubuntu 22.04 = staršie glibc, beží aj na SteamOS.
+    needs: apk
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Kontrola Kotlinu (rýchla)
+        run: |
+          cd linux
+          chmod +x ./gradlew
+          ./gradlew compileKotlin --no-daemon
+      - name: Vulkan SDK a nástroje
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y ninja-build zip
+          V=$(curl -s https://vulkan.lunarg.com/sdk/latest/linux.txt)
+          echo "Vulkan SDK $V"
+          curl -sL "https://sdk.lunarg.com/sdk/download/$V/linux/vulkan_sdk.tar.xz" -o vulkan_sdk.tar.xz
+          mkdir -p vulkan_sdk && tar -xf vulkan_sdk.tar.xz -C vulkan_sdk --strip-components=1
+      - name: Natívne knižnice (llama.cpp + stable-diffusion.cpp, Vulkan)
+        run: |
+          source vulkan_sdk/setup-env.sh
+          cmake -S linux/native/llama -B build-llama -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-llama -j4 --target alexiaai
+          cmake -S linux/native/sd -B build-sd -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-sd -j3 --target alexiasd
+          cp build-llama/libalexiaai.so build-sd/libalexiasd.so linux/resources/linux-x64/
+          ldd linux/resources/linux-x64/*.so
+      - name: Balík pre Linux
+        run: |
+          cd linux
+          chmod +x ./gradlew
+          ./gradlew packageAppImage --no-daemon --stacktrace -Pverzia=1.0.${{ github.run_number }}
+      - name: ZIP a vydanie
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p AlexiaAI-Linux
+          cp -a linux/build/compose/binaries/main/app/AlexiaAI AlexiaAI-Linux/
+          cp linux/spustit.sh linux/nainstalovat.sh linux/ikona.png linux/CITAJ.txt AlexiaAI-Linux/
+          chmod +x AlexiaAI-Linux/spustit.sh AlexiaAI-Linux/nainstalovat.sh AlexiaAI-Linux/AlexiaAI/bin/AlexiaAI
+          ls -la AlexiaAI-Linux AlexiaAI-Linux/AlexiaAI/lib/app/resources || true
+          zip -r -y -q AlexiaAI-Linux.zip AlexiaAI-Linux
+          ls -la AlexiaAI-Linux.zip
+          gh release upload "v1.0.${{ github.run_number }}" AlexiaAI-Linux.zip --clobber

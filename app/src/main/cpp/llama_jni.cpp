@@ -1,7 +1,15 @@
 // Alexia AI – lokálny jazykový model v mobile cez llama.cpp (GGUF: Qwen, Llama, Gemma, Mistral, …)
 // Appka modelu nič nepridáva: žiadny skrytý systémový prompt, žiadne filtre. Posiela len to, čo je v chate.
 #include <jni.h>
+#ifdef __ANDROID__
 #include <android/log.h>
+#else
+// Linux (SteamOS): log na stderr
+#include <cstdio>
+#define ANDROID_LOG_INFO 4
+#define ANDROID_LOG_WARN 5
+#define __android_log_print(l, tag, ...) (fprintf(stderr, "[%s] ", tag), fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n"))
+#endif
 #include <algorithm>
 #include <atomic>
 #include <cstring>
@@ -103,7 +111,11 @@ F(jlong, nacitaj)(JNIEnv* env, jobject, jstring cesta, jint nCtx, jint vlakna) {
     g_chyba.clear();
     std::string path = jstr(env, cesta);
     auto mp = llama_model_default_params();
-    mp.n_gpu_layers = 0;
+#ifdef __ANDROID__
+    mp.n_gpu_layers = 0;              // mobil: procesor
+#else
+    mp.n_gpu_layers = 999;            // Linux: celý model na grafiku (Vulkan), ak sa zmestí
+#endif
     llama_model* model = llama_model_load_from_file(path.c_str(), mp);
     if (!model) { g_chyba = "Model sa nedá načítať (nie je to GGUF, je poškodený, alebo ho llama.cpp nepozná)"; return 0; }
     auto cp = llama_context_default_params();

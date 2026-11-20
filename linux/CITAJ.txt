@@ -1,0 +1,18 @@
+ALEXIA AI pre Linux / SteamOS (Lenovo Legion Go S, Steam Deck…)
+=================================================================
+
+Lokálny AI chat a tvorba obrázkov – všetko beží offline priamo v zariadení.
+Modely bežia na grafike AMD cez Vulkan.
+
+INŠTALÁCIA (Desktop Mode)
+1. Rozbaľ tento ZIP napr. do priečinka Domov (~/AlexiaAI-Linux).
+2. Otvor priečinok, klikni pravým na "nainstalovat.sh" > Spustiť (Run in Konsole).
+   Alexia AI sa objaví v ponuke aplikácií.
+3. Do Steamu (Game Mode): Steam > Add a Game > Add a Non-Steam Game > Alexia AI.
+
+Spustenie aj bez inštalácie: dvojklik na "spustit.sh".
+Ak by sa nespustil, v Konsole: chmod +x spustit.sh nainstalovat.sh AlexiaAI/bin/AlexiaAI
+
+Dáta (modely, chat, obrázky): ~/.local/share/AlexiaAI
+Uložené obrázky: ~/Pictures/Alexia AI
+Esc = späť do chatu.

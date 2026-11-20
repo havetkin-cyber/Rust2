@@ -693,6 +693,18 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     var popisStahovania by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
     var negativny by remember { mutableStateOf("blurry, low quality, deformed") }
+    var pozadie by remember { mutableStateOf("bez") }
+    var vlastnePozadie by remember { mutableStateOf("") }
+    /** popis + vybrané pozadie (anglicky, tomu modely rozumejú najlepšie) */
+    fun popisSPozadim(): String {
+        val p = when (pozadie) {
+            "bez" -> ""
+            "vlastne" -> vlastnePozadie.trim()
+            "nahodne" -> POZADIA.filter { it.first !in setOf("bez", "nahodne", "vlastne") }.random().second
+            else -> POZADIA.first { it.first == pozadie }.second
+        }
+        return if (p.isEmpty()) prompt else "${prompt.trim().trimEnd(',', '.')}, background: $p"
+    }
     var rozmer by remember { mutableIntStateOf(384) }
     var kroky by remember { mutableIntStateOf(20) }
     var cfg by remember { mutableFloatStateOf(7f) }
@@ -808,6 +820,18 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                     )
                     Text(T("obr_anglicky"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    Text(T("poz_nadpis"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        POZADIA.forEach { (id, _) ->
+                            FilterChip(selected = pozadie == id, onClick = { pozadie = id }, label = { Text(T("poz_$id")) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                        }
+                    }
+                    if (pozadie == "vlastne") OutlinedTextField(
+                        value = vlastnePozadie, onValueChange = { vlastnePozadie = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        placeholder = { Text(T("poz_vlastne_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
+                    )
                     TextButton(onClick = { viac = !viac }) {
                         Text(T("obr_viac"), color = Farby.ruzova)
                         Icon(if (viac) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
@@ -843,7 +867,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         TextButton(onClick = { o.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
                     } else {
                         GradientTlacidlo(T("obr_vytvorit"), Icons.Default.AutoAwesome, Modifier.fillMaxWidth(),
-                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generuj(prompt, negativny, rozmer, kroky, cfg) }
+                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generuj(popisSPozadim(), negativny, rozmer, kroky, cfg) }
                         Text(T("obr_cas"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     }
                     if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
@@ -954,6 +978,25 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
         }
     }
 }
+
+/** pozadia pre tvorbu obrázkov: id → anglický popis */
+private val POZADIA = listOf(
+    "bez" to "",
+    "nahodne" to "",
+    "priroda" to "outdoors in nature, green meadow, sunny day",
+    "les" to "in a forest, tall trees, soft sunlight through leaves",
+    "plaz" to "on a sandy beach, turquoise sea, blue sky",
+    "hory" to "mountains, alpine landscape, clear sky",
+    "vidiek" to "countryside village, fields, old houses",
+    "mesto" to "city street, modern buildings",
+    "noc" to "city at night, neon lights, bokeh",
+    "zapad" to "golden hour sunset sky",
+    "zima" to "snowy winter landscape",
+    "izba" to "cozy room interior, warm light",
+    "studio" to "plain studio backdrop, soft studio lighting",
+    "vesmir" to "outer space, stars and colorful nebula",
+    "vlastne" to "",
+)
 
 // ---------------------------------------------------------------- vylepšenie fotky (len Linux)
 

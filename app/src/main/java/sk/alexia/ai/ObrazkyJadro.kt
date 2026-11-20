@@ -62,7 +62,7 @@ object ObrazkyJadro {
     fun jeAktivny(f: File) = aktivnyModel == f.path
 
     /** načíta model; jazykový model sa najprv uvoľní, aby sa zmestili do pamäte */
-    fun nacitaj(cesta: String = aktivnyModel ?: return) {
+    fun nacitaj(cesta: String) {
         if (nacitany == cesta && stav == StavModelu.PRIPRAVENY) return
         aktivnyModel = cesta
         ChatJadro.uvolniPamat()

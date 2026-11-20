@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Alexia AI
+Comment=Lokálny AI chat, obrázky a vylepšenie fotiek (offline)
+Exec=AlexiaAI
+Icon=alexia-ai
+Terminal=false
+Categories=Utility;Graphics;

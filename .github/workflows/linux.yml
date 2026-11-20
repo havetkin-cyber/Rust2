@@ -57,7 +57,17 @@ jobs:
           ls -la AlexiaAI-Linux AlexiaAI-Linux/AlexiaAI/lib/app/resources || true
           zip -r -y -q AlexiaAI-Linux.zip AlexiaAI-Linux
           ls -la AlexiaAI-Linux.zip
+          # jeden súbor AppImage: stiahnuť, dvojklik, hotovo
+          cp -a linux/build/compose/binaries/main/app/AlexiaAI AlexiaAI.AppDir
+          cp linux/appimage/AppRun linux/appimage/alexia-ai.desktop AlexiaAI.AppDir/
+          cp linux/ikona.png AlexiaAI.AppDir/alexia-ai.png
+          cp linux/ikona.png AlexiaAI.AppDir/.DirIcon
+          chmod +x AlexiaAI.AppDir/AppRun AlexiaAI.AppDir/bin/AlexiaAI
+          curl -sL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool --no-appstream AlexiaAI.AppDir AlexiaAI-x86_64.AppImage
+          ls -la AlexiaAI-x86_64.AppImage
           # pridá ZIP k najnovšiemu vydaniu (tam, kde je aj APK)
           TAG=$(gh release view --json tagName -q .tagName)
-          gh release upload "$TAG" AlexiaAI-Linux.zip --clobber
+          gh release upload "$TAG" AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage --clobber
           echo "Pridané k vydaniu $TAG"

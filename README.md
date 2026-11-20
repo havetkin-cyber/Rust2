@@ -10,6 +10,6 @@ Chat s jazykovým modelom, ktorý beží **priamo v mobile, úplne offline** (ll
 
 **Stiahnuť:**
 - Android: [AlexiaAI.apk](https://github.com/havetkin-cyber/rust2/releases/latest/download/AlexiaAI.apk)
-- Linux / SteamOS (x86_64, Vulkan): [AlexiaAI-Linux.zip](https://github.com/havetkin-cyber/rust2/releases/latest/download/AlexiaAI-Linux.zip)
+- Linux / SteamOS (x86_64, Vulkan): [AlexiaAI-x86_64.AppImage](https://github.com/havetkin-cyber/rust2/releases/latest/download/AlexiaAI-x86_64.AppImage) – stiahni a dvakrát klikni (alebo [ZIP](https://github.com/havetkin-cyber/rust2/releases/latest/download/AlexiaAI-Linux.zip))
 
 Do mobilu sa hodia modely 0.5B–4B v kvantizácii Q4_0 alebo Q4_K_M.

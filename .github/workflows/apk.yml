@@ -32,8 +32,8 @@ jobs:
           V="1.0.${{ github.run_number }}"
           cp app/build/outputs/apk/release/app-release.apk AlexiaAI.apk
           # linuxový ZIP z predchádzajúceho vydania prenesieme, aby odkaz "latest" fungoval pre oba
-          gh release download --pattern AlexiaAI-Linux.zip -D predosle 2>/dev/null || true
-          SUBORY="AlexiaAI.apk"; [ -f predosle/AlexiaAI-Linux.zip ] && SUBORY="$SUBORY predosle/AlexiaAI-Linux.zip"
+          gh release download --pattern AlexiaAI-Linux.zip --pattern AlexiaAI-x86_64.AppImage -D predosle 2>/dev/null || true
+          SUBORY="AlexiaAI.apk"; for f in predosle/*; do [ -f "$f" ] && SUBORY="$SUBORY $f"; done
           gh release create "v$V" $SUBORY --latest --target "$GITHUB_SHA" \
             --title "Alexia AI $V" \
             --notes "Lokálny AI chat (llama.cpp) – beží offline v mobile. Stiahni AlexiaAI.apk a nainštaluj."

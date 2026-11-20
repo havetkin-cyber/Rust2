@@ -1,0 +1,13 @@
+#!/bin/bash
+# Alexia AI – spúšťač AppImage. Pri spustení sa appka sama zaradí do ponuky aplikácií
+# (odtiaľ ju v Desktop Mode pridáš do Steamu cez "Add to Steam").
+HERE="$(dirname "$(readlink -f "$0")")"
+if [ -n "$APPIMAGE" ]; then
+    D="$HOME/.local/share/applications"
+    I="$HOME/.local/share/icons/hicolor/512x512/apps"
+    mkdir -p "$D" "$I"
+    cp -f "$HERE/alexia-ai.png" "$I/alexia-ai.png" 2>/dev/null
+    printf '[Desktop Entry]\nType=Application\nName=Alexia AI\nComment=Lokálny AI chat, obrázky a vylepšenie fotiek (offline)\nExec="%s"\nIcon=alexia-ai\nTerminal=false\nCategories=Utility;Graphics;\n' "$APPIMAGE" > "$D/alexia-ai.desktop"
+    update-desktop-database "$D" >/dev/null 2>&1 || true
+fi
+exec "$HERE/bin/AlexiaAI" "$@"

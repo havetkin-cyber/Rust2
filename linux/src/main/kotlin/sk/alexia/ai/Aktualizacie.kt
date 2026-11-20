@@ -54,7 +54,7 @@ object Aktualizacie {
         kontroluje = true
         thread(isDaemon = true) {
             val r = runCatching {
-                val v = otvor(BASE + "linux-verzia.txt").inputStream.bufferedReader().readText().trim()
+                val v = otvor(BASE + if (Platforma.jeWindows) "windows-verzia.txt" else "linux-verzia.txt").inputStream.bufferedReader().readText().trim()
                 val preskocena = File(Platforma.priecinok, "preskocit-verziu").takeIf { it.exists() }?.readText()?.trim()
                 val nova = novsia(v, mojaVerzia) && (rucne || v != preskocena)
                 Platforma.naHlavnom {
@@ -78,7 +78,7 @@ object Aktualizacie {
         val ciel = appImage
         if (ciel == null) {
             // verzia zo ZIP – nový ZIP stiahne prehliadač
-            runCatching { ProcessBuilder("xdg-open", BASE + "AlexiaAI-Linux.zip").start() }
+            Platforma.otvorOdkaz(BASE + if (Platforma.jeWindows) "AlexiaAI-Windows.zip" else "AlexiaAI-Linux.zip")
             novaVerzia = null
             return
         }

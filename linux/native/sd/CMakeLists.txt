@@ -1,8 +1,11 @@
 # Alexia AI pre Linux (SteamOS) – obrázky: stable-diffusion.cpp s Vulkanom
 cmake_minimum_required(VERSION 3.22)
+cmake_policy(SET CMP0091 NEW)
 project(alexiasd C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# Windows (MSVC): runtime pribalený staticky – netreba inštalovať Visual C++ Redistributable
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
 find_package(JNI REQUIRED)
 
 include(FetchContent)
@@ -26,6 +29,10 @@ FetchContent_MakeAvailable(sdcpp)
 
 add_library(alexiasd SHARED ${CMAKE_CURRENT_LIST_DIR}/sd_linux.cpp)
 target_include_directories(alexiasd PRIVATE ${JNI_INCLUDE_DIRS})
-target_compile_options(alexiasd PRIVATE -O3)
+if(NOT MSVC)
+    target_compile_options(alexiasd PRIVATE -O3)
+endif()
 target_link_libraries(alexiasd stable-diffusion)
-target_link_options(alexiasd PRIVATE -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,--no-undefined)
+if(NOT MSVC)
+    target_link_options(alexiasd PRIVATE -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,--no-undefined)
+endif()

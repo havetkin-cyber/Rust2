@@ -3,7 +3,7 @@ name: Alexia AI – APK
 on:
   push:
     branches: [main]
-    paths-ignore: ['linux/**', '.github/workflows/linux.yml', 'README.md']
+    paths-ignore: ['linux/**', '.github/workflows/linux.yml', '.github/workflows/windows.yml', 'README.md']
   workflow_dispatch:
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
           V="1.0.${{ github.run_number }}"
           cp app/build/outputs/apk/release/app-release.apk AlexiaAI.apk
           # linuxový ZIP z predchádzajúceho vydania prenesieme, aby odkaz "latest" fungoval pre oba
-          gh release download --pattern AlexiaAI-Linux.zip --pattern AlexiaAI-x86_64.AppImage --pattern linux-verzia.txt -D predosle 2>/dev/null || true
+          for p in AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage linux-verzia.txt AlexiaAI-Windows.zip windows-verzia.txt; do gh release download --pattern "$p" -D predosle 2>/dev/null || true; done
           SUBORY="AlexiaAI.apk"; for f in predosle/*; do [ -f "$f" ] && SUBORY="$SUBORY $f"; done
           gh release create "v$V" $SUBORY --latest --target "$GITHUB_SHA" \
             --title "Alexia AI $V" \

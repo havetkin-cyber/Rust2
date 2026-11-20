@@ -36,6 +36,8 @@ private fun miesta(): List<Pair<String, File>> {
         File(home, d).takeIf { it.isDirectory }?.let { z += T(k) to it }
     }
     z += T("pr_domov") to home
+    // Windows: disky C:, D: …
+    if (Platforma.jeWindows) File.listRoots()?.forEach { z += it.path.trimEnd('\\') to it }
     // SD karta a USB (SteamOS ich pripája do /run/media)
     listOf(File("/run/media"), File("/run/media/" + System.getProperty("user.name"))).forEach { r ->
         r.listFiles()?.filter { it.isDirectory && it.canRead() && it.name != System.getProperty("user.name") }?.forEach { z += it.name to it }

@@ -12,7 +12,18 @@ import javax.swing.SwingUtilities
 
 /** Všetko, čo je na Linuxe iné ako na Androide. Dáta appky sú len v ~/.local/share/AlexiaAI. */
 object Platforma {
-    val priecinok: File = File(System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() } ?: (System.getProperty("user.home") + "/.local/share"), "AlexiaAI").apply { mkdirs() }
+    val jeWindows: Boolean = System.getProperty("os.name").lowercase().contains("win")
+
+    /** dáta appky: Linux ~/.local/share/AlexiaAI, Windows %LOCALAPPDATA%\\AlexiaAI */
+    val priecinok: File = (if (jeWindows)
+        File(System.getenv("LOCALAPPDATA")?.takeIf { it.isNotBlank() } ?: (System.getProperty("user.home") + "\\AppData\\Local"), "AlexiaAI")
+    else File(System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() } ?: (System.getProperty("user.home") + "/.local/share"), "AlexiaAI")).apply { mkdirs() }
+
+    /** otvorí odkaz v prehliadači */
+    fun otvorOdkaz(url: String) {
+        runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
+            .onFailure { runCatching { ProcessBuilder("xdg-open", url).start() } }
+    }
 
     /** priečinok Obrázky používateľa (~/Pictures alebo podľa XDG) */
     val obrazkyPouzivatela: File = File(System.getProperty("user.home"), "Pictures")
@@ -22,7 +33,7 @@ object Platforma {
     /** natívne knižnice sú v resources appky (compose.application.resources.dir) */
     fun nacitajKniznicu(meno: String) {
         val dir = System.getProperty("compose.application.resources.dir")
-        val f = dir?.let { File(it, "lib$meno.so") }
+        val f = dir?.let { File(it, System.mapLibraryName(meno)) }  // libX.so / X.dll
         if (f != null && f.exists()) System.load(f.absolutePath) else System.loadLibrary(meno)
     }
 

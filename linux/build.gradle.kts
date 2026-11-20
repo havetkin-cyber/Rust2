@@ -29,7 +29,7 @@ compose.desktop {
             vendor = "havetkin-cyber"
             // natívne knižnice (llama.cpp a stable-diffusion.cpp s Vulkanom) – resources/linux-x64
             appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))
-            modules("java.desktop", "java.prefs")
+            modules("java.desktop", "java.prefs", "jdk.httpserver")
             linux { iconFile.set(project.file("ikona.png")) }
         }
     }

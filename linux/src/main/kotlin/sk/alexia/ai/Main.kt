@@ -62,6 +62,7 @@ fun main() {
     ObrazkyJadro.init()
     Aktualizacie.skontroluj()
     Ovladac.spusti()
+    if (ChatJadro.nastavenia.zdielat) Server.spusti()
     application {
         val stav = rememberWindowState(placement = WindowPlacement.Maximized, size = DpSize(1280.dp, 800.dp))
         Window(onCloseRequest = ::exitApplication, title = "Alexia AI", state = stav, onPreviewKeyEvent = {
@@ -685,6 +686,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("nastavenia"), spat = spat)
         PosuvnyStlpec {
+            Karta { PrepojenieKarta() }
             Karta {
                 Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
@@ -1116,6 +1118,95 @@ private val POZADIA = listOf(
     "dzungla" to "tropical jungle, waterfall",
     "vlastne" to "",
 )
+
+// ---------------------------------------------------------------- prepojenie v sieti
+
+@Composable
+private fun PrepojenieKarta() {
+    val n = ChatJadro.nastavenia
+    val j = ChatJadro
+    var najdene by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
+    var hlada by remember { mutableStateOf(false) }
+    val farbyPola = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text)
+    Text(T("siet_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+
+    // A) toto zariadenie ako server
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(T("siet_zdielat"), color = Farby.text)
+            Text(T("siet_zdielat_info"), color = Farby.tlmene, fontSize = 12.sp)
+        }
+        Switch(checked = Server.bezi, onCheckedChange = { z ->
+            if (z) Server.spusti()?.let { Platforma.oznam(it) } else Server.zastav()
+            n.zdielat = Server.bezi; n.uloz()
+        }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+    }
+    if (Server.bezi) {
+        Column(Modifier.padding(vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).padding(12.dp)) {
+            val adresy = remember { Server.adresy() }
+            Text(T("siet_adresa"), color = Farby.tlmene, fontSize = 12.sp)
+            SelectionContainer { Text(adresy.joinToString("\n") { "$it:${Klient.PORT}" }.ifBlank { "?" }, color = Farby.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace) }
+            Spacer(Modifier.height(6.dp))
+            Text(T("siet_pin"), color = Farby.tlmene, fontSize = 12.sp)
+            var pin by remember { mutableStateOf(Server.pin) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SelectionContainer { Text(pin.chunked(4).joinToString(" "), color = Farby.ruzova, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace) }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = { pin = Server.novyPin() }) { Text(T("siet_novy_pin"), color = Farby.tlmene) }
+            }
+            if (Server.pripojeni > 0) Text(T("siet_pripojeni", Server.pripojeni), color = Farby.zelena, fontSize = 13.sp)
+            if (j.stav != StavModelu.PRIPRAVENY || n.vzdialene) Text(T("siet_server_bez_modelu"), color = Farby.cervena, fontSize = 12.sp)
+        }
+    }
+    Text(T("siet_internet"), color = Farby.tlmene, fontSize = 12.sp)
+
+    HorizontalDivider(Modifier.padding(vertical = 10.dp), color = Farby.okraj)
+
+    // B) použiť model z iného zariadenia
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(T("siet_pouzit"), color = Farby.text)
+            Text(T("siet_pouzit_info"), color = Farby.tlmene, fontSize = 12.sp)
+        }
+        Switch(checked = n.vzdialene, onCheckedChange = { j.nastavVzdialene(it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+    }
+    if (n.vzdialene) {
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(value = n.vzdialenaAdresa, onValueChange = { n.vzdialenaAdresa = it.trim(); n.uloz() }, singleLine = true,
+            modifier = Modifier.fillMaxWidth().nadKlavesnicou(), label = { Text(T("siet_adresa_pole")) },
+            placeholder = { Text("192.168.0.10:${Klient.PORT}", color = Farby.tlmene) }, shape = RoundedCornerShape(14.dp), colors = farbyPola)
+        Spacer(Modifier.height(6.dp))
+        OutlinedTextField(value = n.vzdialenyPin, onValueChange = { n.vzdialenyPin = it.filter { c -> c.isDigit() }; n.uloz() }, singleLine = true,
+            modifier = Modifier.fillMaxWidth().nadKlavesnicou(), label = { Text(T("siet_pin")) }, shape = RoundedCornerShape(14.dp), colors = farbyPola)
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            GradientTlacidlo(T("siet_pripojit"), Icons.Default.Link, enabled = j.stav != StavModelu.NACITAVA) { j.pripoj() }
+            OutlinedButton(onClick = {
+                hlada = true
+                thread { val r = Klient.najdi(); Platforma.naHlavnom { najdene = r; hlada = false } }
+            }, enabled = !hlada, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                Icon(Icons.Default.Search, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(T(if (hlada) "siet_hladam" else "siet_najst"), color = Farby.text)
+            }
+        }
+        najdene?.let { z ->
+            if (z.isEmpty()) Text(T("siet_nic"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            z.forEach { (adr, meno) ->
+                Row(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Farby.plocha2)
+                    .clickable { n.vzdialenaAdresa = adr; n.uloz(); najdene = null }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Computer, null, tint = Farby.ruzova); Spacer(Modifier.width(10.dp))
+                    Column { Text(meno, color = Farby.text); Text(adr, color = Farby.tlmene, fontSize = 12.sp) }
+                }
+            }
+        }
+        val stavText = when (j.stav) {
+            StavModelu.PRIPRAVENY -> T("siet_pripojene", j.vzdialeneMeno, j.vzdialenyModel)
+            StavModelu.NACITAVA -> T("siet_pripajam")
+            StavModelu.CHYBA -> j.chyba
+            StavModelu.ZIADNY -> ""
+        }
+        if (stavText.isNotBlank()) Text(stavText, color = if (j.stav == StavModelu.PRIPRAVENY) Farby.zelena else if (j.stav == StavModelu.CHYBA) Farby.cervena else Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+    }
+}
 
 // ---------------------------------------------------------------- vylepšenie fotky (len Linux)
 

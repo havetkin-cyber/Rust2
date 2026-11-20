@@ -54,13 +54,15 @@ object ChatJadro {
         spustene = true
         nastavenia = Nastavenia()
         nacitajChat()
-        nastavenia.aktivnyModel?.let { if (File(it).exists()) nacitajModel(it) }
+        if (nastavenia.vzdialene) pripoj()
+        else nastavenia.aktivnyModel?.let { if (File(it).exists()) nacitajModel(it) }
     }
 
     fun potrebujeZnovuNacitat() = nacitany != null &&
         (nacitanyKontext != nastavenia.kontext || nacitaneVlakna != nastavenia.vlakna)
 
     fun nacitajModel(cesta: String) {
+        if (nastavenia.vzdialene) { nastavenia.vzdialene = false; vzdialenyModel = "" }   // vlastný model namiesto vzdialeného
         nastavenia.aktivnyModel = cesta; nastavenia.uloz()
         stav = StavModelu.NACITAVA; chyba = ""
         val ctx = nastavenia.kontext; val vl = nastavenia.vlakna
@@ -90,7 +92,63 @@ object ChatJadro {
     /** veľkosť práve načítaného jazykového modelu (0 = žiadny) */
     fun velkostNacitaneho(): Long = nacitany?.let { File(it).length() } ?: 0L
 
-    fun nazovModelu(): String = nacitany?.let { File(it).nameWithoutExtension } ?: ""
+    fun nazovModelu(): String = if (nastavenia.vzdialene) vzdialenyModel else nacitany?.let { File(it).nameWithoutExtension } ?: ""
+
+    // ---------------------------------------------------------------- prepojenie: model beží na inom zariadení
+    var vzdialenyModel by mutableStateOf("")
+        private set
+    var vzdialeneMeno by mutableStateOf("")
+        private set
+    @Volatile private var zastavitVzdialene = false
+
+    /** pripojí sa k inému zariadeniu (adresa a PIN z nastavení) */
+    fun pripoj() {
+        val n = nastavenia
+        if (n.vzdialenaAdresa.isBlank()) { stav = StavModelu.CHYBA; chyba = T("siet_bez_adresy"); return }
+        stav = StavModelu.NACITAVA; chyba = ""
+        Thread {
+            val r = runCatching { Klient.info(n.vzdialenaAdresa, n.vzdialenyPin) }
+            Platforma.naHlavnom {
+                if (!n.vzdialene) return@naHlavnom
+                r.onSuccess { i ->
+                    vzdialenyModel = i.model; vzdialeneMeno = i.meno
+                    if (i.pripraveny) { stav = StavModelu.PRIPRAVENY; popisModelu = "${i.meno} · ${i.model}" }
+                    else { stav = StavModelu.CHYBA; chyba = T("siet_bez_modelu", i.meno) }
+                }
+                r.onFailure { stav = StavModelu.CHYBA; chyba = T("siet_nepripojene", it.message ?: "") }
+            }
+        }.start()
+    }
+
+    /** prepne medzi vlastným modelom a modelom na inom zariadení */
+    fun nastavVzdialene(zapnut: Boolean) {
+        if (generuje) zastav()
+        nastavenia.vzdialene = zapnut; nastavenia.uloz()
+        if (zapnut) {
+            vlakno.execute { if (h != 0L) { Llama.uvolni(h); h = 0L } }
+            nacitany = null; pripoj()
+        } else {
+            vzdialenyModel = ""; stav = StavModelu.ZIADNY; popisModelu = ""
+            nastavenia.aktivnyModel?.let { if (File(it).exists()) nacitajModel(it) }
+        }
+    }
+
+    /** pre server: vygeneruje odpoveď cudziemu zariadeniu; vráti null alebo text chyby */
+    fun generujPreSiet(spravy: List<Pair<String, String>>, maxTok: Int, kus: (ByteArray) -> Boolean): String? {
+        val sys = nastavenia.systemovyPrompt.trim()
+        return vlakno.submit<String?> {
+            if (h == 0L) return@submit T("siet_server_bez_modelu")
+            val historia = spravy.toMutableList()
+            var v: Int
+            while (true) {
+                val zoznam = (if (sys.isNotEmpty() && historia.none { it.first == "system" }) listOf("system" to sys) else emptyList()) + historia
+                v = Llama.generuj(h, zoznam.map { it.first }.toTypedArray(), zoznam.map { it.second }.toTypedArray(), maxTok) { b -> kus(b) }
+                if (v == -2 && historia.size > 1) { historia.removeAt(0); if (historia.firstOrNull()?.first == "assistant") historia.removeAt(0); continue }
+                break
+            }
+            when (v) { -1 -> Llama.chyba(); -2 -> T("siet_dlha"); else -> null }
+        }.get()
+    }
 
     fun posli(text: String, obrazok: Boolean = false) {
         if (text.isBlank()) return
@@ -106,6 +164,13 @@ object ChatJadro {
         if (ObrazkyJadro.generuje) return
         spravy += Sprava("user", text, jeObrazkova = true)
         val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
+        if (nastavenia.vzdialene) {
+            ObrazkyJadro.nakresliNaDialku(nastavenia.vzdialenaAdresa, nastavenia.vzdialenyPin, popis) { f, e ->
+                if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"
+                ulozChat()
+            }
+            return
+        }
         ObrazkyJadro.nakresliDoChatu(popis) { f, e ->
             if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"
             ulozChat()
@@ -127,6 +192,29 @@ object ChatJadro {
         val odpoved = Sprava("assistant", ""); spravy += odpoved
         generuje = true; tokenovZaSekundu = 0f
         val maxTok = nastavenia.maxTokenov
+        if (nastavenia.vzdialene) {
+            zastavitVzdialene = false
+            val adr = nastavenia.vzdialenaAdresa; val pin = nastavenia.vzdialenyPin
+            val zoznam = (if (sys.isNotEmpty()) listOf("system" to sys) else emptyList()) + historia
+            Thread {
+                val zaciatok = System.nanoTime(); var kusov = 0
+                val e = Klient.chat(adr, pin, zoznam, maxTok) { t ->
+                    kusov++
+                    Platforma.naHlavnom {
+                        odpoved.text += t
+                        val s = (System.nanoTime() - zaciatok) / 1e9f
+                        if (s > 0.5f) tokenovZaSekundu = kusov / s
+                    }
+                    !zastavitVzdialene
+                }
+                Platforma.naHlavnom {
+                    generuje = false
+                    if (e != null && odpoved.text.isEmpty()) odpoved.text = "⚠ $e"
+                    ulozChat()
+                }
+            }.start()
+            return
+        }
         vlakno.execute {
             val zaciatok = System.nanoTime(); var tokenov = 0
             var vysledok: Int
@@ -154,10 +242,11 @@ object ChatJadro {
         }
     }
 
-    fun zastav() { if (h != 0L) Llama.zastav(h) }
+    fun zastav() { zastavitVzdialene = true; if (h != 0L) Llama.zastav(h) }
 
     /** uvoľní jazykový model z pamäte (napr. pri tvorbe obrázkov); znova sa načíta pri návrate do chatu */
     fun uvolniPamat() {
+        if (nastavenia.vzdialene) return   // model je na inom zariadení – tu nič nezaberá
         if (generuje) zastav()
         vlakno.execute { if (h != 0L) { Llama.uvolni(h); h = 0L } }
         nacitany = null; popisModelu = ""
@@ -166,6 +255,7 @@ object ChatJadro {
 
     /** po návrate do chatu znova načíta posledný model */
     fun obnov() {
+        if (nastavenia.vzdialene) { if (stav != StavModelu.PRIPRAVENY && stav != StavModelu.NACITAVA) pripoj(); return }
         val m = nastavenia.aktivnyModel ?: return
         if (nacitany == null && stav != StavModelu.NACITAVA && File(m).exists()) nacitajModel(m)
     }

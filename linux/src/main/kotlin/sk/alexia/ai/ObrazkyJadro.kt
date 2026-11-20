@@ -130,6 +130,21 @@ object ObrazkyJadro {
         }
     }
 
+    /** obrázok nakreslí iné zariadenie (prepojenie v sieti) */
+    fun nakresliNaDialku(adresa: String, pin: String, popis: String, hotovo: (File?, String) -> Unit) {
+        if (generuje) return
+        generuje = true; priebeh = 0f
+        Thread {
+            val f = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
+            val r = runCatching { Klient.obrazok(adresa, pin, popis, f) }
+            Platforma.naHlavnom {
+                generuje = false
+                r.onSuccess { galeria.add(0, f); hotovo(f, "") }
+                r.onFailure { f.delete(); hotovo(null, it.message ?: "Spojenie zlyhalo") }
+            }
+        }.start()
+    }
+
     /** spustí tvorbu na vlákne sd (po prípadnom načítaní modelu, ktoré je v rade pred ňou) */
     private fun spust(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""

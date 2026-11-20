@@ -26,6 +26,12 @@ class Nastavenia {
     var pozadieChatu by mutableStateOf(p.getProperty("pozadieChatu"))
     var pozadieVerzia by mutableIntStateOf(0)
     var stmavenie by mutableIntStateOf(p.getProperty("stmavenie")?.toIntOrNull() ?: 60)
+    // prepojenie v sieti
+    var pinServera by mutableStateOf(p.getProperty("pinServera", ""))
+    var zdielat by mutableStateOf(p.getProperty("zdielat") == "true")
+    var vzdialene by mutableStateOf(p.getProperty("vzdialene") == "true")
+    var vzdialenaAdresa by mutableStateOf(p.getProperty("vzdialenaAdresa", ""))
+    var vzdialenyPin by mutableStateOf(p.getProperty("vzdialenyPin", ""))
     var otvoritKlavesnicu by mutableStateOf(p.getProperty("otvoritKlavesnicu") == "true")
 
     init { p.getProperty("anglicky")?.let { T.anglicky = it == "true" } ?: run { T.anglicky = false } }
@@ -42,6 +48,11 @@ class Nastavenia {
         p.setProperty("otvoritKlavesnicu", otvoritKlavesnicu.toString())
         pozadieChatu?.let { p.setProperty("pozadieChatu", it) } ?: p.remove("pozadieChatu")
         p.setProperty("stmavenie", stmavenie.toString())
+        p.setProperty("pinServera", pinServera)
+        p.setProperty("zdielat", zdielat.toString())
+        p.setProperty("vzdialene", vzdialene.toString())
+        p.setProperty("vzdialenaAdresa", vzdialenaAdresa)
+        p.setProperty("vzdialenyPin", vzdialenyPin)
         aktivnyModel?.let { p.setProperty("model", it) } ?: p.remove("model")
         aktivnyObrazkovyModel?.let { p.setProperty("obrazkovyModel", it) } ?: p.remove("obrazkovyModel")
         runCatching { subor.outputStream().use { p.store(it, "Alexia AI") } }

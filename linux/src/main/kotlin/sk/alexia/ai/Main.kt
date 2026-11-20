@@ -71,7 +71,7 @@ fun main() {
 /** čo urobí Esc (späť do chatu) */
 private var naspat: (() -> Unit)? = null
 
-private enum class Obrazovka { CHAT, MODELY, NASTAVENIA, OBRAZKY }
+private enum class Obrazovka { CHAT, MODELY, NASTAVENIA, OBRAZKY, VYLEPSIT }
 
 @Composable
 private fun Appka() {
@@ -84,7 +84,8 @@ private fun Appka() {
     LaunchedEffect(obrazovka) {
         when (obrazovka) {
             Obrazovka.OBRAZKY -> ObrazkyJadro.aktivnyModel?.let { if (File(it).exists()) ObrazkyJadro.nacitaj(it) }
-            Obrazovka.CHAT -> { ObrazkyJadro.uvolniPamat(); ChatJadro.obnov() }
+            Obrazovka.CHAT -> { ObrazkyJadro.uvolniPamat(); VylepsenieJadro.uvolniPamat(); ChatJadro.obnov() }
+            Obrazovka.VYLEPSIT -> ObrazkyJadro.uvolniPamat()
             else -> {}
         }
     }
@@ -101,10 +102,12 @@ private fun Appka() {
                 naModely = { obrazovka = Obrazovka.MODELY },
                 naNastavenia = { obrazovka = Obrazovka.NASTAVENIA },
                 naObrazky = { obrazovka = Obrazovka.OBRAZKY },
+                naVylepsit = { obrazovka = Obrazovka.VYLEPSIT },
             )
             Obrazovka.MODELY -> ModelyObrazovka { obrazovka = Obrazovka.CHAT }
             Obrazovka.NASTAVENIA -> NastaveniaObrazovka { obrazovka = Obrazovka.CHAT }
             Obrazovka.OBRAZKY -> ObrazkyObrazovka { obrazovka = Obrazovka.CHAT }
+            Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
         }
         }
         SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(16.dp))
@@ -171,7 +174,7 @@ private fun Karta(modifier: Modifier = Modifier, obsah: @Composable ColumnScope.
 // ---------------------------------------------------------------- chat
 
 @Composable
-private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObrazky: () -> Unit) {
+private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObrazky: () -> Unit, naVylepsit: () -> Unit) {
     val j = ChatJadro
     val zoznam = rememberLazyListState()
     var vstup by remember { mutableStateOf("") }
@@ -187,6 +190,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
         }
         Hlavicka(T("app_name"), pod) {
             IconButton(onClick = { j.novyChat() }, enabled = j.spravy.isNotEmpty()) { Icon(Icons.Default.AddComment, T("novy_chat"), tint = Farby.text) }
+            IconButton(onClick = naVylepsit) { Icon(Icons.Default.AutoFixHigh, T("vylepsit"), tint = Farby.text) }
             IconButton(onClick = naObrazky) { Icon(Icons.Default.Image, T("obrazky"), tint = Farby.text) }
             IconButton(onClick = naModely) { Icon(Icons.Default.Memory, T("modely"), tint = Farby.text) }
             IconButton(onClick = naNastavenia) { Icon(Icons.Default.Tune, T("nastavenia"), tint = Farby.text) }
@@ -782,6 +786,105 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene)
                     }
                 }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- vylepšenie fotky (len Linux)
+
+@Composable
+private fun VylepsenieObrazovka(spat: () -> Unit) {
+    val v = VylepsenieJadro
+    var poVylepseni by remember { mutableStateOf(true) }
+    val nadpisVyberu = T("vyl_vybrat")
+    val ulozene = T("obr_ulozene"); val neulozene = T("obr_neulozene")
+    val vstup = v.vstup; val vysledok = v.vysledok
+    val obrVstup = remember(vstup) { vstup?.let { Platforma.nacitajObrazok(it) } }
+    val obrVysledok = remember(vysledok) { vysledok?.let { Platforma.nacitajObrazok(it) } }
+
+    Column(Modifier.fillMaxSize()) {
+        Hlavicka(T("vylepsit"), spat = spat)
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Karta {
+                if (obrVstup == null) {
+                    Text(T("vyl_prazdne"), color = Farby.tlmene)
+                    Spacer(Modifier.height(10.dp))
+                    GradientTlacidlo(T("vyl_vybrat"), Icons.Default.AddPhotoAlternate) {
+                        Platforma.vyberSubor(nadpisVyberu)?.let { v.vstup = it }
+                    }
+                } else {
+                    val ukaz = if (obrVysledok != null && poVylepseni) obrVysledok else obrVstup
+                    Image(ukaz, null, Modifier.fillMaxWidth().heightIn(max = 520.dp).aspectRatio(ukaz.width.toFloat() / ukaz.height).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (obrVysledok != null) {
+                            listOf(false to T("vyl_pred"), true to T("vyl_po")).forEach { (po, nazov) ->
+                                FilterChip(selected = poVylepseni == po, onClick = { poVylepseni = po }, label = { Text(nazov) },
+                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                            }
+                            Text("${obrVstup.width}×${obrVstup.height} → ${obrVysledok.width}×${obrVysledok.height}", color = Farby.tlmene, fontSize = 12.sp)
+                        } else {
+                            Text("${obrVstup.width}×${obrVstup.height}", color = Farby.tlmene, fontSize = 12.sp)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { Platforma.vyberSubor(nadpisVyberu)?.let { v.vstup = it } }, enabled = !v.pracuje) { Text(T("vyl_ina"), color = Farby.ruzova) }
+                    }
+                    if (vysledok != null) {
+                        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GradientTlacidlo(T("obr_ulozit"), Icons.Default.SaveAlt) {
+                                Platforma.oznam(if (ObrazkyJadro.ulozDoGalerie(vysledok)) ulozene else neulozene)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Karta {
+                Text(T("vyl_zvacsenie"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1 to T("vyl_bez"), 2 to "2×", 4 to "4×").forEach { (n, nazov) ->
+                        FilterChip(selected = v.nasobok == n, onClick = { v.nasobok = n }, label = { Text(nazov) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                if (v.nasobok > 1 && !v.mamModel()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(T("vyl_model", VylepsenieJadro.MB), color = Farby.tlmene, fontSize = 13.sp)
+                    Spacer(Modifier.height(6.dp))
+                    val p = v.priebehStahovania
+                    if (p != null) {
+                        Text("${T("stahujem")} ${(p * 100).roundToInt()} %", color = Farby.text, fontSize = 13.sp)
+                        LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    } else GradientTlacidlo(T("stiahnut"), Icons.Default.Download) { v.stiahniModel() }
+                }
+                Spacer(Modifier.height(10.dp))
+                listOf(
+                    Triple(T("vyl_jas"), v.autoJas) { b: Boolean -> v.autoJas = b },
+                    Triple(T("vyl_farby"), v.farby) { b: Boolean -> v.farby = b },
+                    Triple(T("vyl_ostrost"), v.doostrit) { b: Boolean -> v.doostrit = b },
+                ).forEach { (nazov, hodnota, zmen) ->
+                    Row(Modifier.fillMaxWidth().clickable { zmen(!hodnota) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(nazov, color = Farby.text, modifier = Modifier.weight(1f))
+                        Switch(checked = hodnota, onCheckedChange = zmen, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                if (v.pracuje) {
+                    Text(v.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                } else {
+                    GradientTlacidlo(T("vyl_spustit"), Icons.Default.AutoFixHigh, Modifier.fillMaxWidth(),
+                        enabled = v.vstup != null && (v.nasobok == 1 || v.mamModel()) && v.priebehStahovania == null) { poVylepseni = true; v.vylepsi() }
+                    if (v.nasobok == 4) Text(T("vyl_cas"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+                if (v.chyba.isNotBlank()) Text(v.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Info, null, tint = Farby.tlmene, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                Text(T("vyl_info"), color = Farby.tlmene, fontSize = 12.sp)
             }
         }
     }

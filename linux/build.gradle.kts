@@ -20,7 +20,7 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "sk.alexia.ai.MainKt"
-        jvmArgs += listOf("-Xmx1g", "-Dfile.encoding=UTF-8")
+        jvmArgs += listOf("-Xmx3g", "-Dfile.encoding=UTF-8")
         nativeDistributions {
             targetFormats(TargetFormat.AppImage)
             packageName = "AlexiaAI"

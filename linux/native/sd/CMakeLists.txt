@@ -24,7 +24,7 @@ set(GGML_F16C ON CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(sdcpp)
 
-add_library(alexiasd SHARED ${CMAKE_CURRENT_LIST_DIR}/../../../obrazky/src/main/cpp/sd_jni.cpp)
+add_library(alexiasd SHARED ${CMAKE_CURRENT_LIST_DIR}/sd_linux.cpp)
 target_include_directories(alexiasd PRIVATE ${JNI_INCLUDE_DIRS})
 target_compile_options(alexiasd PRIVATE -O3)
 target_link_libraries(alexiasd stable-diffusion)

@@ -1,0 +1,90 @@
+package sk.alexia.ai
+
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+
+data class OdporucanyModel(val nazov: String, val popis: String, val url: String, val mb: Int)
+
+/** Modely GGUF v priečinku appky (filesDir/modely). Appka nesiaha na iné súbory v mobile. */
+object Modely {
+    val odporucane = listOf(
+        OdporucanyModel("Qwen2.5 0.5B", "najrýchlejší, pre slabšie mobily",
+            "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf", 430),
+        OdporucanyModel("Qwen2.5 1.5B", "dobrý pomer rýchlosti a kvality",
+            "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_0.gguf", 1070),
+        OdporucanyModel("Qwen2.5 3B", "najmúdrejší, potrebuje 6+ GB RAM",
+            "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_0.gguf", 2000),
+    )
+
+    fun priecinok(c: Context) = File(c.filesDir, "modely").apply { mkdirs() }
+
+    fun zoznam(c: Context): List<File> =
+        priecinok(c).listFiles { f -> f.isFile && f.name.endsWith(".gguf", ignoreCase = true) }
+            ?.sortedBy { it.name.lowercase() } ?: emptyList()
+
+    private fun bezpecneMeno(n: String) = n.replace(Regex("[^A-Za-z0-9._-]"), "_").let {
+        if (it.endsWith(".gguf", ignoreCase = true)) it else "$it.gguf"
+    }
+
+    private fun jeGguf(f: File) = f.length() > 1024 &&
+        f.inputStream().use { i -> ByteArray(4).also { i.read(it) } }.contentEquals("GGUF".toByteArray())
+
+    /** skopíruje model, ktorý si používateľ vybral v systémovom výbere súborov */
+    fun importuj(c: Context, uri: Uri, priebeh: (Float) -> Unit): File {
+        var meno = "model.gguf"; var velkost = -1L
+        c.contentResolver.query(uri, null, null, null, null)?.use { k ->
+            if (k.moveToFirst()) {
+                k.getColumnIndex(OpenableColumns.DISPLAY_NAME).takeIf { it >= 0 }?.let { meno = k.getString(it) }
+                k.getColumnIndex(OpenableColumns.SIZE).takeIf { it >= 0 }?.let { velkost = k.getLong(it) }
+            }
+        }
+        val ciel = File(priecinok(c), bezpecneMeno(meno)); val tmp = File(ciel.path + ".part")
+        c.contentResolver.openInputStream(uri)!!.use { i ->
+            tmp.outputStream().use { o -> kopiruj(i, o, velkost, priebeh) }
+        }
+        if (!jeGguf(tmp)) { tmp.delete(); throw IllegalStateException("Súbor nie je model GGUF") }
+        ciel.delete(); tmp.renameTo(ciel)
+        return ciel
+    }
+
+    /** stiahne model z odkazu (Hugging Face presmeruje na iný server – presmerovania riešime sami) */
+    fun stiahni(c: Context, odkaz: String, priebeh: (Float) -> Unit, zrusene: () -> Boolean): File {
+        var url = URL(odkaz.trim()); var k: HttpURLConnection; var skoky = 0
+        while (true) {
+            k = url.openConnection() as HttpURLConnection
+            k.instanceFollowRedirects = false; k.connectTimeout = 20_000; k.readTimeout = 60_000
+            k.setRequestProperty("User-Agent", "AlexiaAI (Android)")
+            val kod = k.responseCode
+            if (kod in 300..399 && skoky++ < 8) { url = URL(url, k.getHeaderField("Location")); k.disconnect(); continue }
+            if (kod != 200) throw IllegalStateException("Server vrátil $kod")
+            break
+        }
+        val meno = Uri.parse(url.toString()).lastPathSegment?.takeIf { it.isNotBlank() }
+            ?: Uri.parse(odkaz).lastPathSegment ?: "model.gguf"
+        val povodne = Uri.parse(odkaz).lastPathSegment
+        val ciel = File(priecinok(c), bezpecneMeno(if (povodne?.endsWith(".gguf", true) == true) povodne else meno))
+        val tmp = File(ciel.path + ".part")
+        val spolu = k.contentLengthLong
+        k.inputStream.use { i -> tmp.outputStream().use { o -> kopiruj(i, o, spolu, priebeh, zrusene) } }
+        if (zrusene()) { tmp.delete(); throw InterruptedException("Zrušené") }
+        if ((spolu > 0 && tmp.length() != spolu) || !jeGguf(tmp)) { tmp.delete(); throw IllegalStateException("Stiahnutý súbor nie je celý model GGUF") }
+        ciel.delete(); tmp.renameTo(ciel)
+        return ciel
+    }
+
+    private fun kopiruj(i: java.io.InputStream, o: java.io.OutputStream, spolu: Long, priebeh: (Float) -> Unit, zrusene: () -> Boolean = { false }) {
+        val b = ByteArray(1 shl 16); var n: Int; var h = 0L; var posledne = 0L
+        while (i.read(b).also { n = it } > 0) {
+            if (zrusene()) return
+            o.write(b, 0, n); h += n
+            if (spolu > 0 && h - posledne > (1 shl 20)) { posledne = h; priebeh(h.toFloat() / spolu) }
+        }
+        priebeh(1f)
+    }
+
+    fun velkost(f: File): String = f.length().let { if (it > 1_000_000_000) "%.2f GB".format(it / 1e9) else "%d MB".format(it / 1_000_000) }
+}

@@ -1,0 +1,35 @@
+name: Alexia AI – APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: NDK a CMake
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" "cmake;3.22.1" > /dev/null
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Zostaviť APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace -PversionCode=${{ github.run_number }}
+      - name: Vydať
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="1.0.${{ github.run_number }}"
+          cp app/build/outputs/apk/release/app-release.apk AlexiaAI.apk
+          gh release create "v$V" AlexiaAI.apk --latest --target "$GITHUB_SHA" \
+            --title "Alexia AI $V" \
+            --notes "Lokálny AI chat (llama.cpp) – beží offline v mobile. Stiahni AlexiaAI.apk a nainštaluj."

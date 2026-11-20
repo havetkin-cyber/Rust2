@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alexia AI</string>
+    <string name="spat">Back</string>
+    <string name="novy_chat">New chat</string>
+    <string name="modely">Models</string>
+    <string name="nastavenia">Settings</string>
+    <string name="ahoj_nadpis">Hi, I\'m Alexia</string>
+    <string name="ahoj_text">I run right on your phone – no internet needed.</string>
+    <string name="ziadny_model">First download or pick a model</string>
+    <string name="ziadny_model_kratko">No model</string>
+    <string name="vybrat_model">Choose model</string>
+    <string name="nacitavam_model">Loading model…</string>
+    <string name="chyba_modelu">Could not load the model</string>
+    <string name="napis_spravu">Type a message…</string>
+    <string name="poslat">Send</string>
+    <string name="zastavit">Stop</string>
+    <string name="kopirovat">Copy</string>
+    <string name="skopirovane">Copied</string>
+    <string name="znova">Regenerate</string>
+    <string name="premysla">Thinking</string>
+    <string name="navrh_1">Make up a short story</string>
+    <string name="navrh_2">Explain simply how AI works</string>
+    <string name="navrh_3">Suggest a quick dinner recipe</string>
+    <string name="modely_moje">ON THIS PHONE</string>
+    <string name="modely_ziadne">No model yet.</string>
+    <string name="modely_odporucane">RECOMMENDED DOWNLOADS</string>
+    <string name="modely_vlastny">Custom model link (.gguf)</string>
+    <string name="stiahnut">Download</string>
+    <string name="zo_suboru">Add model from file</string>
+    <string name="aktivny">Active</string>
+    <string name="zmazat">Delete</string>
+    <string name="stahujem">Downloading…</string>
+    <string name="kopirujem">Copying…</string>
+    <string name="zrusit">Cancel</string>
+    <string name="chyba">Error</string>
+    <string name="modely_info">Models are stored only in the app\'s own folder. Any GGUF model works (Qwen, Llama, Gemma, Mistral…). For phones, 0.5B–4B in Q4_0 or Q4_K_M fit best.</string>
+    <string name="zmazat_model_otazka">Delete model %1$s?</string>
+    <string name="nast_system">System prompt</string>
+    <string name="nast_system_hint">Empty = the model gets no instructions</string>
+    <string name="nast_teplota">Temperature: %1$.2f</string>
+    <string name="nast_teplota_info">Lower = more precise, higher = more creative.</string>
+    <string name="nast_max">Max reply length: %1$d tokens</string>
+    <string name="nast_kontext">Conversation memory (context)</string>
+    <string name="nast_kontext_info">More memory = longer chats, but more RAM.</string>
+    <string name="nast_vlakna">CPU threads: %1$d</string>
+    <string name="nast_znova">Reload model with new settings</string>
+    <string name="nast_info">The app adds no rules or filters. Replies depend only on the model and your system prompt. The chat runs offline, nothing is sent anywhere.</string>
+</resources>

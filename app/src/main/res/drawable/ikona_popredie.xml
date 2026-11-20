@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- bublina chatu -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M34,36h40a8,8 0,0 1,8 8v20a8,8 0,0 1,-8 8h-24l-11,9v-9h-5a8,8 0,0 1,-8 -8v-20a8,8 0,0 1,8 -8z" />
+    <!-- iskra AI -->
+    <path android:fillColor="#FF7C5CFF"
+        android:pathData="M54,43l2.6,7.4l7.4,2.6l-7.4,2.6l-2.6,7.4l-2.6,-7.4l-7.4,-2.6l7.4,-2.6z" />
+</vector>

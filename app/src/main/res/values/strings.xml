@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alexia AI</string>
+    <string name="spat">Späť</string>
+    <string name="novy_chat">Nový chat</string>
+    <string name="modely">Modely</string>
+    <string name="nastavenia">Nastavenia</string>
+    <string name="ahoj_nadpis">Ahoj, som Alexia</string>
+    <string name="ahoj_text">Bežím priamo v tvojom mobile – bez internetu.</string>
+    <string name="ziadny_model">Najprv si stiahni alebo vyber model</string>
+    <string name="ziadny_model_kratko">Žiadny model</string>
+    <string name="vybrat_model">Vybrať model</string>
+    <string name="nacitavam_model">Načítavam model…</string>
+    <string name="chyba_modelu">Model sa nepodarilo načítať</string>
+    <string name="napis_spravu">Napíš správu…</string>
+    <string name="poslat">Poslať</string>
+    <string name="zastavit">Zastaviť</string>
+    <string name="kopirovat">Kopírovať</string>
+    <string name="skopirovane">Skopírované</string>
+    <string name="znova">Vygenerovať znova</string>
+    <string name="premysla">Premýšľanie</string>
+    <string name="navrh_1">Vymysli krátky príbeh</string>
+    <string name="navrh_2">Vysvetli mi jednoducho, ako funguje AI</string>
+    <string name="navrh_3">Navrhni mi recept na rýchlu večeru</string>
+    <string name="modely_moje">V MOBILE</string>
+    <string name="modely_ziadne">Zatiaľ žiadny model.</string>
+    <string name="modely_odporucane">ODPORÚČANÉ NA STIAHNUTIE</string>
+    <string name="modely_vlastny">Vlastný odkaz na model (.gguf)</string>
+    <string name="stiahnut">Stiahnuť</string>
+    <string name="zo_suboru">Pridať model zo súboru</string>
+    <string name="aktivny">Aktívny</string>
+    <string name="zmazat">Zmazať</string>
+    <string name="stahujem">Sťahujem…</string>
+    <string name="kopirujem">Kopírujem…</string>
+    <string name="zrusit">Zrušiť</string>
+    <string name="chyba">Chyba</string>
+    <string name="modely_info">Modely sa ukladajú len do priečinka appky. Funguje akýkoľvek model GGUF (Qwen, Llama, Gemma, Mistral…). Do mobilu sa hodia veľkosti 0.5B–4B v kvantizácii Q4_0 alebo Q4_K_M.</string>
+    <string name="zmazat_model_otazka">Zmazať model %1$s?</string>
+    <string name="nast_system">Systémový prompt</string>
+    <string name="nast_system_hint">Prázdne = model nedostane žiadne pokyny</string>
+    <string name="nast_teplota">Teplota: %1$.2f</string>
+    <string name="nast_teplota_info">Nižšia = presnejšie odpovede, vyššia = kreatívnejšie.</string>
+    <string name="nast_max">Max. dĺžka odpovede: %1$d tokenov</string>
+    <string name="nast_kontext">Pamäť rozhovoru (kontext)</string>
+    <string name="nast_kontext_info">Väčšia pamäť = dlhšie rozhovory, ale viac RAM.</string>
+    <string name="nast_vlakna">Vlákna procesora: %1$d</string>
+    <string name="nast_znova">Načítať model s novými nastaveniami</string>
+    <string name="nast_info">Appka nepridáva žiadne pravidlá ani filtre. Ako odpovedá, určuje len model a tvoj systémový prompt. Chat beží offline, nič sa nikam neposiela.</string>
+</resources>

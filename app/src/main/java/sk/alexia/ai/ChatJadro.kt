@@ -133,6 +133,20 @@ object ChatJadro {
 
     fun zastav() { if (h != 0L) Llama.zastav(h) }
 
+    /** uvoľní jazykový model z pamäte (napr. pri tvorbe obrázkov); znova sa načíta pri návrate do chatu */
+    fun uvolniPamat() {
+        if (generuje) zastav()
+        vlakno.execute { if (h != 0L) { Llama.uvolni(h); h = 0L } }
+        nacitany = null; popisModelu = ""
+        if (stav != StavModelu.CHYBA) stav = StavModelu.ZIADNY
+    }
+
+    /** po návrate do chatu znova načíta posledný model */
+    fun obnov() {
+        val m = nastavenia.aktivnyModel ?: return
+        if (nacitany == null && stav != StavModelu.NACITAVA && File(m).exists()) nacitajModel(m)
+    }
+
     fun novyChat() {
         zastav()
         spravy.clear(); ulozChat()

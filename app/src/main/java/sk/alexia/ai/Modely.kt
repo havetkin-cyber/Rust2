@@ -27,14 +27,19 @@ object Modely {
             ?.sortedBy { it.name.lowercase() } ?: emptyList()
 
     private fun bezpecneMeno(n: String) = n.replace(Regex("[^A-Za-z0-9._-]"), "_").let {
-        if (it.endsWith(".gguf", ignoreCase = true)) it else "$it.gguf"
+        if (it.endsWith(".gguf", ignoreCase = true) || it.endsWith(".safetensors", ignoreCase = true)) it else "$it.gguf"
     }
 
-    private fun jeGguf(f: File) = f.length() > 1024 &&
-        f.inputStream().use { i -> ByteArray(4).also { i.read(it) } }.contentEquals("GGUF".toByteArray())
+    /** GGUF má hlavičku "GGUF"; safetensors (len pre obrázkové modely) začína dĺžkou hlavičky a '{' */
+    private fun platny(f: File, ajSafetensors: Boolean): Boolean {
+        if (f.length() < 1024) return false
+        val b = f.inputStream().use { i -> ByteArray(9).also { i.read(it) } }
+        if (b.copyOfRange(0, 4).contentEquals("GGUF".toByteArray())) return true
+        return ajSafetensors && f.name.removeSuffix(".part").endsWith(".safetensors", true) && b[8] == '{'.code.toByte()
+    }
 
     /** skopíruje model, ktorý si používateľ vybral v systémovom výbere súborov */
-    fun importuj(c: Context, uri: Uri, priebeh: (Float) -> Unit): File {
+    fun importuj(c: Context, uri: Uri, priebeh: (Float) -> Unit, kam: File = priecinok(c), ajSafetensors: Boolean = false): File {
         var meno = "model.gguf"; var velkost = -1L
         c.contentResolver.query(uri, null, null, null, null)?.use { k ->
             if (k.moveToFirst()) {
@@ -42,17 +47,17 @@ object Modely {
                 k.getColumnIndex(OpenableColumns.SIZE).takeIf { it >= 0 }?.let { velkost = k.getLong(it) }
             }
         }
-        val ciel = File(priecinok(c), bezpecneMeno(meno)); val tmp = File(ciel.path + ".part")
+        val ciel = File(kam, bezpecneMeno(meno)); val tmp = File(ciel.path + ".part")
         c.contentResolver.openInputStream(uri)!!.use { i ->
             tmp.outputStream().use { o -> kopiruj(i, o, velkost, priebeh) }
         }
-        if (!jeGguf(tmp)) { tmp.delete(); throw IllegalStateException("Súbor nie je model GGUF") }
+        if (!platny(tmp, ajSafetensors)) { tmp.delete(); throw IllegalStateException("Súbor nie je podporovaný model") }
         ciel.delete(); tmp.renameTo(ciel)
         return ciel
     }
 
     /** stiahne model z odkazu (Hugging Face presmeruje na iný server – presmerovania riešime sami) */
-    fun stiahni(c: Context, odkaz: String, priebeh: (Float) -> Unit, zrusene: () -> Boolean): File {
+    fun stiahni(c: Context, odkaz: String, priebeh: (Float) -> Unit, zrusene: () -> Boolean, kam: File = priecinok(c), ajSafetensors: Boolean = false): File {
         var url = URL(odkaz.trim()); var k: HttpURLConnection; var skoky = 0
         while (true) {
             k = url.openConnection() as HttpURLConnection
@@ -66,12 +71,13 @@ object Modely {
         val meno = Uri.parse(url.toString()).lastPathSegment?.takeIf { it.isNotBlank() }
             ?: Uri.parse(odkaz).lastPathSegment ?: "model.gguf"
         val povodne = Uri.parse(odkaz).lastPathSegment
-        val ciel = File(priecinok(c), bezpecneMeno(if (povodne?.endsWith(".gguf", true) == true) povodne else meno))
+        val ok = { n: String? -> n != null && (n.endsWith(".gguf", true) || n.endsWith(".safetensors", true)) }
+        val ciel = File(kam, bezpecneMeno(if (ok(povodne)) povodne!! else meno))
         val tmp = File(ciel.path + ".part")
         val spolu = k.contentLengthLong
         k.inputStream.use { i -> tmp.outputStream().use { o -> kopiruj(i, o, spolu, priebeh, zrusene) } }
         if (zrusene()) { tmp.delete(); throw InterruptedException("Zrušené") }
-        if ((spolu > 0 && tmp.length() != spolu) || !jeGguf(tmp)) { tmp.delete(); throw IllegalStateException("Stiahnutý súbor nie je celý model GGUF") }
+        if ((spolu > 0 && tmp.length() != spolu) || !platny(tmp, ajSafetensors)) { tmp.delete(); throw IllegalStateException("Stiahnutý súbor nie je celý podporovaný model") }
         ciel.delete(); tmp.renameTo(ciel)
         return ciel
     }

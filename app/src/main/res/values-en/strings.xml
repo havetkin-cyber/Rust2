@@ -46,4 +46,25 @@
     <string name="nast_vlakna">CPU threads: %1$d</string>
     <string name="nast_znova">Reload model with new settings</string>
     <string name="nast_info">The app adds no rules or filters. Replies depend only on the model and your system prompt. The chat runs offline, nothing is sent anywhere.</string>
+    <string name="obrazky">Images</string>
+    <string name="obr_ulozene">Saved to gallery (Pictures/Alexia AI)</string>
+    <string name="obr_neulozene">Could not save the image</string>
+    <string name="obr_bez_modelu">Images need a model</string>
+    <string name="obr_bez_modelu_info">Download a model below (once, ~1.6–1.8 GB). After that everything runs offline.</string>
+    <string name="obr_ulozit">Save to gallery</string>
+    <string name="obr_prompt_hint">Describe the image, e.g. “a cozy cabin in a snowy forest, warm light, detailed”</string>
+    <string name="obr_anglicky">Tip: models understand English best.</string>
+    <string name="obr_viac">More settings</string>
+    <string name="obr_negativny">What you don\'t want in the image</string>
+    <string name="obr_rozmer">Size</string>
+    <string name="obr_kroky">Steps: %1$d (more = better, slower)</string>
+    <string name="obr_cfg">Prompt strength: %1$.1f</string>
+    <string name="obr_tvorim">Creating image… %1$d %%</string>
+    <string name="obr_vytvorit">Create image</string>
+    <string name="obr_cas">On a phone this takes about 1–5 minutes depending on size and steps.</string>
+    <string name="obr_galeria">YOUR IMAGES</string>
+    <string name="obr_modely">IMAGE MODELS</string>
+    <string name="obr_vlastny">Custom model (.gguf / .safetensors)</string>
+    <string name="zo_suboru_kratko">From file</string>
+    <string name="obr_info">Works with Stable Diffusion 1.x/2.x in GGUF or safetensors. Images stay in the app until you save them. The chat model is unloaded from memory while creating images.</string>
 </resources>

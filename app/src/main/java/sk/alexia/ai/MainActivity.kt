@@ -41,6 +41,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -59,16 +62,25 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         ChatJadro.init(this)
+        ObrazkyJadro.init(this)
         setContent { AlexiaTema { Appka() } }
     }
 }
 
-private enum class Obrazovka { CHAT, MODELY, NASTAVENIA }
+private enum class Obrazovka { CHAT, MODELY, NASTAVENIA, OBRAZKY }
 
 @Composable
 private fun Appka() {
     var obrazovka by remember { mutableStateOf(Obrazovka.CHAT) }
     BackHandler(obrazovka != Obrazovka.CHAT) { obrazovka = Obrazovka.CHAT }
+    // v pamäti je vždy len jeden model: obrázky alebo chat
+    LaunchedEffect(obrazovka) {
+        when (obrazovka) {
+            Obrazovka.OBRAZKY -> ObrazkyJadro.aktivnyModel?.let { if (File(it).exists()) ObrazkyJadro.nacitaj(it) }
+            Obrazovka.CHAT -> { ObrazkyJadro.uvolniPamat(); ChatJadro.obnov() }
+            else -> {}
+        }
+    }
     Box(
         Modifier
             .fillMaxSize()
@@ -81,9 +93,11 @@ private fun Appka() {
             Obrazovka.CHAT -> ChatObrazovka(
                 naModely = { obrazovka = Obrazovka.MODELY },
                 naNastavenia = { obrazovka = Obrazovka.NASTAVENIA },
+                naObrazky = { obrazovka = Obrazovka.OBRAZKY },
             )
             Obrazovka.MODELY -> ModelyObrazovka { obrazovka = Obrazovka.CHAT }
             Obrazovka.NASTAVENIA -> NastaveniaObrazovka { obrazovka = Obrazovka.CHAT }
+            Obrazovka.OBRAZKY -> ObrazkyObrazovka { obrazovka = Obrazovka.CHAT }
         }
     }
 }
@@ -148,7 +162,7 @@ private fun Karta(modifier: Modifier = Modifier, obsah: @Composable ColumnScope.
 // ---------------------------------------------------------------- chat
 
 @Composable
-private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit) {
+private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObrazky: () -> Unit) {
     val j = ChatJadro
     val zoznam = rememberLazyListState()
     var vstup by remember { mutableStateOf("") }
@@ -164,6 +178,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit) {
         }
         Hlavicka(stringResource(R.string.app_name), pod) {
             IconButton(onClick = { j.novyChat() }, enabled = j.spravy.isNotEmpty()) { Icon(Icons.Default.AddComment, stringResource(R.string.novy_chat), tint = Farby.text) }
+            IconButton(onClick = naObrazky) { Icon(Icons.Default.Image, stringResource(R.string.obrazky), tint = Farby.text) }
             IconButton(onClick = naModely) { Icon(Icons.Default.Memory, stringResource(R.string.modely), tint = Farby.text) }
             IconButton(onClick = naNastavenia) { Icon(Icons.Default.Tune, stringResource(R.string.nastavenia), tint = Farby.text) }
         }
@@ -519,6 +534,234 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                     Text(stringResource(R.string.nast_info), color = Farby.tlmene, fontSize = 13.sp)
                 }
                 if (j.popisModelu.isNotBlank()) { Spacer(Modifier.height(8.dp)); Text(j.popisModelu, color = Farby.tlmene, fontSize = 12.sp) }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- obrázky
+
+@Composable
+private fun ObrazkyObrazovka(spat: () -> Unit) {
+    val c = LocalContext.current
+    val o = ObrazkyJadro
+    var modely by remember { mutableStateOf(o.modely()) }
+    var prompt by remember { mutableStateOf("") }
+    var negativny by remember { mutableStateOf("blurry, low quality, deformed") }
+    var rozmer by remember { mutableIntStateOf(384) }
+    var kroky by remember { mutableIntStateOf(20) }
+    var cfg by remember { mutableFloatStateOf(7f) }
+    var viac by remember { mutableStateOf(false) }
+    var priebehStahovania by remember { mutableStateOf<Float?>(null) }
+    var zrusit by remember { mutableStateOf(false) }
+    var odkaz by remember { mutableStateOf("") }
+    var detail by remember { mutableStateOf<File?>(null) }
+    val chybaPrefix = stringResource(R.string.chyba)
+    val ulozene = stringResource(R.string.obr_ulozene)
+    val neulozene = stringResource(R.string.obr_neulozene)
+
+    fun hotovo(f: File?, e: Throwable?) {
+        priebehStahovania = null; modely = o.modely()
+        if (f != null) o.nacitaj(f.path)
+        if (e != null && e !is InterruptedException) Toast.makeText(c, "$chybaPrefix: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+    fun stiahni(url: String) {
+        if (priebehStahovania != null) return
+        priebehStahovania = 0f; zrusit = false
+        thread {
+            val r = runCatching { Modely.stiahni(c, url, { p -> priebehStahovania = p }, { zrusit }, o.priecinokModelov(), true) }
+            (c as ComponentActivity).runOnUiThread { hotovo(r.getOrNull(), r.exceptionOrNull()) }
+        }
+    }
+    val vyber = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null || priebehStahovania != null) return@rememberLauncherForActivityResult
+        priebehStahovania = 0f; zrusit = false
+        thread {
+            val r = runCatching { Modely.importuj(c, uri, { p -> priebehStahovania = p }, o.priecinokModelov(), true) }
+            (c as ComponentActivity).runOnUiThread { hotovo(r.getOrNull(), r.exceptionOrNull()) }
+        }
+    }
+    // prvý model sa načíta sám
+    LaunchedEffect(modely) {
+        if (o.stav == StavModelu.ZIADNY && modely.isNotEmpty()) o.nacitaj((modely.find { o.jeAktivny(it) } ?: modely.first()).path)
+    }
+
+    val pod = when (o.stav) {
+        StavModelu.PRIPRAVENY -> o.aktivnyModel?.let { File(it).nameWithoutExtension }
+        StavModelu.NACITAVA -> stringResource(R.string.nacitavam_model)
+        StavModelu.CHYBA -> stringResource(R.string.chyba_modelu)
+        StavModelu.ZIADNY -> stringResource(R.string.ziadny_model_kratko)
+    }
+    Column(Modifier.fillMaxSize()) {
+        Hlavicka(stringResource(R.string.obrazky), pod, spat = spat)
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            priebehStahovania?.let { p ->
+                Karta {
+                    Text("${stringResource(R.string.stahujem)} ${(p * 100).roundToInt()} %", color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    TextButton(onClick = { zrusit = true }) { Text(stringResource(R.string.zrusit), color = Farby.tlmene) }
+                }
+            }
+
+            if (modely.isEmpty()) {
+                Karta {
+                    Text(stringResource(R.string.obr_bez_modelu), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(R.string.obr_bez_modelu_info), color = Farby.tlmene, fontSize = 13.sp)
+                }
+            } else {
+                // výsledok
+                o.posledny?.let { f ->
+                    Karta {
+                        val bmp = remember(f) { android.graphics.BitmapFactory.decodeFile(f.path) }
+                        if (bmp != null) Image(bmp.asImageBitmap(), null, Modifier.fillMaxWidth().aspectRatio(bmp.width.toFloat() / bmp.height).clip(RoundedCornerShape(14.dp)).clickable { detail = f }, contentScale = ContentScale.Fit)
+                        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                                GradientTlacidlo(stringResource(R.string.obr_ulozit), Icons.Default.SaveAlt) {
+                                    Toast.makeText(c, if (o.ulozDoGalerie(f)) ulozene else neulozene, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            OutlinedButton(onClick = { o.zmazObrazok(f) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                                Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.zmazat), color = Farby.tlmene)
+                            }
+                        }
+                    }
+                }
+
+                Karta {
+                    OutlinedTextField(
+                        value = prompt, onValueChange = { prompt = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp),
+                        placeholder = { Text(stringResource(R.string.obr_prompt_hint), color = Farby.tlmene, fontSize = 13.sp) },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
+                    )
+                    Text(stringResource(R.string.obr_anglicky), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    TextButton(onClick = { viac = !viac }) {
+                        Text(stringResource(R.string.obr_viac), color = Farby.ruzova)
+                        Icon(if (viac) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
+                    }
+                    AnimatedVisibility(viac) {
+                        Column {
+                            OutlinedTextField(
+                                value = negativny, onValueChange = { negativny = it }, modifier = Modifier.fillMaxWidth(),
+                                label = { Text(stringResource(R.string.obr_negativny)) }, shape = RoundedCornerShape(14.dp),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(stringResource(R.string.obr_rozmer), color = Farby.text, fontSize = 14.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf(256, 384, 512).forEach { r ->
+                                    FilterChip(selected = rozmer == r, onClick = { rozmer = r }, label = { Text("${r}×$r") },
+                                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                                }
+                            }
+                            Text(stringResource(R.string.obr_kroky, kroky), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+                            Slider(value = kroky.toFloat(), onValueChange = { kroky = it.roundToInt() }, valueRange = 4f..40f,
+                                colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                            Text(stringResource(R.string.obr_cfg, cfg), color = Farby.text, fontSize = 14.sp)
+                            Slider(value = cfg, onValueChange = { cfg = (it * 2).roundToInt() / 2f }, valueRange = 1f..12f,
+                                colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    if (o.generuje) {
+                        Text(stringResource(R.string.obr_tvorim, (o.priebeh * 100).roundToInt()), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                        TextButton(onClick = { o.zrus() }) { Text(stringResource(R.string.zrusit), color = Farby.tlmene) }
+                    } else {
+                        GradientTlacidlo(stringResource(R.string.obr_vytvorit), Icons.Default.AutoAwesome, Modifier.fillMaxWidth(),
+                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generuj(prompt, negativny, rozmer, kroky, cfg) }
+                        Text(stringResource(R.string.obr_cas), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    }
+                    if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+
+                // galéria
+                if (o.galeria.isNotEmpty()) {
+                    Text(stringResource(R.string.obr_galeria), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    o.galeria.chunked(3).forEach { riadok ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            riadok.forEach { f ->
+                                val nahlad = remember(f) { android.graphics.BitmapFactory.decodeFile(f.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 }) }
+                                Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(Farby.plocha2).clickable { detail = f }) {
+                                    if (nahlad != null) Image(nahlad.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                }
+                            }
+                            repeat(3 - riadok.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+            }
+
+            // modely na obrázky
+            Text(stringResource(R.string.obr_modely), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+            modely.forEach { f ->
+                val aktivny = o.jeAktivny(f)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                        .background(if (aktivny) Farby.prechodJemny else Brush.linearGradient(listOf(Farby.plocha, Farby.plocha)))
+                        .border(1.dp, if (aktivny) Farby.fialova else Farby.okraj, RoundedCornerShape(18.dp))
+                        .clickable(enabled = !aktivny && !o.generuje) { o.nacitaj(f.path) }.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(if (aktivny) Icons.Default.CheckCircle else Icons.Default.Image, null, tint = if (aktivny) Farby.zelena else Farby.tlmene)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(f.nameWithoutExtension, color = Farby.text, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(Modely.velkost(f), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    IconButton(onClick = { o.zmazModel(f); modely = modely - f }, enabled = !o.generuje) { Icon(Icons.Default.DeleteOutline, stringResource(R.string.zmazat), tint = Farby.tlmene) }
+                }
+            }
+            o.odporucane.forEach { m ->
+                val uz = modely.any { it.name.equals(Uri.parse(m.url).lastPathSegment, ignoreCase = true) }
+                if (!uz) Karta {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(m.nazov, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                            Text("${m.popis} · ~${m.mb} MB", color = Farby.tlmene, fontSize = 12.sp)
+                        }
+                        GradientTlacidlo(stringResource(R.string.stiahnut), Icons.Default.Download, enabled = priebehStahovania == null) { stiahni(m.url) }
+                    }
+                }
+            }
+            Karta {
+                Text(stringResource(R.string.obr_vlastny), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("https://huggingface.co/…/model.gguf", color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    GradientTlacidlo(stringResource(R.string.stiahnut), Icons.Default.Download, enabled = priebehStahovania == null && odkaz.startsWith("http")) { stiahni(odkaz) }
+                    OutlinedButton(onClick = { vyber.launch(arrayOf("*/*")) }, enabled = priebehStahovania == null, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.FolderOpen, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.zo_suboru_kratko), color = Farby.text)
+                    }
+                }
+            }
+            Text(stringResource(R.string.obr_info), color = Farby.tlmene, fontSize = 12.sp)
+        }
+    }
+
+    detail?.let { f ->
+        val bmp = remember(f) { android.graphics.BitmapFactory.decodeFile(f.path) }
+        androidx.compose.ui.window.Dialog(onDismissRequest = { detail = null }) {
+            Column(Modifier.clip(RoundedCornerShape(20.dp)).background(Farby.plocha).padding(12.dp)) {
+                if (bmp != null) Image(bmp.asImageBitmap(), null, Modifier.fillMaxWidth().aspectRatio(bmp.width.toFloat() / bmp.height).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        GradientTlacidlo(stringResource(R.string.obr_ulozit), Icons.Default.SaveAlt) {
+                            Toast.makeText(c, if (o.ulozDoGalerie(f)) ulozene else neulozene, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    OutlinedButton(onClick = { o.zmazObrazok(f); detail = null }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene)
+                    }
+                }
             }
         }
     }

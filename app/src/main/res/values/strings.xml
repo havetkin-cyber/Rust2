@@ -46,4 +46,25 @@
     <string name="nast_vlakna">Vlákna procesora: %1$d</string>
     <string name="nast_znova">Načítať model s novými nastaveniami</string>
     <string name="nast_info">Appka nepridáva žiadne pravidlá ani filtre. Ako odpovedá, určuje len model a tvoj systémový prompt. Chat beží offline, nič sa nikam neposiela.</string>
+    <string name="obrazky">Obrázky</string>
+    <string name="obr_ulozene">Uložené do galérie (Obrázky/Alexia AI)</string>
+    <string name="obr_neulozene">Obrázok sa nepodarilo uložiť</string>
+    <string name="obr_bez_modelu">Na obrázky treba model</string>
+    <string name="obr_bez_modelu_info">Stiahni si model nižšie (raz, ~1,6–1,8 GB). Potom už všetko beží offline.</string>
+    <string name="obr_ulozit">Uložiť do galérie</string>
+    <string name="obr_prompt_hint">Opíš obrázok, napr. „a cozy cabin in a snowy forest, warm light, detailed“</string>
+    <string name="obr_anglicky">Tip: modely rozumejú najlepšie po anglicky.</string>
+    <string name="obr_viac">Viac nastavení</string>
+    <string name="obr_negativny">Čo na obrázku nechceš</string>
+    <string name="obr_rozmer">Veľkosť</string>
+    <string name="obr_kroky">Kroky: %1$d (viac = kvalitnejšie, pomalšie)</string>
+    <string name="obr_cfg">Presnosť podľa popisu: %1$.1f</string>
+    <string name="obr_tvorim">Tvorím obrázok… %1$d %%</string>
+    <string name="obr_vytvorit">Vytvoriť obrázok</string>
+    <string name="obr_cas">Na mobile to trvá zhruba 1–5 minút podľa veľkosti a krokov.</string>
+    <string name="obr_galeria">TVOJE OBRÁZKY</string>
+    <string name="obr_modely">MODELY NA OBRÁZKY</string>
+    <string name="obr_vlastny">Vlastný model (.gguf / .safetensors)</string>
+    <string name="zo_suboru_kratko">Zo súboru</string>
+    <string name="obr_info">Funguje Stable Diffusion 1.x/2.x vo formáte GGUF alebo safetensors. Obrázky sú len v appke, kým ich neuložíš do galérie. Pri tvorbe obrázkov sa chatový model dočasne uvoľní z pamäte.</string>
 </resources>

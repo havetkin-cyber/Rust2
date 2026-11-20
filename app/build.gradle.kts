@@ -18,7 +18,7 @@ android {
         targetSdk = 35
         versionCode = kodVerzie
         versionName = "1.0.$kodVerzie"
-        ndk { abiFilters.addAll(listOf("arm64-v8a", "x86_64")) }
+        ndk { abiFilters.addAll(listOf("arm64-v8a")) }
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static")
@@ -65,6 +65,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":obrazky"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

@@ -23,3 +23,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "AlexiaAI"
 include(":app")
+include(":obrazky")

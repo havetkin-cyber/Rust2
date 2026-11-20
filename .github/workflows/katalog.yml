@@ -1,0 +1,27 @@
+name: Kontrola odkazov na modely
+on:
+  push:
+    branches: [kontrola-katalogu]
+    paths: ['linux/src/main/resources/katalog.json', '.github/workflows/katalog.yml']
+  workflow_dispatch:
+jobs:
+  odkazy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Over všetky odkazy (HTTP stav a veľkosť)
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, sys
+          d = json.load(open('linux/src/main/resources/katalog.json'))
+          urls = [m['url'] for m in d['text']] + [u for m in d['obrazky'] for u in m['subory'].values()]
+          zle = 0
+          for u in urls:
+              r = subprocess.run(['curl', '-sIL', '-o', '/dev/null', '-w', '%{http_code} %{size_download} %{url_effective}', u], capture_output=True, text=True)
+              h = subprocess.run(['curl', '-sIL', u], capture_output=True, text=True).stdout
+              dl = [l for l in h.lower().splitlines() if l.startswith('content-length') or l.startswith('x-linked-size')]
+              kod = r.stdout.split()[0] if r.stdout else '?'
+              print(('OK ' if kod == '200' else 'ZLE') + ' ' + kod + ' ' + u.split('/resolve/')[0].split('huggingface.co/')[-1] + ' :: ' + u.rsplit('/', 1)[-1] + ' :: ' + (dl[-1] if dl else ''))
+              zle += kod != '200'
+          sys.exit(1 if zle else 0)
+          PY

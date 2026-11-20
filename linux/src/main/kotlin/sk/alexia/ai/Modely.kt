@@ -38,7 +38,8 @@ object Modely {
     }
 
     /** stiahne model z odkazu (Hugging Face presmeruje na iný server – presmerovania riešime sami) */
-    fun stiahni(odkaz: String, priebeh: (Float) -> Unit, zrusene: () -> Boolean, kam: File = priecinok(), ajSafetensors: Boolean = false): File {
+    fun stiahni(odkazPouzivatela: String, priebeh: (Float) -> Unit, zrusene: () -> Boolean, kam: File = priecinok(), ajSafetensors: Boolean = false): File {
+        val odkaz = upravOdkaz(odkazPouzivatela)
         var url = URL(odkaz.trim()); var k: HttpURLConnection; var skoky = 0
         while (true) {
             k = url.openConnection() as HttpURLConnection
@@ -60,6 +61,33 @@ object Modely {
         if ((spolu > 0 && tmp.length() != spolu) || !platny(tmp, ajSafetensors)) { tmp.delete(); throw IllegalStateException("Stiahnutý súbor nie je celý podporovaný model") }
         ciel.delete(); tmp.renameTo(ciel)
         return ciel
+    }
+
+    /**
+     * Odkaz z Hugging Face prerobí na priamy súbor:
+     *  …/blob/main/x.gguf → …/resolve/main/x.gguf, odstráni ?download=true,
+     *  odkaz na celý repozitár → vyberie GGUF (najradšej Q4_K_M, potom Q4_0, inak najmenší).
+     */
+    fun upravOdkaz(o: String): String {
+        var u = o.trim().substringBefore('?').substringBefore('#')
+        if (!u.startsWith("http")) u = "https://$u"
+        u = u.replace("://hf.co/", "://huggingface.co/")
+        if (!u.contains("huggingface.co")) return if (o.trim().startsWith("http")) o.trim() else u
+        u = u.replace("/blob/", "/resolve/")
+        if (u.contains("/resolve/")) return u
+        val m = Regex("huggingface\\.co/([^/]+)/([^/]+)").find(u) ?: return u
+        val repo = "${m.groupValues[1]}/${m.groupValues[2]}"
+        val k = URL("https://huggingface.co/api/models/$repo/tree/main?recursive=true").openConnection() as HttpURLConnection
+        k.setRequestProperty("User-Agent", "AlexiaAI (Linux)"); k.connectTimeout = 20_000; k.readTimeout = 30_000
+        val a = org.json.JSONArray(k.inputStream.bufferedReader().readText())
+        val ggufy = (0 until a.length()).map { a.getJSONObject(it) }
+            .filter { it.optString("type") == "file" && it.optString("path").endsWith(".gguf", true) && !it.optString("path").contains("mmproj", true) }
+            .map { it.optString("path") to it.optLong("size") }
+            // viac-dielne modely (-00001-of-00003) appka nevie spojiť
+            .filter { !Regex("-\\d{5}-of-\\d{5}").containsMatchIn(it.first) }
+        if (ggufy.isEmpty()) throw IllegalStateException("V repozitári $repo nie je žiadny GGUF model")
+        val vyber = ggufy.firstOrNull { it.first.contains("Q4_K_M", true) } ?: ggufy.firstOrNull { it.first.contains("Q4_0", true) } ?: ggufy.minBy { it.second }
+        return "https://huggingface.co/$repo/resolve/main/${vyber.first}"
     }
 
     private fun kopiruj(i: java.io.InputStream, o: java.io.OutputStream, spolu: Long, priebeh: (Float) -> Unit, zrusene: () -> Boolean = { false }) {

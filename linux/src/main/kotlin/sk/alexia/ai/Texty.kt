@@ -14,6 +14,18 @@ object T {
     }
 
     private val sk = mapOf(
+        "akt_karta" to "Aktualizácie",
+        "akt_skontrolovat" to "Skontrolovať a stiahnuť aktualizácie",
+        "akt_najnovsia" to "Máš najnovšiu verziu (%1\$s).",
+        "akt_nepodarilo" to "Nepodarilo sa skontrolovať – si pripojený na internet?",
+        "poz_scifi" to "Sci-fi",
+        "poz_cyberpunk" to "Cyberpunk",
+        "poz_fantasy" to "Fantasy",
+        "poz_vesmirna_lod" to "Vesmírna loď",
+        "poz_pust" to "Púšť",
+        "poz_more" to "Pod vodou",
+        "poz_postapo" to "Postapo",
+        "poz_dzungla" to "Džungľa",
         "poz_nadpis" to "Pozadie",
         "poz_bez" to "Bez",
         "poz_nahodne" to "🎲 Náhodné",
@@ -144,6 +156,18 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "akt_karta" to "Updates",
+        "akt_skontrolovat" to "Check and download updates",
+        "akt_najnovsia" to "You have the latest version (%1\$s).",
+        "akt_nepodarilo" to "Could not check – are you online?",
+        "poz_scifi" to "Sci-fi",
+        "poz_cyberpunk" to "Cyberpunk",
+        "poz_fantasy" to "Fantasy",
+        "poz_vesmirna_lod" to "Spaceship",
+        "poz_pust" to "Desert",
+        "poz_more" to "Underwater",
+        "poz_postapo" to "Post-apocalyptic",
+        "poz_dzungla" to "Jungle",
         "poz_nadpis" to "Background",
         "poz_bez" to "None",
         "poz_nahodne" to "🎲 Random",

@@ -45,12 +45,26 @@ object Aktualizacie {
         }
     }
 
-    fun skontroluj() {
+    var kontroluje by mutableStateOf(false)
+        private set
+
+    /** rucne = z Nastavení: ukáže aj preskočenú verziu a napíše, keď je appka aktuálna */
+    fun skontroluj(rucne: Boolean = false) {
+        if (kontroluje) return
+        kontroluje = true
         thread(isDaemon = true) {
-            runCatching {
+            val r = runCatching {
                 val v = otvor(BASE + "linux-verzia.txt").inputStream.bufferedReader().readText().trim()
                 val preskocena = File(Platforma.priecinok, "preskocit-verziu").takeIf { it.exists() }?.readText()?.trim()
-                if (novsia(v, mojaVerzia) && v != preskocena) Platforma.naHlavnom { novaVerzia = v }
+                val nova = novsia(v, mojaVerzia) && (rucne || v != preskocena)
+                Platforma.naHlavnom {
+                    if (nova) { chyba = ""; novaVerzia = v }
+                    else if (rucne) Platforma.oznam(T("akt_najnovsia", mojaVerzia))
+                }
+            }
+            Platforma.naHlavnom {
+                kontroluje = false
+                if (rucne) r.onFailure { Platforma.oznam(T("akt_nepodarilo")) }
             }
         }
     }

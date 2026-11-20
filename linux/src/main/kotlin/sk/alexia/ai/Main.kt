@@ -592,7 +592,7 @@ private fun ModelyObrazovka(spat: () -> Unit) {
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                     )
                     Spacer(Modifier.height(10.dp))
-                    GradientTlacidlo(T("stiahnut"), Icons.Default.Download, enabled = priebeh == null && odkaz.startsWith("http")) { stiahni(odkaz) }
+                    GradientTlacidlo(T("stiahnut"), Icons.Default.Download, enabled = priebeh == null && (odkaz.trim().startsWith("http") || odkaz.contains("huggingface.co") || odkaz.contains("hf.co"))) { stiahni(odkaz) }
                 }
             }
             item { Text(T("modely_info"), color = Farby.tlmene, fontSize = 12.sp) }
@@ -621,6 +621,12 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("nastavenia"), spat = spat)
         PosuvnyStlpec {
+            Karta {
+                Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+                if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(rucne = true) }
+            }
             Karta {
                 Text(T("nast_system"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
@@ -949,7 +955,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                 )
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    GradientTlacidlo(T("stiahnut"), Icons.Default.Download, enabled = priebehStahovania == null && odkaz.startsWith("http")) { stiahni(odkaz) }
+                    GradientTlacidlo(T("stiahnut"), Icons.Default.Download, enabled = priebehStahovania == null && (odkaz.trim().startsWith("http") || odkaz.contains("huggingface.co") || odkaz.contains("hf.co"))) { stiahni(odkaz) }
                     OutlinedButton(onClick = { vyberZoSuboru() }, enabled = priebehStahovania == null, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                         Icon(Icons.Default.FolderOpen, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(T("zo_suboru_kratko"), color = Farby.text)
                     }
@@ -995,6 +1001,14 @@ private val POZADIA = listOf(
     "izba" to "cozy room interior, warm light",
     "studio" to "plain studio backdrop, soft studio lighting",
     "vesmir" to "outer space, stars and colorful nebula",
+    "scifi" to "futuristic sci-fi city, spaceships, glowing lights",
+    "cyberpunk" to "cyberpunk street at night, neon signs, rain",
+    "fantasy" to "magical fantasy landscape, castle, glowing forest",
+    "vesmirna_lod" to "inside a futuristic spaceship, control panels",
+    "pust" to "desert dunes, hot sun",
+    "more" to "underwater world, coral reef, fish",
+    "postapo" to "post-apocalyptic ruined city, dust, overgrown buildings",
+    "dzungla" to "tropical jungle, waterfall",
     "vlastne" to "",
 )
 

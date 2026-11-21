@@ -22,7 +22,7 @@ jobs:
         run: |
           P=t/python/bin/python3
           $P -m pip install -q --no-warn-script-location torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
-          $P -m pip install -q --no-warn-script-location "numpy<2" omegaconf==2.3.0 einops==0.7.0 "transformers==4.44.2" trimesh==4.4.9 PyMCubes==0.1.6 Pillow huggingface_hub
+          $P -m pip install -q --no-warn-script-location "numpy<2" omegaconf==2.3.0 einops==0.7.0 "transformers==4.44.2" trimesh==4.4.9 PyMCubes==0.1.6 Pillow huggingface_hub imageio
       - name: TripoSR + váhy
         run: |
           curl -sL https://github.com/VAST-AI-Research/TripoSR/archive/refs/heads/main.zip -o tsr.zip && unzip -q tsr.zip -d t && mv t/TripoSR-main t/TripoSR

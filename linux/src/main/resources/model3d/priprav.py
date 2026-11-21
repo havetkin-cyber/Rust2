@@ -18,4 +18,11 @@ def marching_cubes(vol, thr):
 '''
     s = s.replace("from torchmcubes import marching_cubes", nahrada)
     open(p, "w", encoding="utf-8").write(s)
+# tsr/utils.py: imageio a rembg (odstránenie pozadia) appka nepotrebuje – pozadie rieši sama
+import re
+u = os.path.join(d, "tsr", "utils.py")
+t = open(u, encoding="utf-8").read()
+for modul in ("imageio", "rembg"):
+    t = re.sub(r"^import %s\s*$" % modul, "try:\n    import %s\nexcept ImportError:\n    %s = None" % (modul, modul), t, flags=re.M)
+open(u, "w", encoding="utf-8").write(t)
 print("OK")

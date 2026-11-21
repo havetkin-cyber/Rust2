@@ -1266,6 +1266,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     }
                     SeedStitok(f)
                 }
+                Model3DRiadok(f)
                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.SportsEsports, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp))
                     Text(T("hra_export"), color = Farby.text, fontSize = 13.sp)
@@ -1725,4 +1726,41 @@ private fun HesloKarta() {
             shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("hist_zrusit_heslo"), color = Farby.tlmene) }
     }
     Text(T("hist_upozornenie"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+}
+
+/** 3D model z obrázka (len obrázky z appky so seedom) */
+@Composable
+private fun Model3DRiadok(f: File) {
+    val m = Model3D
+    if (remember(f) { ObrazkyJadro.seedObrazka(f) } == null) return
+    Column(Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).padding(10.dp)) {
+        val jeTento = m.zdroj == f
+        when {
+            m.pripravuje || (m.pracuje && jeTento) -> {
+                Text(m.cinnost, color = Farby.text, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(progress = { m.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha)
+            }
+            jeTento && m.vysledok != null -> {
+                val v = m.vysledok!!
+                Text(T("m3d_hotovo", v.parentFile.path), color = Farby.zelena, fontSize = 13.sp)
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GradientTlacidlo(T("m3d_otvorit"), Icons.Default.ViewInAr) { m.otvor(v) }
+                    OutlinedButton(onClick = { m.otvor(v.parentFile) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("m3d_priecinok"), color = Farby.text, fontSize = 13.sp) }
+                    OutlinedButton(onClick = { Platforma.otvorOdkaz("https://www.mixamo.com") }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("m3d_rig"), color = Farby.text, fontSize = 13.sp) }
+                }
+                Text(T("m3d_rig_info"), color = Farby.tlmene, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+            else -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.ViewInAr, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                    Text(T("m3d_nadpis"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    AssistChip(onClick = { m.vytvor(f) }, enabled = !m.pracuje, label = { Text(T("m3d_vytvorit"), fontSize = 12.sp) },
+                        colors = AssistChipDefaults.assistChipColors(labelColor = Farby.text))
+                }
+                if (!m.jePripravene()) Text(T("m3d_prvy", Model3D.MB / 1000.0), color = Farby.tlmene, fontSize = 11.sp)
+            }
+        }
+        if (m.chyba.isNotBlank() && (m.zdroj == f || m.zdroj == null)) Text(m.chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+    }
 }

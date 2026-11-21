@@ -27,6 +27,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -270,6 +274,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
     val zoznam = rememberLazyListState()
     var vstup by remember { mutableStateOf("") }
     var rezimObrazka by remember { mutableStateOf(false) }
+    var rezimVidea by remember { mutableStateOf(false) }
     val o = ObrazkyJadro
     val posledny = j.spravy.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(j.spravy.size, posledny) { if (j.spravy.isNotEmpty()) zoznam.scrollToItem(j.spravy.lastIndex, Int.MAX_VALUE / 2) }
@@ -295,6 +300,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                 LazyColumn(state = zoznam, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     itemsIndexed(j.spravy) { i, s ->
                         if (s.rola == "user") BublinaPouzivatel(s.text)
+                        else if (s.jeObrazkova && (s.video != null || s.stavText.isNotEmpty())) BublinaVideo(s)
                         else if (s.jeObrazkova) BublinaObrazok(s)
                         else BublinaAI(s.text, pise = j.generuje && i == j.spravy.lastIndex, posledna = i == j.spravy.lastIndex && !j.generuje)
                     }
@@ -309,12 +315,15 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                 .border(1.dp, Farby.okraj, RoundedCornerShape(28.dp)).padding(start = 6.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { rezimObrazka = !rezimObrazka }) {
+            IconButton(onClick = { rezimObrazka = !rezimObrazka; if (rezimObrazka) rezimVidea = false }) {
                 Icon(Icons.Default.Brush, T("chat_obr_rezim"), tint = if (rezimObrazka) Farby.ruzova else Farby.tlmene)
+            }
+            IconButton(onClick = { rezimVidea = !rezimVidea; if (rezimVidea) rezimObrazka = false }) {
+                Icon(Icons.Default.Movie, T("video_rezim"), tint = if (rezimVidea) Farby.ruzova else Farby.tlmene)
             }
             TextField(
                 value = vstup, onValueChange = { vstup = it },
-                placeholder = { Text(T(if (rezimObrazka) "chat_obr_popis" else if (j.stav == StavModelu.PRIPRAVENY) "napis_spravu" else "ziadny_model_kratko"), color = Farby.tlmene) },
+                placeholder = { Text(T(if (rezimVidea) "video_popis" else if (rezimObrazka) "chat_obr_popis" else if (j.stav == StavModelu.PRIPRAVENY) "napis_spravu" else "ziadny_model_kratko"), color = Farby.tlmene) },
                 modifier = Modifier.weight(1f).nadKlavesnicou(), maxLines = 6,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
@@ -322,13 +331,13 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                     cursorColor = Farby.ruzova, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text,
                 ),
             )
-            val jeObr = rezimObrazka || popisObrazka(vstup) != null
-            val moze = vstup.isNotBlank() && (if (jeObr) !o.generuje else j.stav == StavModelu.PRIPRAVENY && !j.generuje)
+            val jeObr = rezimObrazka || rezimVidea || popisObrazka(vstup) != null || popisVidea(vstup) != null
+            val moze = vstup.isNotBlank() && (if (jeObr) !o.generuje && !VideoJadro.pracuje else j.stav == StavModelu.PRIPRAVENY && !j.generuje)
             Box(
                 Modifier.size(44.dp).clip(CircleShape)
                     .background(if (j.generuje) Brush.linearGradient(listOf(Farby.cervena, Farby.cervena)) else if (moze) Farby.prechod else Brush.linearGradient(listOf(Farby.plocha2, Farby.plocha2)))
                     .clickable(enabled = j.generuje || moze) {
-                        if (j.generuje) j.zastav() else { j.posli(vstup, rezimObrazka); vstup = "" }
+                        if (j.generuje) j.zastav() else { j.posli(vstup, rezimObrazka, rezimVidea); vstup = "" }
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -454,6 +463,108 @@ private fun BublinaAI(text: String, pise: Boolean, posledna: Boolean) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BublinaVideo(s: Sprava) {
+    val v = VideoJadro
+    val cesta = s.video
+    var znova by remember { mutableStateOf<Float?>(null) }   // priebeh pri zmene hudby
+    var verzia by remember { mutableStateOf(0) }
+    Row(Modifier.fillMaxWidth()) {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(Farby.prechod), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Movie, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            if (cesta != null && File(cesta).isDirectory) {
+                val proj = remember(cesta) { VideoJadro.Projekt(File(cesta)) }
+                key(verzia) { VideoPrehravac(proj) }
+                val z = znova
+                if (z != null) {
+                    Text(T("video_skladam", (z * 100).roundToInt()), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                    LinearProgressIndicator(progress = { z }, modifier = Modifier.width(300.dp).height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                }
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val ulozene = T("video_ulozene")
+                    OutlinedButton(onClick = { val f = v.uloz(proj); Platforma.oznam(if (f != null) ulozene + " " + f.parent else T("obr_neulozene")) },
+                        enabled = proj.mp4.exists(), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.SaveAlt, null, tint = Farby.text, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(T("video_ulozit"), color = Farby.text, fontSize = 13.sp)
+                    }
+                    OutlinedButton(onClick = {
+                        Platforma.vyberSubor(T("video_hudba_vyber"), setOf("mp3", "wav", "ogg", "flac", "m4a", "aac", "opus")) { f ->
+                            proj.hudba = f.path; ChatJadro.nastavenia.hudbaVidea = f.path; ChatJadro.nastavenia.uloz()
+                            znova = 0f
+                            v.exportuj(proj, { p -> znova = p }) { ok, e -> znova = null; verzia++; if (!ok) Platforma.oznam("⚠ $e") }
+                        }
+                    }, enabled = znova == null && !v.pracuje, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.MusicNote, null, tint = Farby.text, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(T("video_hudba"), color = Farby.text, fontSize = 13.sp)
+                    }
+                    IconButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(proj.mp4) }.onFailure { Platforma.otvorOdkaz(proj.mp4.toURI().toString()) } }, enabled = proj.mp4.exists()) {
+                        Icon(Icons.Default.OpenInNew, T("video_otvorit"), tint = Farby.tlmene, modifier = Modifier.size(18.dp))
+                    }
+                    proj.obrazky.firstOrNull()?.let { f ->
+                        IconButton(onClick = { ObrazkyJadro.nastavPozadieChatu(f) }) { Icon(Icons.Default.Wallpaper, T("poz_chat_tlacidlo"), tint = Farby.tlmene, modifier = Modifier.size(18.dp)) }
+                    }
+                }
+            } else if (s.text.isNotEmpty()) Text(s.text, color = Farby.cervena, fontSize = 14.sp)
+            else Column(Modifier.widthIn(max = 480.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Farby.plocha).padding(14.dp)) {
+                val ff = v.priebehFfmpeg
+                Text(if (ff != null) T("video_ffmpeg", (ff * 100).roundToInt()) else s.stavText, color = Farby.text, fontSize = 14.sp)
+                Spacer(Modifier.height(8.dp))
+                val p = ff ?: s.priebeh
+                LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                if (ObrazkyJadro.generuje) {
+                    Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(progress = { ObrazkyJadro.priebeh }, modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)), color = Farby.fialova, trackColor = Farby.plocha2)
+                    TextButton(onClick = { ObrazkyJadro.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
+                }
+                Text(T("video_info"), color = Farby.tlmene, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+/** náhľad videa priamo v chate – rovnaké efekty ako v MP4, vykresľované naživo (menšie rozlíšenie) */
+@Composable
+private fun VideoPrehravac(proj: VideoJadro.Projekt) {
+    val obr = remember(proj) {
+        proj.obrazky.mapNotNull { f -> runCatching {
+            val i = javax.imageio.ImageIO.read(f)
+            val k = 600.0 / i.width
+            java.awt.image.BufferedImage((i.width * k).toInt(), (i.height * k).toInt(), java.awt.image.BufferedImage.TYPE_INT_RGB).also { b ->
+                val g = b.createGraphics(); g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                g.drawImage(i, 0, 0, b.width, b.height, null); g.dispose()
+            }
+        }.getOrNull() }
+    }
+    if (obr.isEmpty()) return
+    val r = remember(obr) { VideoJadro.Renderer(obr, proj.seed, 432, 768) }
+    var hra by remember { mutableStateOf(false) }
+    var cas by remember { mutableStateOf(0.0) }
+    var snimka by remember { mutableStateOf<ImageBitmap?>(null) }
+    val dlzka = proj.dlzka
+    LaunchedEffect(Unit) { snimka = r.snimka(0.6).toComposeImageBitmap() }
+    LaunchedEffect(hra) {
+        if (!hra) { VideoJadro.zastavHudbu(); return@LaunchedEffect }
+        proj.hudba?.takeIf { File(it).exists() }?.let { VideoJadro.hrajHudbu(it) }
+        val start = System.nanoTime()
+        while (hra) {
+            withFrameNanos { }
+            cas = (System.nanoTime() - start) / 1e9
+            if (cas >= dlzka) { hra = false; cas = 0.0; break }
+            snimka = withContext(Dispatchers.Default) { r.snimka(cas).toComposeImageBitmap() }
+        }
+        VideoJadro.zastavHudbu()
+    }
+    DisposableEffect(Unit) { onDispose { VideoJadro.zastavHudbu() } }
+    Box(Modifier.width(270.dp).height(480.dp).clip(RoundedCornerShape(16.dp)).background(Color.Black).clickable { hra = !hra }, contentAlignment = Alignment.Center) {
+        snimka?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        if (!hra) Box(Modifier.size(64.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.PlayArrow, T("video_prehrat"), tint = Color.White, modifier = Modifier.size(40.dp))
+        }
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(((cas / dlzka).toFloat()).coerceIn(0f, 1f)).height(3.dp).background(Farby.ruzova))
     }
 }
 

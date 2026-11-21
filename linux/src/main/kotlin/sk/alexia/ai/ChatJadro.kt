@@ -10,9 +10,19 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /** jeObrazkova = žiadosť o obrázok alebo hotový obrázok v chate; jazykovému modelu sa neposiela */
-class Sprava(val rola: String, text: String, val jeObrazkova: Boolean = false, obrazok: String? = null) {
+class Sprava(val rola: String, text: String, val jeObrazkova: Boolean = false, obrazok: String? = null, video: String? = null) {
     var text by mutableStateOf(text)
     var obrazok by mutableStateOf(obrazok)
+    /** priečinok projektu videa (obrázky + video.mp4) */
+    var video by mutableStateOf(video)
+    var priebeh by mutableStateOf(0f)
+    var stavText by mutableStateOf("")
+}
+
+/** "/video …", "sprav video: …", "make a video …" → popis videa, inak null */
+fun popisVidea(t: String): String? {
+    val m = Regex("^\\s*(/video|sprav(te)? video|vytvor video|urob video|make a video|create a video)[\\s:,]+(.+)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t)
+    return m?.groupValues?.get(3)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 /** "/obrazok mačka", "nakresli mačku", "draw a cat" → popis obrázka, inak null */
@@ -150,8 +160,10 @@ object ChatJadro {
         }.get()
     }
 
-    fun posli(text: String, obrazok: Boolean = false) {
+    fun posli(text: String, obrazok: Boolean = false, video: Boolean = false) {
         if (text.isBlank()) return
+        val popisV = if (video) text.trim() else popisVidea(text)
+        if (popisV != null) { natoc(text.trim(), popisV); return }
         val popis = if (obrazok) text.trim() else popisObrazka(text)
         if (popis != null) { nakresli(text.trim(), popis); return }
         if (generuje || stav != StavModelu.PRIPRAVENY) return
@@ -160,6 +172,20 @@ object ChatJadro {
     }
 
     /** obrázok priamo v chate – kreslí ho obrázkový model (Obrázky) */
+    /** krátke video z obrázkov priamo v chate */
+    private fun natoc(text: String, popis: String) {
+        if (ObrazkyJadro.generuje || VideoJadro.pracuje) return
+        spravy += Sprava("user", text, jeObrazkova = true)
+        val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
+        if (nastavenia.vzdialene) { odpoved.text = "⚠ " + T("video_vzdialene"); ulozChat(); return }
+        odpoved.stavText = T("video_zacinam")
+        VideoJadro.vytvor(popis, { t, p -> odpoved.stavText = t; odpoved.priebeh = p }) { proj, e ->
+            if (proj != null) { odpoved.video = proj.dir.path; odpoved.obrazok = proj.obrazky.firstOrNull()?.path }
+            else odpoved.text = "⚠ $e"
+            ulozChat()
+        }
+    }
+
     private fun nakresli(text: String, popis: String) {
         if (ObrazkyJadro.generuje) return
         spravy += Sprava("user", text, jeObrazkova = true)
@@ -283,14 +309,14 @@ object ChatJadro {
     private fun suborChatu() = File(Platforma.priecinok, "chat.json")
 
     private fun ulozChat() {
-        val a = JSONArray(); spravy.forEach { a.put(JSONObject().put("r", it.rola).put("t", it.text).put("k", it.jeObrazkova).apply { it.obrazok?.let { o -> put("o", o) } }) }
+        val a = JSONArray(); spravy.forEach { a.put(JSONObject().put("r", it.rola).put("t", it.text).put("k", it.jeObrazkova).apply { it.obrazok?.let { o -> put("o", o) }; it.video?.let { v -> put("v", v) } }) }
         runCatching { suborChatu().writeText(a.toString()) }
     }
 
     private fun nacitajChat() {
         runCatching {
             val a = JSONArray(suborChatu().readText())
-            for (i in 0 until a.length()) a.getJSONObject(i).let { spravy += Sprava(it.getString("r"), it.getString("t"), it.optBoolean("k"), it.optString("o").ifEmpty { null }) }
+            for (i in 0 until a.length()) a.getJSONObject(i).let { spravy += Sprava(it.getString("r"), it.getString("t"), it.optBoolean("k"), it.optString("o").ifEmpty { null }, it.optString("v").ifEmpty { null }) }
         }
     }
 }

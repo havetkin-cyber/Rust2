@@ -103,7 +103,7 @@ object ObrazkyJadro {
 
     fun generuj(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float) {
         if (generuje || stav != StavModelu.PRIPRAVENY || prompt.isBlank()) return
-        spust(prompt, negativny, rozmer, kroky, cfg) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
+        spust(prompt, negativny, rozmer, rozmer, kroky, cfg) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
     }
 
     /** veľkosť obrázkového modelu na disku */
@@ -124,10 +124,40 @@ object ObrazkyJadro {
         if (uvolnit) ChatJadro.uvolniPamat()
         nacitaj(cesta, uvolnitChat = false)
         val s = aktivnaSada()
-        spust(popis, "", s?.rozmer ?: 512, s?.kroky ?: 20, s?.cfg ?: 7f) { f, e ->
+        spust(popis, "", s?.rozmer ?: 512, s?.rozmer ?: 512, s?.kroky ?: 20, s?.cfg ?: 7f) { f, e ->
             hotovo(f, e)
             if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
         }
+    }
+
+    /**
+     * Viac obrázkov po sebe (na video) na výšku 9:16. [priebeh] dostane (hotových, spolu).
+     * Hotové obrázky idú do [kam], nie do galérie.
+     */
+    fun nakresliViac(popisy: List<String>, kam: File, priebehObr: (Int, Int) -> Unit, hotovo: (List<File>, String) -> Unit) {
+        val cesta = aktivnyModel
+        val mam = cesta != null && (aktivnaSada()?.let { mamSadu(it) } ?: File(cesta).exists())
+        if (!mam) { hotovo(emptyList(), T("chat_obr_ziadny")); return }
+        if (generuje) { hotovo(emptyList(), T("video_zaneprazdnene")); return }
+        val uvolnit = ChatJadro.velkostNacitaneho() + velkost(cesta!!) > LIMIT_SPOLU
+        if (uvolnit) ChatJadro.uvolniPamat()
+        nacitaj(cesta, uvolnitChat = false)
+        val s = aktivnaSada()
+        // Z-Image / FLUX zvládnu 576×1024, SD 1.5 radšej menšie
+        val (w, v) = if (s != null && s.rozmer >= 768) 576 to 1024 else 448 to 768
+        val hotove = mutableListOf<File>()
+        kam.mkdirs()
+        fun dalsi(i: Int) {
+            if (i >= popisy.size) { hotovo(hotove, ""); if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }; return }
+            priebehObr(i, popisy.size)
+            spust(popisy[i], "", w, v, s?.kroky ?: 20, s?.cfg ?: 7f, doGalerie = false) { f, e ->
+                if (f == null) { hotovo(hotove, e); if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }; return@spust }
+                val ciel = File(kam, "obr_%02d.png".format(i + 1)); f.copyTo(ciel, overwrite = true); f.delete()
+                hotove += ciel
+                dalsi(i + 1)
+            }
+        }
+        dalsi(0)
     }
 
     /** obrázok nakreslí iné zariadenie (prepojenie v sieti) */
@@ -146,7 +176,7 @@ object ObrazkyJadro {
     }
 
     /** spustí tvorbu na vlákne sd (po prípadnom načítaní modelu, ktoré je v rade pred ňou) */
-    private fun spust(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, hotovo: (File?, String) -> Unit) {
+    private fun spust(prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, doGalerie: Boolean = true, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
         val seed = (Math.random() * Int.MAX_VALUE).toLong()
         // priebeh čítame z iného vlákna, kým generovanie beží
@@ -165,7 +195,7 @@ object ObrazkyJadro {
             else {
                 val r = IntArray(2)
                 val metoda = aktivnaSada()?.metoda ?: "euler_a"
-                val px = Sd.generujEx(h, prompt.trim(), negativny.trim(), rozmer, rozmer, kroky, cfg, seed, metoda, r)
+                val px = Sd.generujEx(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, r)
                 if (px != null) {
                     runCatching {
                         val img = BufferedImage(r[0], r[1], BufferedImage.TYPE_INT_RGB)
@@ -177,7 +207,7 @@ object ObrazkyJadro {
             }
             Platforma.naHlavnom {
                 generuje = false; priebeh = 0f
-                subor?.let { galeria.add(0, it) }
+                if (doGalerie) subor?.let { galeria.add(0, it) }
                 hotovo(subor, e)
             }
         }

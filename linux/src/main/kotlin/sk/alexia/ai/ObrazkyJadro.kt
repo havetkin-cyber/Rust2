@@ -432,7 +432,9 @@ object ObrazkyJadro {
         nacitaj(cesta, uvolnitChat = false)
         val s = aktivnaSada()
         val popis = j.optString("popis").trimEnd('.', ',', ' ') + ", " + zmena.trim()
-        spust(popis, j.optString("neg"), w, v, s?.kroky ?: j.optInt("kroky", 20), s?.cfg ?: j.optDouble("cfg", 7.0).toFloat(),
+        // pri úprave viac krokov (časť z nich sa preskočí), aby zmena bola kvalitná
+        val kroky = maxOf((s?.kroky ?: j.optInt("kroky", 20)) * 3 / 2, 12)
+        spust(popis, j.optString("neg"), w, v, kroky, s?.cfg ?: j.optDouble("cfg", 7.0).toFloat(),
             pevnySeed = seed, predloha = px, sila = sila) { nf, e ->
             hotovo(nf, e)
             if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }

@@ -29,11 +29,12 @@ fun upravaObrazka(t: String): Pair<Long, String>? {
 
 /** sila úpravy podľa slov: jemne = drží sa predlohy, výrazne = viac zmien */
 fun silaUpravy(t: String): Float {
+    // overené testom so Z-Image: 0.8 = obrázok ostane, zmena je jasne vidieť; 0.9 = výraznejšia zmena
     val x = t.lowercase()
     return when {
-        listOf("jemne", "trochu", "mierne", "slightly", "drž sa", "drz sa", "predloh").any { it in x } -> 0.4f
-        listOf("výrazne", "vyrazne", "úplne", "uplne", "silno", "strongly", "completely").any { it in x } -> 0.75f
-        else -> 0.55f
+        listOf("jemne", "trochu", "mierne", "slightly", "drž sa", "drz sa", "predloh").any { it in x } -> 0.75f
+        listOf("výrazne", "vyrazne", "úplne", "uplne", "silno", "strongly", "completely").any { it in x } -> 0.92f
+        else -> 0.85f
     }
 }
 

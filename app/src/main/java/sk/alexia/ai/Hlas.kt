@@ -20,9 +20,11 @@ import java.util.Locale
  * Výška: zvuk sa prehrá s inou vzorkovacou frekvenciou a rýchlosť reči sa o to isté vyrovná pri tvorbe.
  */
 object Hlas {
-    val HLASY = listOf("system" to "", "st0" to "Ema", "st1" to "Nina", "st2" to "Sofia", "st3" to "Zara", "st4" to "Hana")
+    val HLASY = listOf("system" to "", "lili" to "Lili", "st0" to "Ema", "st1" to "Nina", "st2" to "Sofia", "st3" to "Zara", "st4" to "Hana")
     fun meno(id: String) = HLASY.firstOrNull { it.first == id }?.second?.ifEmpty { "Alexia" } ?: "Alexia"
     const val ST_MB = 130
+    const val LILI_MB = 25
+    private const val LILI_MODEL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-sk_SK-lili-medium-int8.tar.bz2"
     private const val ST_MODEL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2"
 
     private var tts: TextToSpeech? = null
@@ -39,15 +41,31 @@ object Hlas {
     @Volatile private var stopa: AudioTrack? = null
 
     private fun jazyk(): Locale = if (ChatJadro.nastavenia.jazykOdpovedi == "en") Locale.ENGLISH else Locale("sk", "SK")
-    private fun jeSt(id: String) = id.startsWith("st")
+    /** hlasy cez sherpa-onnx (Supertonic aj Lili) */
+    private fun jeSt(id: String) = id.startsWith("st") || id == "lili"
+    private fun liliDir() = File(Platforma.priecinok, "hlas/lili")
+    private fun mamLili() = File(liliDir(), "sk_SK-lili-medium.onnx").length() > 5_000_000 && File(liliDir(), "espeak-ng-data/phontab").exists()
     private fun stDir() = File(Platforma.priecinok, "hlas/supertonic")
     private fun mamSt() = File(stDir(), "vector_estimator.int8.onnx").length() > 50_000_000 && File(stDir(), "voice.bin").exists()
-    fun mam(id: String = ChatJadro.nastavenia.hlas) = !jeSt(id) || mamSt()
+    fun mam(id: String = ChatJadro.nastavenia.hlas) = when { id == "lili" -> mamLili(); id.startsWith("st") -> mamSt(); else -> true }
 
     // ---------- sťahovanie ----------
-    fun stiahni() {
+    fun stiahni(id: String = ChatJadro.nastavenia.hlas) {
         if (priebeh != null) return
         priebeh = 0f; chyba = ""
+        if (id == "lili") {
+            Thread {
+                val r = runCatching {
+                    val arch = File(Platforma.priecinok, "hlas/lili.tar.bz2").apply { parentFile?.mkdirs() }
+                    stiahniSubor(LILI_MODEL, arch) { Platforma.naHlavnom { priebeh = it * 0.9f } }
+                    rozbalTarBz2(arch, liliDir()) { true }
+                    arch.delete()
+                    if (!mamLili()) throw IllegalStateException("Hlas sa nepodarilo rozbaliť")
+                }
+                Platforma.naHlavnom { priebeh = null; r.exceptionOrNull()?.let { chyba = it.message ?: "Hlas sa nepodarilo stiahnuť" } }
+            }.start()
+            return
+        }
         Thread {
             val r = runCatching {
                 val arch = File(Platforma.priecinok, "hlas/supertonic.tar.bz2").apply { parentFile?.mkdirs() }
@@ -129,7 +147,7 @@ object Hlas {
 
     fun hovor(text: String, poKonci: (() -> Unit)? = null) {
         val n = ChatJadro.nastavenia
-        if (jeSt(n.hlas)) { hovorSt(text, n.hlas.drop(2).toIntOrNull() ?: 0, poKonci); return }
+        if (jeSt(n.hlas)) { hovorSt(text, n.hlas, poKonci); return }
         if (tts == null || !pripraveny) { cakajuci = text; cakajuciKoniec = poKonci; priprav(); return }
         zastavSt()
         poKonciSys = poKonci
@@ -169,6 +187,25 @@ object Hlas {
         st = t; t
     }
 
+    @Volatile private var lili: com.k2fsa.sherpa.onnx.OfflineTts? = null
+
+    private fun liliModel(): com.k2fsa.sherpa.onnx.OfflineTts = synchronized(zamok) {
+        lili?.let { return it }
+        val d = liliDir()
+        val cfg = com.k2fsa.sherpa.onnx.OfflineTtsConfig(
+            model = com.k2fsa.sherpa.onnx.OfflineTtsModelConfig(
+                vits = com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig(
+                    model = File(d, "sk_SK-lili-medium.onnx").path,
+                    tokens = File(d, "tokens.txt").path,
+                    dataDir = File(d, "espeak-ng-data").path,
+                ),
+                numThreads = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4),
+            )
+        )
+        val t = com.k2fsa.sherpa.onnx.OfflineTts(assetManager = null, config = cfg)
+        lili = t; t
+    }
+
     private fun kusky(t: String): List<String> {
         val vety = t.split(Regex("(?<=[.!?…:;])\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
         val out = mutableListOf<String>(); val b = StringBuilder()
@@ -179,9 +216,11 @@ object Hlas {
 
     @Volatile private var stChyba = false
 
-    private fun hovorSt(text: String, sid: Int, poKonci: (() -> Unit)?) {
+    private fun hovorSt(text: String, id: String, poKonci: (() -> Unit)?) {
         zastav()
-        if (!mamSt()) { Platforma.oznam(T("hlas_najprv")); return }
+        if (!mam(id)) { Platforma.oznam(T("hlas_najprv")); return }
+        val jeLili = id == "lili"
+        val sid = if (jeLili) 0 else id.drop(2).toIntOrNull() ?: 0
         val t = naCitanie(text); if (t.isBlank()) { poKonci?.invoke(); return }
         stChyba = false
         hovori = text
@@ -192,7 +231,7 @@ object Hlas {
         val koniec = ShortArray(0) to 0
         Thread {
             try {
-                val m = stModel()
+                val m = if (jeLili) liliModel() else stModel()
                 for (kus in kusky(t)) {
                     if (hovori != text) break
                     val a = m.generateWithConfig(kus, com.k2fsa.sherpa.onnx.GenerationConfig(sid = sid, speed = speed, numSteps = 8, extra = mapOf("lang" to lang)))

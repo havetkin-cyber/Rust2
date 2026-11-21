@@ -72,7 +72,7 @@ val sherpaPriprav by tasks.registering {
     val out = layout.buildDirectory.dir("sherpa").get().asFile
     outputs.dir(out)
     doLast {
-        val verzia = "v2.0.2"
+        val verzia = "v1.13.2"   // posledná s espeak (Lili) aj Supertonic 3
         // Kotlin API: hlasy (Tts) a rozpoznávanie reči (OfflineRecognizer + závislosti)
         for (meno in listOf("Tts.kt", "OfflineRecognizer.kt", "OfflineStream.kt", "FeatureConfig.kt", "QnnConfig.kt", "HomophoneReplacerConfig.kt")) {
             val kt = File(out, "kotlin/com/k2fsa/sherpa/onnx/$meno")

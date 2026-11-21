@@ -694,7 +694,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 }
                 if (n.hlas == "system") Text(T("hlas_android"), color = Farby.tlmene, fontSize = 12.sp)
                 else {
-                    Text(T("hlas_st_info", Hlas.ST_MB).substringBefore(" Lili"), color = Farby.tlmene, fontSize = 12.sp)
+                    Text(if (n.hlas == "lili") T("hlas_lili", Hlas.LILI_MB) else T("hlas_st_info", Hlas.ST_MB).substringBefore(" Lili"), color = Farby.tlmene, fontSize = 12.sp)
                     val p = Hlas.priebeh
                     when {
                         p != null -> LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)

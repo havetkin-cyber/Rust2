@@ -208,6 +208,8 @@ private fun ChatObrazovka(naModely: () -> Unit) {
     val zoznam = rememberLazyListState()
     var vstup by remember { mutableStateOf("") }
     var rezimObrazka by remember { mutableStateOf(false) }
+    var historia by remember { mutableStateOf(false) }
+    if (historia) HistoriaDialog { historia = false }
     val posledny = j.spravy.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(j.spravy.size, posledny) { if (j.spravy.isNotEmpty()) zoznam.scrollToItem(j.spravy.lastIndex, Int.MAX_VALUE / 2) }
 
@@ -219,6 +221,7 @@ private fun ChatObrazovka(naModely: () -> Unit) {
             StavModelu.ZIADNY -> stringResource(R.string.ziadny_model_kratko)
         }
         Hlavicka(stringResource(R.string.app_name), pod) {
+            IconButton(onClick = { historia = true }) { Icon(Icons.Default.History, T("hist_nadpis"), tint = Farby.text) }
             IconButton(onClick = { j.novyChat() }, enabled = j.spravy.isNotEmpty()) { Icon(Icons.Default.AddComment, stringResource(R.string.novy_chat), tint = Farby.text) }
         }
 
@@ -1171,3 +1174,50 @@ private fun nahlad(f: File): androidx.compose.ui.graphics.ImageBitmap? = runCatc
     var vz = 1; while (maxOf(o.outWidth, o.outHeight) / vz > 2048) vz *= 2
     android.graphics.BitmapFactory.decodeFile(f.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = vz })?.asImageBitmap()
 }.getOrNull()
+
+// ---------------------------------------------------------------- história chatov (šifrovaná)
+
+@Composable
+private fun HistoriaDialog(zavri: () -> Unit) {
+    val j = ChatJadro
+    var naZmazanie by remember { mutableStateOf<Historia.Zaznam?>(null) }
+    val datum = remember { java.text.SimpleDateFormat("d. M. yyyy HH:mm", java.util.Locale.getDefault()) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = zavri) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 640.dp).clip(RoundedCornerShape(24.dp)).background(Farby.plocha).padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Lock, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                Text(T("hist_nadpis"), color = Farby.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                IconButton(onClick = zavri) { Icon(Icons.Default.Close, stringResource(R.string.zrusit), tint = Farby.text) }
+            }
+            Text(T("hist_info"), color = Farby.tlmene, fontSize = 12.sp)
+            Spacer(Modifier.height(8.dp))
+            GradientTlacidlo(stringResource(R.string.novy_chat), Icons.Default.AddComment, Modifier.fillMaxWidth()) { j.novyChat(); zavri() }
+            Spacer(Modifier.height(8.dp))
+            if (Historia.zoznam.isEmpty()) Text(T("hist_prazdna"), color = Farby.tlmene, modifier = Modifier.padding(12.dp))
+            LazyColumn(Modifier.weight(1f, fill = false)) {
+                items(Historia.zoznam.toList(), key = { it.id }) { z ->
+                    val je = z.id == Historia.aktualne
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (je) Farby.fialova.copy(alpha = 0.25f) else Farby.plocha2)
+                        .clickable { j.otvor(z.id); zavri() }.padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(z.nazov, color = Farby.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(datum.format(java.util.Date(z.cas)), color = Farby.tlmene, fontSize = 12.sp)
+                        }
+                        IconButton(onClick = { naZmazanie = z }) { Icon(Icons.Default.DeleteOutline, T("hist_zmazat"), tint = Farby.tlmene) }
+                    }
+                }
+            }
+        }
+    }
+    naZmazanie?.let { z ->
+        AlertDialog(
+            onDismissRequest = { naZmazanie = null }, containerColor = Farby.plocha,
+            title = { Text(T("hist_zmazat_otazka"), color = Farby.text) },
+            text = { Text(z.nazov, color = Farby.tlmene) },
+            confirmButton = { TextButton(onClick = { j.zmazChat(z.id); naZmazanie = null }) { Text(T("hist_zmazat"), color = Farby.cervena) } },
+            dismissButton = { TextButton(onClick = { naZmazanie = null }) { Text(stringResource(R.string.zrusit), color = Farby.text) } },
+        )
+    }
+}

@@ -53,6 +53,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.unit.DpSize
@@ -145,6 +146,7 @@ private fun Appka() {
         val spodok by androidx.compose.animation.core.animateDpAsState(
             if (n.posunKlavesnica && Klavesnica.pise) maxHeight * (n.vyskaKlavesnice / 100f) else 0.dp, label = "klavesnica")
         Column(Modifier.fillMaxHeight().widthIn(max = 960.dp).fillMaxWidth().align(Alignment.TopCenter).padding(bottom = spodok)) {
+        if (Sifra.zamknute) { Odomknutie(); return@Column }
         Zalozky(obrazovka) { obrazovka = it }
         Box(Modifier.weight(1f)) {
         when (obrazovka) {
@@ -274,6 +276,8 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
     val zoznam = rememberLazyListState()
     var vstup by remember { mutableStateOf("") }
     var rezimObrazka by remember { mutableStateOf(false) }
+    var historia by remember { mutableStateOf(false) }
+    if (historia) HistoriaDialog { historia = false }
     var rezimVidea by remember { mutableStateOf(false) }
     val o = ObrazkyJadro
     val posledny = j.spravy.lastOrNull()?.text?.length ?: 0
@@ -290,6 +294,7 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
             StavModelu.ZIADNY -> T("ziadny_model_kratko")
         }
         Hlavicka(T("app_name"), pod) {
+            IconButton(onClick = { historia = true }) { Icon(Icons.Default.History, T("hist_nadpis"), tint = Farby.text) }
             IconButton(onClick = { j.novyChat() }, enabled = j.spravy.isNotEmpty()) { Icon(Icons.Default.AddComment, T("novy_chat"), tint = Farby.text) }
         }
 
@@ -800,6 +805,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("nastavenia"), spat = spat)
         PosuvnyStlpec {
+            Karta { HesloKarta() }
             Karta { PrepojenieKarta() }
             Karta {
                 Text(T("hlas_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
@@ -1469,4 +1475,109 @@ private fun Aktualizacia() {
         confirmButton = { TextButton(onClick = { Aktualizacie.aktualizuj() }, enabled = p == null) { Text(T("akt_aktualizovat"), color = Farby.ruzova) } },
         dismissButton = { if (p == null) TextButton(onClick = { Aktualizacie.preskoc() }) { Text(T("akt_neskor"), color = Farby.tlmene) } },
     )
+}
+
+// ---------------------------------------------------------------- história chatov (šifrovaná)
+
+@Composable
+private fun HistoriaDialog(zavri: () -> Unit) {
+    val j = ChatJadro
+    var naZmazanie by remember { mutableStateOf<Historia.Zaznam?>(null) }
+    val datum = remember { java.text.SimpleDateFormat("d. M. yyyy HH:mm", java.util.Locale.getDefault()) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = zavri) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 640.dp).clip(RoundedCornerShape(24.dp)).background(Farby.plocha).padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Lock, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                Text(T("hist_nadpis"), color = Farby.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                IconButton(onClick = zavri) { Icon(Icons.Default.Close, T("zrusit"), tint = Farby.text) }
+            }
+            Text(T("hist_info"), color = Farby.tlmene, fontSize = 12.sp)
+            Spacer(Modifier.height(8.dp))
+            GradientTlacidlo(T("novy_chat"), Icons.Default.AddComment, Modifier.fillMaxWidth()) { j.novyChat(); zavri() }
+            Spacer(Modifier.height(8.dp))
+            if (Historia.zoznam.isEmpty()) Text(T("hist_prazdna"), color = Farby.tlmene, modifier = Modifier.padding(12.dp))
+            LazyColumn(Modifier.weight(1f, fill = false)) {
+                items(Historia.zoznam.toList(), key = { it.id }) { z ->
+                    val je = z.id == Historia.aktualne
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (je) Farby.fialova.copy(alpha = 0.25f) else Farby.plocha2)
+                        .clickable { j.otvor(z.id); zavri() }.padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(z.nazov, color = Farby.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(datum.format(java.util.Date(z.cas)), color = Farby.tlmene, fontSize = 12.sp)
+                        }
+                        IconButton(onClick = { naZmazanie = z }) { Icon(Icons.Default.DeleteOutline, T("hist_zmazat"), tint = Farby.tlmene) }
+                    }
+                }
+            }
+        }
+    }
+    naZmazanie?.let { z ->
+        AlertDialog(
+            onDismissRequest = { naZmazanie = null }, containerColor = Farby.plocha,
+            title = { Text(T("hist_zmazat_otazka"), color = Farby.text) },
+            text = { Text(z.nazov, color = Farby.tlmene) },
+            confirmButton = { TextButton(onClick = { j.zmazChat(z.id); naZmazanie = null }) { Text(T("hist_zmazat"), color = Farby.cervena) } },
+            dismissButton = { TextButton(onClick = { naZmazanie = null }) { Text(T("zrusit"), color = Farby.text) } },
+        )
+    }
+}
+
+@Composable
+private fun Odomknutie() {
+    var heslo by remember { mutableStateOf("") }
+    var zle by remember { mutableStateOf(false) }
+    var pracuje by remember { mutableStateOf(false) }
+    val skus = {
+        pracuje = true
+        val h = heslo
+        thread { val ok = ChatJadro.odomkni(h); Platforma.naHlavnom { pracuje = false; zle = !ok; if (ok) heslo = "" } }
+        Unit
+    }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(Modifier.widthIn(max = 420.dp).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(72.dp).clip(CircleShape).background(Farby.prechod), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(34.dp))
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(T("hist_zamknute"), color = Farby.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(value = heslo, onValueChange = { heslo = it; zle = false }, singleLine = true,
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                label = { Text(T("hist_heslo")) }, isError = zle, modifier = Modifier.fillMaxWidth().nadKlavesnicou()
+                    .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Enter) { skus(); true } else false },
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+            if (zle) Text(T("hist_zle_heslo"), color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            Spacer(Modifier.height(12.dp))
+            if (pracuje) CircularProgressIndicator(color = Farby.ruzova)
+            else GradientTlacidlo(T("hist_odomknut"), Icons.Default.LockOpen, Modifier.fillMaxWidth(), enabled = heslo.isNotEmpty()) { skus() }
+        }
+    }
+}
+
+@Composable
+private fun HesloKarta() {
+    var nove by remember { mutableStateOf("") }
+    var znova by remember { mutableStateOf("") }
+    var ma by remember { mutableStateOf(Sifra.maHeslo()) }
+    val farbyPola = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text)
+    Text(T("hist_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+    Text(T(if (ma) "hist_heslo_ma" else "hist_heslo_nema"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+    OutlinedTextField(value = nove, onValueChange = { nove = it }, singleLine = true, label = { Text(T("hist_nove_heslo")) },
+        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+        modifier = Modifier.fillMaxWidth().nadKlavesnicou(), shape = RoundedCornerShape(14.dp), colors = farbyPola)
+    Spacer(Modifier.height(6.dp))
+    OutlinedTextField(value = znova, onValueChange = { znova = it }, singleLine = true, label = { Text(T("hist_heslo_znova")) },
+        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), isError = znova.isNotEmpty() && znova != nove,
+        modifier = Modifier.fillMaxWidth().nadKlavesnicou(), shape = RoundedCornerShape(14.dp), colors = farbyPola)
+    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        GradientTlacidlo(T(if (ma) "hist_zmenit" else "hist_nastavit"), Icons.Default.Lock, enabled = nove.length >= 4 && nove == znova) {
+            runCatching { Sifra.nastavHeslo(nove) }.onSuccess { ma = true; nove = ""; znova = ""; Platforma.oznam(T("hist_heslo_ok")) }
+        }
+        if (ma) OutlinedButton(onClick = { runCatching { Sifra.nastavHeslo(null) }.onSuccess { ma = false; Platforma.oznam(T("hist_heslo_zrusene")) } },
+            shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("hist_zrusit_heslo"), color = Farby.tlmene) }
+    }
+    Text(T("hist_upozornenie"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
 }

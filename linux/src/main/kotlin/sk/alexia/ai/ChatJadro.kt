@@ -63,7 +63,8 @@ object ChatJadro {
         if (spustene) return
         spustene = true
         nastavenia = Nastavenia()
-        nacitajChat()
+        Sifra.priprav()
+        if (!Sifra.zamknute) nacitajChat()
         if (nastavenia.vzdialene) pripoj()
         else nastavenia.aktivnyModel?.let { if (File(it).exists()) nacitajModel(it) }
     }
@@ -290,7 +291,7 @@ object ChatJadro {
 
     fun novyChat() {
         zastav()
-        spravy.clear(); ulozChat()
+        spravy.clear(); Historia.novy()
         vlakno.execute { if (h != 0L) Llama.zabudni(h) }
     }
 
@@ -306,17 +307,38 @@ object ChatJadro {
     fun jeAktivny(f: File) = nacitany == f.path
 
     // --- chat sa ukladá do súboru appky, aby prežil zatvorenie ---
-    private fun suborChatu() = File(Platforma.priecinok, "chat.json")
-
+    /** história: zašifrovaný rozhovor (pozri Historia) */
     private fun ulozChat() {
         val a = JSONArray(); spravy.forEach { a.put(JSONObject().put("r", it.rola).put("t", it.text).put("k", it.jeObrazkova).apply { it.obrazok?.let { o -> put("o", o) }; it.video?.let { v -> put("v", v) } }) }
-        runCatching { suborChatu().writeText(a.toString()) }
+        Historia.uloz(Historia.aktualne, a)
+        if (nastavenia.aktualnyChat != Historia.aktualne) { nastavenia.aktualnyChat = Historia.aktualne; nastavenia.uloz() }
     }
 
     private fun nacitajChat() {
-        runCatching {
-            val a = JSONArray(suborChatu().readText())
-            for (i in 0 until a.length()) a.getJSONObject(i).let { spravy += Sprava(it.getString("r"), it.getString("t"), it.optBoolean("k"), it.optString("o").ifEmpty { null }, it.optString("v").ifEmpty { null }) }
-        }
+        Historia.nacitaj(nastavenia.aktualnyChat)
+        zobraz(Historia.aktualne)
+    }
+
+    private fun zobraz(id: String) {
+        spravy.clear()
+        val a = Historia.obsah(id) ?: return
+        for (i in 0 until a.length()) a.getJSONObject(i).let { spravy += Sprava(it.getString("r"), it.getString("t"), it.optBoolean("k"), it.optString("o").ifEmpty { null }, it.optString("v").ifEmpty { null }) }
+    }
+
+    /** po zadaní hesla načíta históriu */
+    fun odomkni(heslo: String): Boolean = Sifra.odomkni(heslo).also { if (it) nacitajChat() }
+
+    /** otvorí rozhovor z histórie */
+    fun otvor(id: String) {
+        if (id == Historia.aktualne) return
+        zastav()
+        Historia.prepni(id); nastavenia.aktualnyChat = id; nastavenia.uloz()
+        zobraz(id)
+        vlakno.execute { if (h != 0L) Llama.zabudni(h) }
+    }
+
+    fun zmazChat(id: String) {
+        Historia.zmaz(id)
+        if (id == Historia.aktualne) novyChat()
     }
 }

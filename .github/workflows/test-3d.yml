@@ -1,0 +1,40 @@
+name: Test – 3D model (TripoSR)
+
+# Overí rovnaký postup, aký robí appka: Python → balíky → TripoSR → váhy → 3D model z obrázka
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['linux/src/main/resources/model3d/**', '.github/workflows/test-3d.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python (python-build-standalone, ako v appke)
+        run: |
+          URL=$(curl -sL https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest | python3 -c "import sys,json,re; a=json.load(sys.stdin)['assets']; print([x['browser_download_url'] for x in a if re.match(r'cpython-3\.11\.\d+\+\d+-x86_64-unknown-linux-gnu-install_only\.tar\.gz$', x['name'])][0])")
+          echo "$URL"
+          mkdir -p t && curl -sL "$URL" | tar -xz -C t
+          t/python/bin/python3 --version
+      - name: Balíky
+        run: |
+          P=t/python/bin/python3
+          $P -m pip install -q --no-warn-script-location torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+          $P -m pip install -q --no-warn-script-location "numpy<2" omegaconf==2.3.0 einops==0.7.0 "transformers==4.44.2" trimesh==4.4.9 PyMCubes==0.1.6 Pillow huggingface_hub
+      - name: TripoSR + váhy
+        run: |
+          curl -sL https://github.com/VAST-AI-Research/TripoSR/archive/refs/heads/main.zip -o tsr.zip && unzip -q tsr.zip -d t && mv t/TripoSR-main t/TripoSR
+          t/python/bin/python3 linux/src/main/resources/model3d/priprav.py t/TripoSR
+          mkdir -p t/vahy
+          curl -sL -o t/vahy/config.yaml https://huggingface.co/stabilityai/TripoSR/resolve/main/config.yaml
+          curl -sL -o t/vahy/model.ckpt https://huggingface.co/stabilityai/TripoSR/resolve/main/model.ckpt
+          ls -la t/vahy
+      - name: 3D model z obrázka
+        run: |
+          cp linux/src/main/resources/model3d/alexia3d.py t/
+          export ALEXIA_TSR_MODEL=$PWD/t/vahy HF_HOME=$PWD/t/hf
+          /usr/bin/time -v t/python/bin/python3 t/alexia3d.py t/TripoSR/examples/chair.png t/vysledok 4 256 2>&1 | grep -E "PRIEBEH|HOTOVO|Maximum resident|Elapsed|Error|error" 
+          ls -la t/vysledok.*
+          t/python/bin/python3 -c "import trimesh; m=trimesh.load('t/vysledok.glb', force='mesh'); print('vrcholy', len(m.vertices), 'trojuholniky', len(m.faces), 'farby', m.visual.kind, 'rozmer', m.extents)"

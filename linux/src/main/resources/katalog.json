@@ -41,6 +41,13 @@
        "diffusion_model_path": "https://huggingface.co/leejet/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-q4_0.gguf",
        "t5xxl_path": "https://huggingface.co/second-state/stable-diffusion-3.5-large-GGUF/resolve/main/t5xxl-Q4_0.gguf",
        "clip_l_path": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors",
-       "vae_path": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors"}}
+       "vae_path": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors"}},
+    {"id": "wan21-1.3b", "nazov": "Wan 2.1 – video AI (1.3B)", "popis": "krátke video z textu (pokus) – 2 s videa trvajú desiatky minút", "mb": 6700,
+     "kroky": 20, "cfg": 6.0, "rozmer": 480, "metoda": "euler", "fa": true, "negativny": true,
+     "video": {"sirka": 832, "vyska": 480, "snimok": 33, "fps": 16, "posun": 3.0},
+     "subory": {
+       "diffusion_model_path": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors",
+       "t5xxl_path": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q4_K_M.gguf",
+       "vae_path": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"}}
   ]
 }

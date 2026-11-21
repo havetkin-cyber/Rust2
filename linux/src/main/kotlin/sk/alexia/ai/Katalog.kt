@@ -8,7 +8,11 @@ data class ObrazkovaSada(
     val kroky: Int, val cfg: Float, val rozmer: Int, val metoda: String, val fa: Boolean, val negativny: Boolean,
     /** kľúč pre stable-diffusion.cpp (model_path, diffusion_model_path, llm_path, vae_path, …) -> odkaz */
     val subory: Map<String, String>,
+    /** video AI (Wan): rozmer, počet snímok, fps, flow shift; null = obrázkový model */
+    val video: VideoNastavenie? = null,
 )
+
+data class VideoNastavenie(val sirka: Int, val vyska: Int, val snimok: Int, val fps: Int, val posun: Float)
 
 /** Katalóg overených modelov (resources/katalog.json – odkazy kontroluje GitHub). */
 object Katalog {
@@ -30,6 +34,7 @@ object Katalog {
                 o.getInt("kroky"), o.getDouble("cfg").toFloat(), o.getInt("rozmer"), o.getString("metoda"),
                 o.getBoolean("fa"), o.getBoolean("negativny"),
                 s.keys().asSequence().associateWith { k -> s.getString(k) },
+                o.optJSONObject("video")?.let { v -> VideoNastavenie(v.getInt("sirka"), v.getInt("vyska"), v.getInt("snimok"), v.getInt("fps"), v.getDouble("posun").toFloat()) },
             )
         } }
     }

@@ -1,0 +1,16 @@
+name: Test – odkazy v katalógu
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['linux/src/main/resources/katalog.json', '.github/workflows/test-odkazy.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          grep -o 'https://[^"]*' linux/src/main/resources/katalog.json | sort -u | while read u; do
+            k=$(curl -sIL -o /dev/null -w "%{http_code}" "$u"); echo "$k $u"
+          done | tee vysledok.txt
+          ! grep -v "^200 " vysledok.txt

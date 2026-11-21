@@ -176,3 +176,42 @@ F(jintArray, generujZPredlohy)(JNIEnv* env, jobject, jlong h, jstring prompt, js
     g_krok = g_krokov.load();
     return out;
 }
+
+// ---------------------------------------------------------------- video AI (Wan 2.1): text → krátke video
+// vráti RGB snímky za sebou (w*h*3*T bajtov), rozmer = {w, h, T, fps}
+F(jbyteArray, generujVideo)(JNIEnv* env, jobject, jlong h, jstring prompt, jstring negativny, jint w, jint v, jint snimok,
+                            jint kroky, jfloat cfg, jfloat posun, jlong seed, jstring metoda, jintArray rozmer) {
+    auto* ctx = (sd_ctx_t*)h; g_chyba.clear(); g_krok = 0; g_krokov = kroky;
+    sd_cancel_generation(ctx, SD_CANCEL_RESET);
+    if (!sd_ctx_supports_video_generation(ctx)) { g_chyba = "Načítaný model nevie robiť video"; return nullptr; }
+    std::string p = jstr(env, prompt), n = jstr(env, negativny), m = jstr(env, metoda);
+    sd_vid_gen_opt_t* o = sd_vid_gen_opt_create();
+    sd_result_t* res = nullptr;
+    bool good = o && ok(sd_opt_set_string(o, "prompt", p.c_str()))
+                  && (n.empty() || ok(sd_opt_set_string(o, "negative_prompt", n.c_str())))
+                  && ok(sd_opt_set_int(o, "width", w)) && ok(sd_opt_set_int(o, "height", v))
+                  && ok(sd_opt_set_int(o, "seed", seed))
+                  && ok(sd_opt_set_int(o, "video_frames", snimok))
+                  && ok(sd_opt_set_int(o, "sample.steps", kroky))
+                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg))
+                  && ok(sd_opt_set_float(o, "sample.flow_shift", posun))
+                  && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
+                  && ok(sd_generate_video(ctx, o, &res));
+    sd_opt_free(o);
+    const sd_video_t* vid = (good && res) ? sd_result_get_video(res) : nullptr;
+    if (!vid || !vid->data) { sd_result_free(res); if (g_chyba.empty()) g_chyba = "Video sa nepodarilo vytvoriť"; return nullptr; }
+    const sd_tensor_t* t = vid->data;
+    int64_t c = sd_tensor_dim(t, 0), sw = sd_tensor_dim(t, 1), sv = sd_tensor_dim(t, 2), st = sd_tensor_dim(t, 3);
+    const auto* d = (const uint8_t*)sd_tensor_data(t);
+    if (sd_tensor_type(t) != SD_TENSOR_U8 || c < 3 || !d || st < 1) { sd_result_free(res); g_chyba = "Neočakávaný formát videa"; return nullptr; }
+    size_t pocet = (size_t)(sw * sv * st);
+    std::vector<jbyte> rgb(pocet * 3);
+    for (size_t i = 0; i < pocet; i++) { rgb[i * 3] = (jbyte)d[i * c]; rgb[i * 3 + 1] = (jbyte)d[i * c + 1]; rgb[i * 3 + 2] = (jbyte)d[i * c + 2]; }
+    jint r[4] = {(jint)sw, (jint)sv, (jint)st, (jint)(vid->fps > 0 ? vid->fps : 16)};
+    sd_result_free(res);
+    env->SetIntArrayRegion(rozmer, 0, 4, r);
+    jbyteArray out = env->NewByteArray((jsize)rgb.size());
+    env->SetByteArrayRegion(out, 0, (jsize)rgb.size(), rgb.data());
+    g_krok = g_krokov.load();
+    return out;
+}

@@ -25,4 +25,6 @@ object Sd {
     external fun generujZPredlohy(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, seed: Long, metoda: String, argb: IntArray, sila: Float, rozmer: IntArray): IntArray?
     /** nekonečná textúra pre ďalšie obrázky (generujEx / generujZPredlohy) */
     external fun nastavTexturu(zapnut: Boolean)
+    /** video AI (Wan): RGB snímky za sebou; rozmer = {šírka, výška, snímok, fps} */
+    external fun generujVideo(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, snimok: Int, kroky: Int, cfg: Float, posun: Float, seed: Long, metoda: String, rozmer: IntArray): ByteArray?
 }

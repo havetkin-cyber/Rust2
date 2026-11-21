@@ -4,27 +4,14 @@ on:
     branches: [main]
     paths: ['.github/workflows/test-sherpa.yml']
 jobs:
-  lili:
+  mix:
     runs-on: ubuntu-22.04
     steps:
-      - env: { GH_TOKEN: '${{ github.token }}' }
-        run: |
-          gh api repos/k2-fsa/sherpa-onnx/releases --jq '.[].tag_name' | head -20 | tr '\n' ' '; echo
-          pip -q install sherpa-onnx==1.13.2 2>&1 | tail -2
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-sk_SK-lili-medium-int8.tar.bz2 | tar -xj
+      - run: |
           curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2 | tar -xj
-          ls vits-piper-sk_SK-lili-medium-int8
-          python3 - <<'P'
-          import sherpa_onnx
-          d="vits-piper-sk_SK-lili-medium-int8"
-          import glob; m=glob.glob(d+"/*.onnx")[0]
-          c=sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(vits=sherpa_onnx.OfflineTtsVitsModelConfig(model=m, tokens=d+"/tokens.txt", data_dir=d+"/espeak-ng-data")))
-          t=sherpa_onnx.OfflineTts(c); a=t.generate("Ľúbim čiernu kávu a žltého ďateľa.", sid=0, speed=1.0); print("LILI", len(a.samples), a.sample_rate)
-          D="sherpa-onnx-supertonic-3-tts-int8-2026-05-11/"
-          c=sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(supertonic=sherpa_onnx.OfflineTtsSupertonicModelConfig(duration_predictor=D+"duration_predictor.int8.onnx", text_encoder=D+"text_encoder.int8.onnx", vector_estimator=D+"vector_estimator.int8.onnx", vocoder=D+"vocoder.int8.onnx", tts_json=D+"tts.json", unicode_indexer=D+"unicode_indexer.bin", voice_style=D+"voice.bin")))
-          t=sherpa_onnx.OfflineTts(c); g=sherpa_onnx.GenerationConfig(); g.sid=1; g.num_steps=8; g.extra["lang"]="sk"; a=t.generate("Ahoj, ja som Nina.", g); print("ST", len(a.samples), a.sample_rate)
-          P
-          B=https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.2/sherpa-onnx/kotlin-api
-          curl -sL $B/Tts.kt | grep -n "class \|dataDir\|extra\|fun generateWithConfig" | head -30
-          curl -sfL $B/OfflineRecognizer.kt | grep -n "class OfflineWhisperModelConfig\|class OfflineRecognizer(" 
-          curl -sI https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.2/sherpa-onnx-v1.13.2-android.tar.bz2 | grep -i "^HTTP\|content-length" | tail -2
+          D=sherpa-onnx-supertonic-3-tts-int8-2026-05-11
+          grep -n -i "voice" $D/README.md | head -30
+          xxd $D/voice.bin | head -5
+          python3 -c "
+          import struct; b=open('$D/voice.bin','rb').read(); print(len(b)); print(struct.unpack('<16i', b[:64])); print(struct.unpack('<16f', b[:64]))"
+          python3 -c "import json; j=json.load(open('$D/tts.json')); print(list(j.keys())); print({k:(v if not isinstance(v,(list,dict)) else type(v).__name__) for k,v in j.items()})"

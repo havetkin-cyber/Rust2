@@ -1353,6 +1353,98 @@ private fun PrepojenieKarta() {
 
 // ---------------------------------------------------------------- vylepšenie fotky (len Linux)
 
+private var rezimVideaVyl by mutableStateOf(false)
+
+@Composable
+private fun ColumnScope.VideoVylepsenie() {
+    val v = VylepsenieVidea
+    val i = v.info
+    val nadpis = T("vv_vybrat")
+    PosuvnyStlpec {
+        Karta {
+            val f = v.vstup
+            if (f == null) {
+                Text(T("vv_prazdne"), color = Farby.tlmene)
+                Spacer(Modifier.height(10.dp))
+                GradientTlacidlo(T("vv_vybrat"), Icons.Default.VideoFile) { Platforma.vyberSubor(nadpis, setOf("mp4", "mov", "mkv", "webm", "avi", "m4v", "3gp")) { v.nastavVstup(it) } }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Movie, null, tint = Farby.ruzova); Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(f.name, color = Farby.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (i != null) Text("${i.sirka}×${i.vyska} · ${"%.0f".format(i.fpsCislo)} fps · ${(i.dlzka / 60).toInt()}:${"%02d".format((i.dlzka % 60).toInt())}", color = Farby.tlmene, fontSize = 12.sp)
+                        else if (v.chyba.isEmpty()) Text(T("vv_citam"), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    TextButton(onClick = { Platforma.vyberSubor(nadpis, setOf("mp4", "mov", "mkv", "webm", "avi", "m4v", "3gp")) { v.nastavVstup(it) } }, enabled = !v.pracuje) { Text(T("vyl_ina"), color = Farby.ruzova) }
+                }
+            }
+            VideoJadro.priebehFfmpeg?.let { p ->
+                Text(T("video_ffmpeg", (p * 100).roundToInt()), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+            }
+        }
+        Karta {
+            Text(T("vyl_zvacsenie"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to T("vyl_bez"), 2 to "2× AI", 1080 to "Full HD AI", 2160 to "4K AI").forEach { (n, nazov) ->
+                    FilterChip(selected = v.ciel == n, onClick = { v.ciel = n }, label = { Text(nazov) },
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                }
+            }
+            if (i != null && v.ciel != 0) v.cielovyRozmer(i).let { (w, h) -> Text("→ ${w}×$h", color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+            if (v.ciel != 0) Text(T("vv_ai_cas"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            if (v.ciel != 0 && !VylepsenieJadro.mamModel()) {
+                Spacer(Modifier.height(8.dp))
+                Text(T("vyl_model", VylepsenieJadro.MB), color = Farby.tlmene, fontSize = 13.sp)
+                val p = VylepsenieJadro.priebehStahovania
+                if (p != null) LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                else GradientTlacidlo(T("stiahnut"), Icons.Default.Download, Modifier.padding(top = 6.dp)) { VylepsenieJadro.stiahniModel() }
+            }
+            Spacer(Modifier.height(10.dp))
+            listOf(
+                Triple(T("vv_ostrost"), v.ostrost) { b: Boolean -> v.ostrost = b },
+                Triple(T("vv_sum"), v.sum) { b: Boolean -> v.sum = b },
+                Triple(T("vv_farby"), v.farby) { b: Boolean -> v.farby = b },
+                Triple(T("vv_stabil"), v.stabilizacia) { b: Boolean -> v.stabilizacia = b },
+                Triple(T("vv_60fps"), v.plynulost) { b: Boolean -> v.plynulost = b },
+                Triple(T("vv_zvuk"), v.zvuk) { b: Boolean -> v.zvuk = b },
+            ).forEach { (nazov, hodnota, zmen) ->
+                Row(Modifier.fillMaxWidth().clickable { zmen(!hodnota) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(nazov, color = Farby.text, modifier = Modifier.weight(1f))
+                    Switch(checked = hodnota, onCheckedChange = zmen, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            if (v.pracuje) {
+                Text(v.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(progress = { v.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                TextButton(onClick = { v.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
+            } else {
+                GradientTlacidlo(T("vv_spustit"), Icons.Default.AutoFixHigh, Modifier.fillMaxWidth(),
+                    enabled = i != null && (v.ciel == 0 || VylepsenieJadro.mamModel()) && VideoJadro.priebehFfmpeg == null) { v.vylepsi() }
+            }
+            if (v.chyba.isNotBlank()) Text(v.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            v.vysledok?.let { r ->
+                Spacer(Modifier.height(10.dp))
+                Text(T("vv_hotovo", r.path), color = Farby.zelena, fontSize = 13.sp)
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GradientTlacidlo(T("video_otvorit"), Icons.Default.PlayArrow) {
+                        runCatching { java.awt.Desktop.getDesktop().open(r) }.onFailure { Platforma.otvorOdkaz(r.toURI().toString()) }
+                    }
+                    OutlinedButton(onClick = { val u = v.ulozDoVidei(); Platforma.oznam(if (u != null) T("video_ulozene") + " " + u.parent else T("obr_neulozene")) },
+                        shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("vv_do_videi"), color = Farby.text) }
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Info, null, tint = Farby.tlmene, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+            Text(T("vv_info"), color = Farby.tlmene, fontSize = 12.sp)
+        }
+    }
+}
+
 @Composable
 private fun VylepsenieObrazovka(spat: () -> Unit) {
     val v = VylepsenieJadro
@@ -1365,6 +1457,14 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("vylepsit"), spat = spat)
+        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(false to T("vv_fotka"), true to T("vv_video")).forEach { (je, nazov) ->
+                FilterChip(selected = rezimVideaVyl == je, onClick = { rezimVideaVyl = je }, label = { Text(nazov) },
+                    leadingIcon = { Icon(if (je) Icons.Default.Movie else Icons.Default.Image, null, modifier = Modifier.size(16.dp)) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White, labelColor = Farby.text, iconColor = Farby.text))
+            }
+        }
+        if (rezimVideaVyl) { VideoVylepsenie(); return@Column }
         PosuvnyStlpec {
             Karta {
                 if (obrVstup == null) {

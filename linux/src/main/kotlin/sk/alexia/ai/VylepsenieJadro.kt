@@ -149,8 +149,18 @@ object VylepsenieJadro {
         return BufferedImage(roz[0], roz[1], BufferedImage.TYPE_INT_RGB).apply { setRGB(0, 0, roz[0], roz[1], out, 0, roz[0]) }
     }
 
+    /** AI 4× pre jednu snímku videa (ARGB pixely) – používa VylepsenieVidea */
+    @Synchronized
+    fun zvacsiSnimku(px: IntArray, w: Int, v: Int, roz: IntArray): IntArray {
+        if (h == 0L) {
+            h = Sd.upscalerNacitaj(model().absolutePath, ChatJadro.nastavenia.vlakna)
+            if (h == 0L) throw IllegalStateException(Sd.chyba())
+        }
+        return Sd.zvacsi(h, px, w, v, roz) ?: throw IllegalStateException(Sd.chyba())
+    }
+
     fun uvolniPamat() {
-        if (pracuje) return
+        if (pracuje || VylepsenieVidea.pracuje) return
         vlakno.execute { if (h != 0L) { Sd.upscalerUvolni(h); h = 0L } }
     }
 

@@ -36,6 +36,8 @@ jobs:
           pip -q install -U "huggingface_hub[cli]" gdown
           bash download_weights.sh 2>&1 | tail -15
           find models -type f | xargs ls -la
+          # transformers 4.39 potrebuje starší huggingface_hub (CLI na sťahovanie ho zvýšilo)
+          pip -q install "huggingface_hub==0.30.2"
       - name: Hlas (Supertonic, slovensky)
         run: |
           pip -q install sherpa-onnx==1.13.2 soundfile

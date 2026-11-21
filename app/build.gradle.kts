@@ -64,8 +64,8 @@ android {
     packaging { jniLibs { useLegacyPackaging = false } }
     lint { checkReleaseBuilds = false; abortOnError = false }
     // sherpa-onnx (Apache 2.0) – hlasy Supertonic: Kotlin API + natívne knižnice (arm64), pripraví úloha sherpaPriprav
-    sourceSets["main"].java.srcDir(layout.buildDirectory.dir("sherpa/kotlin"))
-    sourceSets["main"].jniLibs.srcDir(layout.buildDirectory.dir("sherpa/jni"))
+    sourceSets["main"].java.srcDir(layout.buildDirectory.dir("sherpa/kotlin").get().asFile)
+    sourceSets["main"].jniLibs.srcDir(layout.buildDirectory.dir("sherpa/jni").get().asFile)
 }
 
 val sherpaPriprav by tasks.registering {

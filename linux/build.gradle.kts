@@ -40,6 +40,7 @@ val sherpaZdroje by tasks.registering {
     }
 }
 sourceSets.main { java.srcDir(sherpaZdroje) }
+kotlin.sourceSets.named("main") { kotlin.srcDir(sherpaZdroje) }
 
 compose.desktop {
     application {

@@ -6,13 +6,25 @@ on:
 env:
   T: v2.0.2
 jobs:
-  asr:
+  lili:
     runs-on: ubuntu-22.04
     steps:
-      - run: |
+      - env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh api repos/k2-fsa/sherpa-onnx/releases/tags/tts-models --paginate --jq '.assets[] | select(.name|test("sk_SK|lili|espeak")) | "\(.name) \(.size) \(.updated_at)"'
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-sk_SK-lili-medium.tar.bz2 | tar -tvj | head -20
           B=https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx
-          curl -sL $B/kotlin-api/OfflineRecognizer.kt -o r.kt; sed -n '1,20p;92,102p;144,235p' r.kt
-          curl -sL $B/kotlin-api/FeatureConfig.kt
-          curl -sL $B/java-api/src/main/java/com/k2fsa/sherpa/onnx/OfflineRecognizerConfig.java | grep -n "public"
-          curl -sL $B/java-api/src/main/java/com/k2fsa/sherpa/onnx/OfflineRecognizerResult.java | grep -n "public"
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2 | tar -tvj
+          curl -sL $B/kotlin-api/Tts.kt | sed -n '291,400p'
+          pip -q install sherpa-onnx==2.0.2 soundfile 2>&1 | tail -1
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-sk_SK-lili-medium.tar.bz2 | tar -xj
+          ls vits-piper-sk_SK-lili-medium
+          python3 - <<'P'
+          import sherpa_onnx, os
+          d="vits-piper-sk_SK-lili-medium"
+          for kw in [dict(model=f"{d}/sk_SK-lili-medium.onnx", tokens=f"{d}/tokens.txt", data_dir=f"{d}/espeak-ng-data"), dict(model=f"{d}/sk_SK-lili-medium.onnx", tokens=f"{d}/tokens.txt")]:
+              try:
+                  c=sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(vits=sherpa_onnx.OfflineTtsVitsModelConfig(**kw)))
+                  t=sherpa_onnx.OfflineTts(c); a=t.generate("Ľúbim čiernu kávu a žltého ďateľa.", sid=0, speed=1.0)
+                  print("OK", list(kw), len(a.samples), a.sample_rate)
+              except Exception as e: print("ERR", list(kw), e)
+          P

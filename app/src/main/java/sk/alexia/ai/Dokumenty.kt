@@ -84,7 +84,7 @@ object Dokumenty {
     fun zavri() { Citac.zastav(); aktualny = null }
 
     private fun citajText(f: File): String = when (f.extension.lowercase()) {
-        "pdf" -> {
+        "pdf" -> run {
             com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(Platforma.app)
             com.tom_roush.pdfbox.pdmodel.PDDocument.load(f)
         }.use { d ->

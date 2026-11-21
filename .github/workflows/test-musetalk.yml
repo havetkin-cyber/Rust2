@@ -19,10 +19,16 @@ jobs:
           git clone -q --depth 1 https://github.com/TMElyralab/MuseTalk
           cd MuseTalk && ls && cat requirements.txt
           pip -q install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cpu
-          pip -q install -r requirements.txt 2>&1 | tail -3
+          grep -viE "^(tensorflow|tensorboard|gradio)" requirements.txt > req.txt
+          pip -q install -r req.txt 2>&1 | tail -3
           pip -q install -U openmim
           pip -q install mmcv==2.0.1 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.0/index.html 2>&1 | tail -2
-          pip -q install "mmdet==3.1.0" "mmpose==1.1.0" 2>&1 | tail -2
+          # chumpy (závislosť mmpose) sa nedá zostaviť v izolácii – nainštaluje sa bez nej
+          pip -q install setuptools wheel cython
+          pip -q install --no-build-isolation chumpy 2>&1 | tail -2
+          pip -q install "mmdet==3.1.0" 2>&1 | tail -2
+          pip -q install "mmpose==1.1.0" --no-deps
+          pip -q install json_tricks munkres xtcocotools 2>&1 | tail -2
           python -c "import mmcv, mmpose, mmdet; print('mm OK', mmcv.__version__)"
       - name: Váhy
         run: |

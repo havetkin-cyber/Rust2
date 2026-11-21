@@ -49,6 +49,12 @@ fun popisAIVidea(t: String): String? {
     return m?.groupValues?.get(3)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
+/** „rozhýbaj seed 12345 …“ → (seed, popis pohybu alebo "") */
+fun rozhybanie(t: String): Pair<Long, String>? {
+    val m = Regex("^\\s*(rozhýbaj|rozhybaj|animuj|animate)\\s+(obr[aá]zok\\s+)?(seed\\s*)?#?(\\d{3,12})\\s*[:,.-]?\\s*(a\\s+|and\\s+)?(.*)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t) ?: return null
+    return m.groupValues[4].toLong() to m.groupValues[6].trim()
+}
+
 /** "/video …", "sprav video: …", "make a video …" → popis videa, inak null */
 fun popisVidea(t: String): String? {
     val m = Regex("^\\s*(/video|sprav(te)? video|vytvor video|urob video|make a video|create a video)[\\s:,]+(.+)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t)
@@ -194,6 +200,7 @@ object ChatJadro {
     fun posli(text: String, obrazok: Boolean = false, video: Boolean = false) {
         if (text.isBlank()) return
         popisAIVidea(text)?.let { natocAI(text.trim(), it); return }
+        rozhybanie(text)?.let { (seed, pohyb) -> rozhybaj(text.trim(), seed, pohyb); return }
         val popisV = if (video) text.trim() else popisVidea(text)
         if (popisV != null) { natoc(text.trim(), popisV); return }
         upravaObrazka(text)?.let { (seed, zmena) -> uprav(text.trim(), seed, zmena); return }
@@ -205,6 +212,23 @@ object ChatJadro {
     }
 
     /** obrázok priamo v chate – kreslí ho obrázkový model (Obrázky) */
+    /** rozhýbe obrázok z appky (Wan 2.2) */
+    private fun rozhybaj(text: String, seed: Long, pohyb: String) {
+        if (ObrazkyJadro.generuje || VideoJadro.pracuje) return
+        spravy += Sprava("user", text, jeObrazkova = true)
+        val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
+        if (nastavenia.vzdialene) { odpoved.text = "⚠ " + T("video_vzdialene"); ulozChat(); return }
+        if (Podpis.zakazane(pohyb)) { odpoved.text = "⚠ " + T("upr_zakazane"); ulozChat(); return }
+        val f = ObrazkyJadro.najdiPodlaSeedu(seed) ?: run { odpoved.text = "⚠ " + T("upr_nenajdene", seed); ulozChat(); return }
+        val popis = listOf(ObrazkyJadro.popisObrazka(f).orEmpty(), pohyb.ifBlank { "natural subtle motion, cinematic" }).filter { it.isNotBlank() }.joinToString(", ")
+        odpoved.stavText = T("vai_tvorim")
+        ObrazkyJadro.natocAI(popis, null, f) { v, e ->
+            if (v != null) { odpoved.video = v.path; odpoved.obrazok = v.path.removeSuffix(".mp4") + ".png" } else odpoved.text = "⚠ $e"
+            odpoved.stavText = ""
+            ulozChat()
+        }
+    }
+
     /** video AI (Wan) priamo v chate */
     private fun natocAI(text: String, popis: String) {
         if (ObrazkyJadro.generuje || VideoJadro.pracuje) return

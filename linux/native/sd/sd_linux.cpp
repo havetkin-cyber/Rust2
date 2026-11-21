@@ -180,10 +180,22 @@ F(jintArray, generujZPredlohy)(JNIEnv* env, jobject, jlong h, jstring prompt, js
 // ---------------------------------------------------------------- video AI (Wan 2.1): text → krátke video
 // vráti RGB snímky za sebou (w*h*3*T bajtov), rozmer = {w, h, T, fps}
 F(jbyteArray, generujVideo)(JNIEnv* env, jobject, jlong h, jstring prompt, jstring negativny, jint w, jint v, jint snimok,
-                            jint kroky, jfloat cfg, jfloat posun, jlong seed, jstring metoda, jintArray rozmer) {
+                            jint kroky, jfloat cfg, jfloat posun, jlong seed, jstring metoda, jintArray predloha, jintArray rozmer) {
     auto* ctx = (sd_ctx_t*)h; g_chyba.clear(); g_krok = 0; g_krokov = kroky;
     sd_cancel_generation(ctx, SD_CANCEL_RESET);
     if (!sd_ctx_supports_video_generation(ctx)) { g_chyba = "Načítaný model nevie robiť video"; return nullptr; }
+    // voliteľný prvý obrázok (rozhýbanie obrázka – Wan 2.2 TI2V); ARGB w×v
+    std::vector<uint8_t> prgb;
+    sd_tensor_t* pt = nullptr;
+    if (predloha) {
+        jsize pn = env->GetArrayLength(predloha);
+        if (pn != w * v) { g_chyba = "Zlý rozmer obrázka"; return nullptr; }
+        std::vector<jint> px((size_t)pn); env->GetIntArrayRegion(predloha, 0, pn, px.data());
+        prgb.resize((size_t)pn * 3);
+        for (jsize i = 0; i < pn; i++) { uint32_t q = (uint32_t)px[(size_t)i]; prgb[(size_t)i * 3] = (uint8_t)(q >> 16); prgb[(size_t)i * 3 + 1] = (uint8_t)(q >> 8); prgb[(size_t)i * 3 + 2] = (uint8_t)q; }
+        int64_t tvar[3] = {3, w, v};
+        pt = sd_tensor_create(SD_TENSOR_U8, 3, tvar, prgb.data(), prgb.size());
+    }
     std::string p = jstr(env, prompt), n = jstr(env, negativny), m = jstr(env, metoda);
     sd_vid_gen_opt_t* o = sd_vid_gen_opt_create();
     sd_result_t* res = nullptr;
@@ -196,8 +208,10 @@ F(jbyteArray, generujVideo)(JNIEnv* env, jobject, jlong h, jstring prompt, jstri
                   && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg))
                   && ok(sd_opt_set_float(o, "sample.flow_shift", posun))
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
+                  && (!pt || ok(sd_opt_set_tensor(o, "init_image", pt)))
                   && ok(sd_generate_video(ctx, o, &res));
     sd_opt_free(o);
+    if (pt) sd_tensor_free(pt);
     const sd_video_t* vid = (good && res) ? sd_result_get_video(res) : nullptr;
     if (!vid || !vid->data) { sd_result_free(res); if (g_chyba.empty()) g_chyba = "Video sa nepodarilo vytvoriť"; return nullptr; }
     const sd_tensor_t* t = vid->data;

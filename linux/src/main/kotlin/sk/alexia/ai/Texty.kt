@@ -14,6 +14,10 @@ object T {
     }
 
     private val sk = mapOf(
+        "vai_ziadny_i2v" to "Na rozhýbanie obrázka treba v Obrázkoch stiahnuť „Wan 2.2 – video AI (5B)“.",
+        "vai_rozhybat" to "Rozhýbať obrázok (video AI)",
+        "vai_pohyb_hint" to "Aký pohyb? (napr. turns head and smiles, hair blowing) – anglicky",
+        "vai_rozhybat_tlacidlo" to "Rozhýbať",
         "koder_hf" to "Odkaz z Hugging Face (rovnaký typ modelu)",
         "koder_aktualny" to "Teraz: %1\$s",
         "koder_necitatelny" to "Súbor sa nedá prečítať ako GGUF model.",
@@ -312,6 +316,10 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "vai_ziadny_i2v" to "To animate an image, download “Wan 2.2 – video AI (5B)” in Images.",
+        "vai_rozhybat" to "Animate image (video AI)",
+        "vai_pohyb_hint" to "What motion? (e.g. turns head and smiles, hair blowing)",
+        "vai_rozhybat_tlacidlo" to "Animate",
         "koder_hf" to "Hugging Face link (same model type)",
         "koder_aktualny" to "Now: %1\$s",
         "koder_necitatelny" to "The file can't be read as a GGUF model.",

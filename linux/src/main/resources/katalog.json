@@ -48,6 +48,13 @@
      "subory": {
        "diffusion_model_path": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors",
        "t5xxl_path": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q4_K_M.gguf",
-       "vae_path": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"}}
+       "vae_path": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"}},
+    {"id": "wan22-5b", "nazov": "Wan 2.2 – video AI (5B), aj z obrázka", "popis": "lepšie video a rozhýbanie obrázka z appky – pomalé, ideálne PC s grafikou", "mb": 7500,
+     "kroky": 20, "cfg": 6.0, "rozmer": 480, "metoda": "euler", "fa": true, "negativny": true,
+     "video": {"sirka": 480, "vyska": 832, "snimok": 33, "fps": 24, "posun": 3.0, "i2v": true},
+     "subory": {
+       "diffusion_model_path": "https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF/resolve/main/Wan2.2-TI2V-5B-Q4_K_M.gguf",
+       "t5xxl_path": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q4_K_M.gguf",
+       "vae_path": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan2.2_vae.safetensors"}}
   ]
 }

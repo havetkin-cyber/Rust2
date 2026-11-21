@@ -448,10 +448,19 @@ object ObrazkyJadro {
      * Krátke video z textu. Ak je aktívny obrázkový model, na čas videa sa načíta Wan a potom sa vráti voľba používateľa.
      * [snimok] napr. 17 / 33 / 49 (pri 16 fps ≈ 1 / 2 / 3 s). Výsledok: MP4 cez ffmpeg.
      */
-    fun natocAI(popis: String, snimok: Int?, hotovo: (File?, String) -> Unit) {
-        val sada = aktivnaSada()?.takeIf { it.video != null } ?: videoSada() ?: run { hotovo(null, T("vai_ziadny")); return }
+    /** popis, s ktorým bol obrázok z appky vytvorený (na rozhýbanie) */
+    fun popisObrazka(f: File): String? = runCatching { org.json.JSONObject(File(f.path + ".json").readText()).optString("popis") }.getOrNull()
+
+    fun i2vSada(): ObrazkovaSada? = Katalog.obrazky.firstOrNull { it.video?.i2v == true && mamSadu(it) }
+
+    fun natocAI(popis: String, snimok: Int?, predloha: File? = null, hotovo: (File?, String) -> Unit) {
+        // rozhýbanie obrázka: len obrázky vytvorené a podpísané appkou
+        if (predloha != null && seedObrazka(predloha) == null) { hotovo(null, T("m3d_len_appka")); return }
+        val sada = (if (predloha != null) (aktivnaSada()?.takeIf { it.video?.i2v == true } ?: i2vSada())
+                    else (aktivnaSada()?.takeIf { it.video != null } ?: videoSada()))
+            ?: run { hotovo(null, T(if (predloha != null) "vai_ziadny_i2v" else "vai_ziadny")); return }
         if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
-        val ff = VideoJadro.ffmpeg() ?: run { VideoJadro.stiahniFfmpeg { natocAI(popis, snimok, hotovo) }; return }
+        val ff = VideoJadro.ffmpeg() ?: run { VideoJadro.stiahniFfmpeg { natocAI(popis, snimok, predloha, hotovo) }; return }
         val v = sada.video!!
         val predtym = aktivnyModel
         ChatJadro.uvolniPamat()
@@ -472,14 +481,26 @@ object ObrazkyJadro {
             else runCatching {
                 val r = IntArray(4)
                 val neg = "blurry, static, still frame, low quality, deformed, watermark, text, extra fingers, bad hands"
-                val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimok ?: v.snimok, sada.kroky, sada.cfg, v.posun, seed, sada.metoda, r)
+                // obrázok → rozmer videa (vyplní celý záber, orežú sa okraje)
+                val px = predloha?.let { f ->
+                    val src = ImageIO.read(f)
+                    val k = maxOf(v.sirka.toDouble() / src.width, v.vyska.toDouble() / src.height)
+                    val dst = BufferedImage(v.sirka, v.vyska, BufferedImage.TYPE_INT_RGB)
+                    dst.createGraphics().apply {
+                        setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                        val dw = (src.width * k).toInt(); val dv = (src.height * k).toInt()
+                        drawImage(src, (v.sirka - dw) / 2, (v.vyska - dv) / 2, dw, dv, null); dispose()
+                    }
+                    dst.getRGB(0, 0, v.sirka, v.vyska, null, 0, v.sirka)
+                }
+                val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimok ?: v.snimok, sada.kroky, sada.cfg, v.posun, seed, sada.metoda, px, r)
                     ?: throw IllegalStateException(Sd.chyba())
                 val (w, vy, t, fps) = r.toList()
                 val out = File(VideoJadro.priecinok(), "ai_video_${System.currentTimeMillis()}.mp4")
                 // náhľad = prvá snímka
                 val obr = BufferedImage(w, vy, BufferedImage.TYPE_INT_RGB)
-                val px = IntArray(w * vy) { i -> ((data[i * 3].toInt() and 255) shl 16) or ((data[i * 3 + 1].toInt() and 255) shl 8) or (data[i * 3 + 2].toInt() and 255) }
-                obr.setRGB(0, 0, w, vy, px, 0, w); ImageIO.write(obr, "png", File(out.path.removeSuffix(".mp4") + ".png"))
+                val pxN = IntArray(w * vy) { i -> ((data[i * 3].toInt() and 255) shl 16) or ((data[i * 3 + 1].toInt() and 255) shl 8) or (data[i * 3 + 2].toInt() and 255) }
+                obr.setRGB(0, 0, w, vy, pxN, 0, w); ImageIO.write(obr, "png", File(out.path.removeSuffix(".mp4") + ".png"))
                 // MP4: dvojnásobná plynulosť (dopočítané snímky) a 2× väčšie
                 val p = ProcessBuilder(ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$vy", "-r", "$fps", "-i", "-",
                     "-vf", "minterpolate=fps=${fps * 2}:mi_mode=mci:mc_mode=aobmc,scale=${w * 2}:${vy * 2}:flags=lanczos",

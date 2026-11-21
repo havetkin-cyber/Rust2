@@ -12,7 +12,8 @@ data class ObrazkovaSada(
     val video: VideoNastavenie? = null,
 )
 
-data class VideoNastavenie(val sirka: Int, val vyska: Int, val snimok: Int, val fps: Int, val posun: Float)
+/** i2v = vie rozhýbať obrázok (prvá snímka = obrázok) */
+data class VideoNastavenie(val sirka: Int, val vyska: Int, val snimok: Int, val fps: Int, val posun: Float, val i2v: Boolean = false)
 
 /** Katalóg overených modelov (resources/katalog.json – odkazy kontroluje GitHub). */
 object Katalog {
@@ -34,7 +35,7 @@ object Katalog {
                 o.getInt("kroky"), o.getDouble("cfg").toFloat(), o.getInt("rozmer"), o.getString("metoda"),
                 o.getBoolean("fa"), o.getBoolean("negativny"),
                 s.keys().asSequence().associateWith { k -> s.getString(k) },
-                o.optJSONObject("video")?.let { v -> VideoNastavenie(v.getInt("sirka"), v.getInt("vyska"), v.getInt("snimok"), v.getInt("fps"), v.getDouble("posun").toFloat()) },
+                o.optJSONObject("video")?.let { v -> VideoNastavenie(v.getInt("sirka"), v.getInt("vyska"), v.getInt("snimok"), v.getInt("fps"), v.getDouble("posun").toFloat(), v.optBoolean("i2v")) },
             )
         } }
     }

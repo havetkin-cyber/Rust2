@@ -26,5 +26,5 @@ object Sd {
     /** nekonečná textúra pre ďalšie obrázky (generujEx / generujZPredlohy) */
     external fun nastavTexturu(zapnut: Boolean)
     /** video AI (Wan): RGB snímky za sebou; rozmer = {šírka, výška, snímok, fps} */
-    external fun generujVideo(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, snimok: Int, kroky: Int, cfg: Float, posun: Float, seed: Long, metoda: String, rozmer: IntArray): ByteArray?
+    external fun generujVideo(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, snimok: Int, kroky: Int, cfg: Float, posun: Float, seed: Long, metoda: String, predloha: IntArray?, rozmer: IntArray): ByteArray?
 }

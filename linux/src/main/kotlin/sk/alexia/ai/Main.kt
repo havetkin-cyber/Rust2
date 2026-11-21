@@ -1360,6 +1360,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     SeedStitok(f)
                 }
                 Model3DRiadok(f)
+                RozhybatRiadok(f)
                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.SportsEsports, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp))
                     Text(T("hra_export"), color = Farby.text, fontSize = 13.sp)
@@ -1867,5 +1868,40 @@ private fun Model3DRiadok(f: File) {
             }
         }
         if (m.chyba.isNotBlank() && (m.zdroj == f || m.zdroj == null)) Text(m.chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** rozhýbať obrázok z appky (video AI Wan 2.2) */
+@Composable
+private fun RozhybatRiadok(f: File) {
+    val o = ObrazkyJadro
+    if (remember(f) { o.seedObrazka(f) } == null || o.i2vSada() == null) return
+    var vysledok by remember { mutableStateOf<File?>(null) }
+    var pohyb by remember { mutableStateOf("") }
+    var pracuje by remember { mutableStateOf(false) }
+    Column(Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).padding(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Movie, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+            Text(T("vai_rozhybat"), color = Farby.text, fontSize = 13.sp)
+        }
+        OutlinedTextField(value = pohyb, onValueChange = { pohyb = it }, singleLine = true, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().nadKlavesnicou(),
+            placeholder = { Text(T("vai_pohyb_hint"), color = Farby.tlmene, fontSize = 12.sp) }, shape = RoundedCornerShape(12.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+        if (pracuje) {
+            Text(T("vai_tvorim"), color = Farby.text, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha)
+        } else Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AssistChip(onClick = {
+                if (Podpis.zakazane(pohyb)) { Platforma.oznam(T("upr_zakazane")); return@AssistChip }
+                pracuje = true
+                val popis = listOf(o.popisObrazka(f).orEmpty(), pohyb.ifBlank { "natural subtle motion, cinematic" }).filter { it.isNotBlank() }.joinToString(", ")
+                o.natocAI(popis, null, f) { v, e -> pracuje = false; if (v != null) vysledok = v else Platforma.oznam("⚠ $e") }
+            }, enabled = !o.generuje, label = { Text(T("vai_rozhybat_tlacidlo"), fontSize = 12.sp) }, colors = AssistChipDefaults.assistChipColors(labelColor = Farby.text))
+            vysledok?.let { v ->
+                AssistChip(onClick = { runCatching { java.awt.Desktop.getDesktop().open(v) }.onFailure { Platforma.otvorOdkaz(v.toURI().toString()) } },
+                    label = { Text(T("video_prehrat"), fontSize = 12.sp) }, colors = AssistChipDefaults.assistChipColors(labelColor = Farby.zelena))
+            }
+        }
     }
 }

@@ -20,7 +20,7 @@ import javax.sound.sampled.SourceDataLine
  */
 object Hlas {
     /** id hlasu → meno; „stN“ = hovoriaci N zo Supertonic 3 */
-    val HLASY = listOf("lili" to "Lili", "st0" to "Ema", "st1" to "Nina", "st2" to "Sofia", "st3" to "Zara", "st4" to "Hana")
+    val HLASY = listOf("lili" to "Lili", "st0" to "Ema", "st1" to "Nina", "st2" to "Sofia", "st3" to "Zara", "st4" to "Hana", "mix" to "Mix")
     fun meno(id: String) = HLASY.firstOrNull { it.first == id }?.second ?: "Lili"
     const val ST_MB = 140
     private const val SHERPA = "v2.0.2"
@@ -47,7 +47,7 @@ object Hlas {
     private fun priecinok() = File(Platforma.priecinok, "hlas").apply { mkdirs() }
     private fun program() = File(priecinok(), if (Platforma.jeWindows) "piper/piper.exe" else "piper/piper")
     private fun model() = File(priecinok(), "sk_SK-lili-medium.onnx")
-    private fun jeSt(id: String) = id.startsWith("st")
+    private fun jeSt(id: String) = id.startsWith("st") || id == "mix"
     internal fun sherpaDir() = File(priecinok(), "sherpa")
     private fun sherpa() = File(sherpaDir(), System.mapLibraryName("sherpa-onnx-jni"))
     private fun stDir() = File(priecinok(), "supertonic")
@@ -214,11 +214,12 @@ object Hlas {
         Thread {
             val ok = runCatching {
                 if (jeSt(id)) {
-                    val sid = id.drop(2).toIntOrNull() ?: 0
+                    val sid = if (id == "mix") -1 else id.drop(2).toIntOrNull() ?: 0
                     prehrajKusy(text, t, u) { kus ->
                         val g = com.k2fsa.sherpa.onnx.GenerationConfig()
-                        g.sid = sid; g.speed = speed; g.numSteps = 8; g.extra = mapOf("lang" to jazyk)
-                        val a = stModel().generateWithConfig(kus, g)
+                        val m = stModel()
+                        g.sid = if (sid < 0) mixSid else sid; g.speed = speed; g.numSteps = 8; g.extra = mapOf("lang" to jazyk)
+                        val a = m.generateWithConfig(kus, g)
                         a.samples to a.sampleRate
                     }
                 } else { opravKonfig(); prehrajKusy(text, t, u) { kus -> lili(kus, 1f / speed) } }
@@ -288,10 +289,19 @@ object Hlas {
     private val stZamok = Any()
 
     /** model sa načíta raz (~1–2 s) a ostane v pamäti */
+    @Volatile private var mixSid = 10
+    private var stKluc = ""
+
     private fun stModel(): com.k2fsa.sherpa.onnx.OfflineTts = synchronized(stZamok) {
-        st?.let { return it }
+        // voice-mix.bin = 10 hlasov + mix podľa Nastavení; pri zmene mixu sa model načíta znova
+        val n = ChatJadro.nastavenia
+        val kluc = "${n.mixA},${n.mixB},${n.mixPomer}"
+        st?.let { if (kluc == stKluc) return it; runCatching { it.release() }; st = null }
         pripravSherpa {}
         val d = stDir()
+        val hlasy = File(d, "voice-mix.bin")
+        mixSid = MixHlasov.vytvor(File(d, "voice.bin"), hlasy, n.mixA, n.mixB, n.mixPomer)
+        stKluc = kluc
         val sc = com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig.builder()
             .setDurationPredictor(File(d, "duration_predictor.int8.onnx").path)
             .setTextEncoder(File(d, "text_encoder.int8.onnx").path)
@@ -299,7 +309,7 @@ object Hlas {
             .setVocoder(File(d, "vocoder.int8.onnx").path)
             .setTtsJson(File(d, "tts.json").path)
             .setUnicodeIndexer(File(d, "unicode_indexer.bin").path)
-            .setVoiceStyle(File(d, "voice.bin").path)
+            .setVoiceStyle(hlasy.path)
             .build()
         val mc = com.k2fsa.sherpa.onnx.OfflineTtsModelConfig.builder()
             .setSupertonic(sc)

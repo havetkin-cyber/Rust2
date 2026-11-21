@@ -944,6 +944,25 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                     }
                 }
+                if (n.hlas == "mix") {
+                    val zeny = listOf("Ema", "Nina", "Sofia", "Zara", "Hana")
+                    for ((nadpis, vybrany, nastav) in listOf(
+                        Triple(T("mix_a"), n.mixA) { i: Int -> n.mixA = i },
+                        Triple(T("mix_b"), n.mixB) { i: Int -> n.mixB = i },
+                    )) {
+                        Text(nadpis, color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            zeny.forEachIndexed { i, meno ->
+                                FilterChip(selected = vybrany == i, onClick = { Hlas.zastav(); nastav(i); n.uloz() }, label = { Text(meno) },
+                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                            }
+                        }
+                    }
+                    val pa = ((1 - n.mixPomer) * 100).roundToInt()
+                    Text(T("mix_pomer", zeny[n.mixA.coerceIn(0, 4)], pa, zeny[n.mixB.coerceIn(0, 4)], 100 - pa), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                    Slider(value = n.mixPomer, onValueChange = { n.mixPomer = (it * 20).roundToInt() / 20f }, onValueChangeFinished = { Hlas.zastav(); n.uloz() }, valueRange = 0f..1f,
+                        colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                }
                 Text(T("hlas_st_info", Hlas.ST_MB), color = Farby.tlmene, fontSize = 12.sp)
                 val p = Hlas.priebeh
                 when {

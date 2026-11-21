@@ -20,7 +20,7 @@ import java.util.Locale
  * Výška: zvuk sa prehrá s inou vzorkovacou frekvenciou a rýchlosť reči sa o to isté vyrovná pri tvorbe.
  */
 object Hlas {
-    val HLASY = listOf("system" to "", "lili" to "Lili", "st0" to "Ema", "st1" to "Nina", "st2" to "Sofia", "st3" to "Zara", "st4" to "Hana")
+    val HLASY = listOf("system" to "", "lili" to "Lili", "st0" to "Ema", "st1" to "Nina", "st2" to "Sofia", "st3" to "Zara", "st4" to "Hana", "mix" to "Mix")
     fun meno(id: String) = HLASY.firstOrNull { it.first == id }?.second?.ifEmpty { "Alexia" } ?: "Alexia"
     const val ST_MB = 130
     const val LILI_MB = 25
@@ -42,12 +42,12 @@ object Hlas {
 
     private fun jazyk(): Locale = if (ChatJadro.nastavenia.jazykOdpovedi == "en") Locale.ENGLISH else Locale("sk", "SK")
     /** hlasy cez sherpa-onnx (Supertonic aj Lili) */
-    private fun jeSt(id: String) = id.startsWith("st") || id == "lili"
+    private fun jeSt(id: String) = id.startsWith("st") || id == "lili" || id == "mix"
     private fun liliDir() = File(Platforma.priecinok, "hlas/lili")
     private fun mamLili() = File(liliDir(), "sk_SK-lili-medium.onnx").length() > 5_000_000 && File(liliDir(), "espeak-ng-data/phontab").exists()
     private fun stDir() = File(Platforma.priecinok, "hlas/supertonic")
     private fun mamSt() = File(stDir(), "vector_estimator.int8.onnx").length() > 50_000_000 && File(stDir(), "voice.bin").exists()
-    fun mam(id: String = ChatJadro.nastavenia.hlas) = when { id == "lili" -> mamLili(); id.startsWith("st") -> mamSt(); else -> true }
+    fun mam(id: String = ChatJadro.nastavenia.hlas) = when { id == "lili" -> mamLili(); id.startsWith("st") || id == "mix" -> mamSt(); else -> true }
 
     // ---------- sťahovanie ----------
     fun stiahni(id: String = ChatJadro.nastavenia.hlas) {
@@ -166,9 +166,18 @@ object Hlas {
     @Volatile private var st: com.k2fsa.sherpa.onnx.OfflineTts? = null
     private val zamok = Any()
 
+    @Volatile private var mixSid = 10
+    private var stKluc = ""
+
     private fun stModel(): com.k2fsa.sherpa.onnx.OfflineTts = synchronized(zamok) {
-        st?.let { return it }
+        // voice-mix.bin = 10 hlasov + mix podľa Nastavení; pri zmene mixu sa model načíta znova
+        val n = ChatJadro.nastavenia
+        val kluc = "${n.mixA},${n.mixB},${n.mixPomer}"
+        st?.let { if (kluc == stKluc) return it; runCatching { it.release() }; st = null }
         val d = stDir()
+        val hlasy = File(d, "voice-mix.bin")
+        mixSid = MixHlasov.vytvor(File(d, "voice.bin"), hlasy, n.mixA, n.mixB, n.mixPomer)
+        stKluc = kluc
         val cfg = com.k2fsa.sherpa.onnx.OfflineTtsConfig(
             model = com.k2fsa.sherpa.onnx.OfflineTtsModelConfig(
                 supertonic = com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig(
@@ -178,7 +187,7 @@ object Hlas {
                     vocoder = File(d, "vocoder.int8.onnx").path,
                     ttsJson = File(d, "tts.json").path,
                     unicodeIndexer = File(d, "unicode_indexer.bin").path,
-                    voiceStyle = File(d, "voice.bin").path,
+                    voiceStyle = hlasy.path,
                 ),
                 numThreads = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4),
             )
@@ -220,7 +229,7 @@ object Hlas {
         zastav()
         if (!mam(id)) { Platforma.oznam(T("hlas_najprv")); return }
         val jeLili = id == "lili"
-        val sid = if (jeLili) 0 else id.drop(2).toIntOrNull() ?: 0
+        val sid = if (jeLili) 0 else if (id == "mix") -1 else id.drop(2).toIntOrNull() ?: 0
         val t = naCitanie(text); if (t.isBlank()) { poKonci?.invoke(); return }
         stChyba = false
         hovori = text
@@ -237,7 +246,7 @@ object Hlas {
                 val m = if (jeLili) liliModel() else stModel()
                 for (kus in kusky(t)) {
                     if (hovori != text) break
-                    val a = m.generateWithConfig(kus, com.k2fsa.sherpa.onnx.GenerationConfig(sid = sid, speed = speed, numSteps = 8, extra = mapOf("lang" to lang)))
+                    val a = m.generateWithConfig(kus, com.k2fsa.sherpa.onnx.GenerationConfig(sid = if (sid < 0) mixSid else sid, speed = speed, numSteps = 8, extra = mapOf("lang" to lang)))
                     if (hovori != text) break
                     rad.put(Zvuk.naShort(Zvuk.uprav(a.samples, a.sampleRate, vyska, hrubka, plnost)) to a.sampleRate)
                 }

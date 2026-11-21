@@ -120,3 +120,27 @@ object Zvuk {
 
     fun naShort(f: FloatArray) = ShortArray(f.size) { (f[it].coerceIn(-1f, 1f) * 32767).roundToInt().toShort() }
 }
+
+
+/** Mix hlasov Supertonic: voice.bin = hlavička (int64: N, 50, 256, N, 8, 16) + štýly ttl a dp; pridá hovoriaceho N = mix A a B */
+object MixHlasov {
+    fun vytvor(zdroj: java.io.File, ciel: java.io.File, a: Int, b: Int, pomer: Float): Int {
+        val bb = java.nio.ByteBuffer.wrap(zdroj.readBytes()).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        val n1 = bb.long.toInt(); val d1 = bb.long.toInt(); val e1 = bb.long.toInt()
+        val n2 = bb.long.toInt(); val d2 = bb.long.toInt(); val e2 = bb.long.toInt()
+        val ttl = FloatArray(n1 * d1 * e1) { bb.float }
+        val dp = FloatArray(n2 * d2 * e2) { bb.float }
+        val w = pomer.coerceIn(0f, 1f)
+        val out = java.nio.ByteBuffer.allocate(48 + (ttl.size + d1 * e1 + dp.size + d2 * e2) * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        out.putLong((n1 + 1).toLong()).putLong(d1.toLong()).putLong(e1.toLong())
+        out.putLong((n2 + 1).toLong()).putLong(d2.toLong()).putLong(e2.toLong())
+        ttl.forEach { out.putFloat(it) }
+        val ta = a.coerceIn(0, n1 - 1) * d1 * e1; val tb = b.coerceIn(0, n1 - 1) * d1 * e1
+        for (i in 0 until d1 * e1) out.putFloat((1 - w) * ttl[ta + i] + w * ttl[tb + i])
+        dp.forEach { out.putFloat(it) }
+        val pa = a.coerceIn(0, n2 - 1) * d2 * e2; val pb = b.coerceIn(0, n2 - 1) * d2 * e2
+        for (i in 0 until d2 * e2) out.putFloat((1 - w) * dp[pa + i] + w * dp[pb + i])
+        ciel.writeBytes(out.array())
+        return n1   // index nového hovoriaceho
+    }
+}

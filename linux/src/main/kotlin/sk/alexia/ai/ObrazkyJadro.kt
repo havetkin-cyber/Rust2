@@ -66,7 +66,12 @@ object ObrazkyJadro {
     fun koderKluc(s: ObrazkovaSada): String? = listOf("llm_path", "t5xxl_path").firstOrNull { it in s.subory }
 
     /** voľby kodéra: (názov, URL alebo "" = pôvodný). Z-Image potrebuje model s architektúrou Qwen3 4B. */
-    fun volbyKodera(s: ObrazkovaSada): List<Pair<String, String>> = when (koderKluc(s)) {
+    fun volbyKodera(s: ObrazkovaSada): List<Pair<String, String>> = if (s.id == "flux3-klein") listOf(
+            "Q3_K_M · 2,1 GB · rýchlejší" to "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct-Q3_K_M.gguf",
+            "Q4_K_M · 2,5 GB · pôvodný" to "",
+            "Q6_K · 3,3 GB · presnejší" to "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct-Q6_K.gguf",
+            "Q8_0 · 4,3 GB · najpresnejší" to "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct-Q8_0.gguf",
+        ) else when (koderKluc(s)) {
         "llm_path" -> listOf(
             "Q3_K_M · 2,1 GB · rýchlejší" to "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q3_K_M.gguf",
             "Q4_K_M · 2,5 GB · pôvodný" to "",
@@ -96,8 +101,9 @@ object ObrazkyJadro {
         private set
 
     /** aká architektúra kodéra sa hodí k sade (null = nevieme overiť) */
-    private fun potrebnyKoder(s: ObrazkovaSada): Pair<String, Long?>? = when (koderKluc(s)) {
-        "llm_path" -> "qwen3" to 2560L      // Z-Image: Qwen3 4B
+    private fun potrebnyKoder(s: ObrazkovaSada): Pair<String, Long?>? = when {
+        s.id == "flux3-klein" -> "qwen3vl" to null          // FLUX.3 Klein: Qwen3-VL 4B
+        koderKluc(s) == "llm_path" -> "qwen3" to 2560L      // Z-Image: Qwen3 4B
         else -> null
     }
 
@@ -106,7 +112,8 @@ object ObrazkyJadro {
         val pot = potrebnyKoder(s) ?: return null
         if (!f.name.endsWith(".gguf", true)) return null
         val i = Gguf.info(f) ?: return T("koder_necitatelny")
-        if (i.architektura != pot.first || (pot.second != null && i.embedding != pot.second))
+        val arch = i.architektura.lowercase().replace("_", "")
+        if (arch != pot.first || (pot.second != null && i.embedding != pot.second))
             return T("koder_nekompatibilny", "${i.architektura}${i.embedding?.let { " · $it" } ?: ""}", "${pot.first} · ${pot.second}")
         return null
     }
@@ -535,7 +542,9 @@ object ObrazkyJadro {
                         val r = IntArray(4)
                         val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimokKusa, sada.kroky, sada.cfg, v.posun, seed + kus, sada.metoda, px, r)
                             ?: throw IllegalStateException(Sd.chyba().ifBlank { "Video sa nepodarilo" })
-                        val (w, vy, t, fps) = r.toList()
+                        val (w, vy, t) = r.toList()
+                        // fps podľa modelu (Wan 2.1 = 16, Wan 2.2 = 24) – engine vracia 16 pre všetky, video by bolo spomalené
+                        val fps = v.fps
                         val snimka = w * vy * 3
                         if (ffp == null) {
                             // náhľad = prvá snímka

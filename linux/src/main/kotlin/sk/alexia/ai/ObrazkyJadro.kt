@@ -164,9 +164,9 @@ object ObrazkyJadro {
             val novy = if (sada != null) {
                 val k = sada.subory.keys.toList()
                 val hod = k.map { kk -> koderSubor(sada, kk) ?: suborSady(sada, sada.subory.getValue(kk)).absolutePath }
-                // Šetriť VRAM: textový kodér a VAE počítajú na CPU (v RAM), grafika ostane celá pre hlavný model
+                // Šetriť VRAM: textový kodér počíta na CPU (v RAM, raz na začiatku); VAE ostane na grafike a skladá po kúskoch
                 val kk = if (setrit) k + "backend" else k
-                val hh = if (setrit) hod + "te=cpu,vae=cpu" else hod
+                val hh = if (setrit) hod + "te=cpu" else hod
                 Sd.nacitajViac(kk.toTypedArray(), hh.toTypedArray(), vl, sada.fa)
             } else Sd.nacitaj(cesta, vl)
             val e = if (novy == 0L) Sd.chyba() else ""

@@ -207,6 +207,8 @@ F(jbyteArray, generujVideo)(JNIEnv* env, jobject, jlong h, jstring prompt, jstri
                   && ok(sd_opt_set_int(o, "sample.steps", kroky))
                   && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg))
                   && ok(sd_opt_set_float(o, "sample.flow_shift", posun))
+                  // VAE po kúskoch: skladanie videa sa zmestí aj do 6 GB grafiky (inak by padlo alebo muselo ísť na CPU)
+                  && ok(sd_opt_set_bool(o, "vae_tiling.enabled", true))
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
                   && (!pt || ok(sd_opt_set_tensor(o, "init_image", pt)))
                   && ok(sd_generate_video(ctx, o, &res));

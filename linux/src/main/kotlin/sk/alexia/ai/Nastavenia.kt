@@ -19,6 +19,14 @@ class Nastavenia {
     var maxTokenov by mutableIntStateOf(p.getProperty("maxTokenov", "1024").toIntOrNull() ?: 1024)
     var vlakna by mutableIntStateOf(p.getProperty("vlakna")?.toIntOrNull() ?: predvoleneVlakna())
     var aktivnyModel by mutableStateOf(p.getProperty("model"))
+    /** vymenený textový kodér pre obrázkovú sadu (id sady → URL alebo cesta) */
+    private val kodery = mutableMapOf<String, String>().apply {
+        p.stringPropertyNames().filter { it.startsWith("koder.") }.forEach { put(it.removePrefix("koder."), p.getProperty(it)) }
+    }
+    var koderVerzia by mutableIntStateOf(0)
+    fun koder(sada: String): String? = kodery[sada]
+    fun nastavKoder(sada: String, v: String?) { if (v == null) kodery.remove(sada) else kodery[sada] = v; koderVerzia++; uloz() }
+    var autoAktualizacie by mutableStateOf(p.getProperty("autoAktualizacie") != "false")
     var aktualnyChat by mutableStateOf(p.getProperty("aktualnyChat"))
     var hudbaVidea by mutableStateOf(p.getProperty("hudbaVidea"))
     var citatNahlas by mutableStateOf(p.getProperty("citatNahlas") == "true")
@@ -56,6 +64,9 @@ class Nastavenia {
         p.setProperty("jazykOdpovedi", jazykOdpovedi)
         p.setProperty("citatNahlas", citatNahlas.toString())
         aktualnyChat?.let { p.setProperty("aktualnyChat", it) }
+        p.setProperty("autoAktualizacie", autoAktualizacie.toString())
+        p.stringPropertyNames().filter { it.startsWith("koder.") }.forEach { p.remove(it) }
+        kodery.forEach { (k, v) -> p.setProperty("koder.$k", v) }
         hudbaVidea?.let { p.setProperty("hudbaVidea", it) } ?: p.remove("hudbaVidea")
         p.setProperty("zdielat", zdielat.toString())
         p.setProperty("vzdialene", vzdialene.toString())

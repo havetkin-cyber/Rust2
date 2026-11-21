@@ -57,6 +57,49 @@ object ObrazkyJadro {
     fun aktivnaSada(): ObrazkovaSada? = aktivnyModel?.takeIf { it.startsWith("sada:") }?.let { id -> Katalog.obrazky.find { "sada:" + it.id == id } }
     fun jeAktivna(s: ObrazkovaSada) = aktivnyModel == "sada:" + s.id
 
+    // ------------------------------------------------ výmena textového kodéra (napr. Qwen3 4B pri Z-Image)
+
+    /** ktorý súbor sady je textový kodér (číta popis obrázka) */
+    fun koderKluc(s: ObrazkovaSada): String? = listOf("llm_path", "t5xxl_path").firstOrNull { it in s.subory }
+
+    /** voľby kodéra: (názov, URL alebo "" = pôvodný). Z-Image potrebuje model s architektúrou Qwen3 4B. */
+    fun volbyKodera(s: ObrazkovaSada): List<Pair<String, String>> = when (koderKluc(s)) {
+        "llm_path" -> listOf(
+            "Q3_K_M · 2,1 GB · rýchlejší" to "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q3_K_M.gguf",
+            "Q4_K_M · 2,5 GB · pôvodný" to "",
+            "Q6_K · 3,3 GB · presnejší" to "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q6_K.gguf",
+            "Q8_0 · 4,3 GB · najpresnejší" to "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q8_0.gguf",
+        )
+        else -> listOf("pôvodný" to "")
+    }
+
+    /** zvolený kodér: null = pôvodný zo sady, inak cesta k súboru */
+    fun koderSubor(s: ObrazkovaSada, kluc: String): String? {
+        if (kluc != koderKluc(s)) return null
+        val v = ChatJadro.nastavenia.koder(s.id) ?: return null
+        return when {
+            v.startsWith("http") -> suborSady(s, v).takeIf { it.exists() }?.absolutePath
+            File(v).exists() -> v
+            else -> null
+        }
+    }
+
+    var koderPriebeh by mutableStateOf<Float?>(null)
+        private set
+
+    /** nastaví kodér (URL z volieb – stiahne ho; cesta k vlastnému .gguf; "" = pôvodný) a sadu znova načíta */
+    fun nastavKoder(s: ObrazkovaSada, volba: String) {
+        if (koderPriebeh != null) return
+        val n = ChatJadro.nastavenia
+        fun hotovo() { n.nastavKoder(s.id, volba.ifEmpty { null }); if (jeAktivna(s)) { nacitany = null; nacitaj("sada:" + s.id) } }
+        if (!volba.startsWith("http") || suborSady(s, volba).exists()) { hotovo(); return }
+        koderPriebeh = 0f
+        Thread {
+            val r = runCatching { Modely.stiahni(volba, { p -> Platforma.naHlavnom { koderPriebeh = p } }, { false }, priecinokSady(s), true) }
+            Platforma.naHlavnom { koderPriebeh = null; r.onSuccess { hotovo() }; r.onFailure { chyba = it.message ?: "Sťahovanie zlyhalo" } }
+        }.start()
+    }
+
     /** stiahne chýbajúce súbory sady jeden po druhom; priebeh(0..1, "2/3 ae.safetensors") */
     fun stiahniSadu(s: ObrazkovaSada, priebeh: (Float, String) -> Unit, zrusene: () -> Boolean) {
         val chyba = s.subory.values.filter { u -> !suborSady(s, u).exists() }
@@ -84,7 +127,7 @@ object ObrazkyJadro {
             val sada = Katalog.obrazky.find { "sada:" + it.id == cesta }
             val novy = if (sada != null) {
                 val k = sada.subory.keys.toTypedArray()
-                Sd.nacitajViac(k, k.map { suborSady(sada, sada.subory.getValue(it)).absolutePath }.toTypedArray(), vl, sada.fa)
+                Sd.nacitajViac(k, k.map { kk -> koderSubor(sada, kk) ?: suborSady(sada, sada.subory.getValue(kk)).absolutePath }.toTypedArray(), vl, sada.fa)
             } else Sd.nacitaj(cesta, vl)
             val e = if (novy == 0L) Sd.chyba() else ""
             h = novy

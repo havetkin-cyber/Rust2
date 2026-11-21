@@ -14,6 +14,13 @@ object T {
     }
 
     private val sk = mapOf(
+        "koder_nadpis" to "Textový kodér (číta tvoj popis)",
+        "koder_info" to "Väčší = presnejšie pochopí popis, menší = rýchlejšie a menej pamäte. Vlastný súbor musí byť rovnaký typ modelu (pri Z-Image Qwen3 4B), inak sa sada nenačíta.",
+        "koder_vlastny" to "Vlastný súbor…",
+        "akt_auto" to "Sťahovať aktualizácie automaticky",
+        "akt_pripravena" to "Aktualizácia %1\$s je stiahnutá",
+        "akt_pripravena_text" to "Nová verzia je pripravená. Reštartuj appku teraz, alebo sa spustí pri ďalšom zapnutí.",
+        "akt_restart" to "Reštartovať",
         "m3d_nadpis" to "3D model z obrázka (pre hry, Blender)",
         "m3d_vytvorit" to "Vytvoriť 3D",
         "m3d_prvy" to "Prvýkrát sa stiahne ~%1\$.1f GB (Python, PyTorch, TripoSR). Potom offline, 1–3 min na model.",
@@ -294,6 +301,13 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "koder_nadpis" to "Text encoder (reads your prompt)",
+        "koder_info" to "Bigger = understands the prompt better, smaller = faster and less memory. A custom file must be the same model type (Qwen3 4B for Z-Image), otherwise the set won't load.",
+        "koder_vlastny" to "Custom file…",
+        "akt_auto" to "Download updates automatically",
+        "akt_pripravena" to "Update %1\$s is downloaded",
+        "akt_pripravena_text" to "The new version is ready. Restart the app now, or it starts next time.",
+        "akt_restart" to "Restart",
         "m3d_nadpis" to "3D model from image (games, Blender)",
         "m3d_vytvorit" to "Create 3D",
         "m3d_prvy" to "First time ~%1\$.1f GB is downloaded (Python, PyTorch, TripoSR). Then offline, 1–3 min per model.",

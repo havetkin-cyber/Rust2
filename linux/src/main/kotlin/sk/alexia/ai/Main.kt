@@ -65,6 +65,7 @@ import androidx.compose.ui.window.rememberWindowState
 fun main() {
     ChatJadro.init()
     ObrazkyJadro.init()
+    Aktualizacie.skontrolujPripravenu()
     Aktualizacie.skontroluj()
     Ovladac.spusti()
     if (ChatJadro.nastavenia.zdielat) Server.spusti()
@@ -165,6 +166,34 @@ private fun Appka() {
         }
         SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(16.dp))
         Platforma.ziadostOVyber?.let { z -> VyberSuboru(z) { Platforma.ziadostOVyber = null } }
+    }
+}
+
+/** výber textového kodéra pre obrázkovú sadu (napr. iná verzia Qwen3 4B pri Z-Image) */
+@Composable
+private fun KoderVolba(sd: ObrazkovaSada) {
+    val o = ObrazkyJadro
+    val n = ChatJadro.nastavenia
+    @Suppress("UNUSED_VARIABLE") val v = n.koderVerzia
+    val aktualny = n.koder(sd.id).orEmpty()
+    val nadpis = T("koder_vlastny")
+    Column(Modifier.fillMaxWidth().padding(start = 12.dp, bottom = 4.dp).clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).padding(10.dp)) {
+        Text(T("koder_nadpis"), color = Farby.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(T("koder_info"), color = Farby.tlmene, fontSize = 11.sp)
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            o.volbyKodera(sd).forEach { (nazov, url) ->
+                FilterChip(selected = aktualny == url, onClick = { o.nastavKoder(sd, url) }, enabled = o.koderPriebeh == null && !o.generuje,
+                    label = { Text(nazov, fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+            }
+            FilterChip(selected = aktualny.isNotEmpty() && !aktualny.startsWith("http"), enabled = o.koderPriebeh == null && !o.generuje,
+                onClick = { Platforma.vyberSubor(nadpis, setOf("gguf", "safetensors")) { f -> o.nastavKoder(sd, f.path) } },
+                label = { Text(T("koder_vlastny"), fontSize = 12.sp) },
+                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+        }
+        o.koderPriebeh?.let { p ->
+            LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha)
+        }
     }
 }
 
@@ -849,6 +878,10 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
                 if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(rucne = true) }
+                Row(Modifier.fillMaxWidth().clickable { n.autoAktualizacie = !n.autoAktualizacie; n.uloz() }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("akt_auto"), color = Farby.text, modifier = Modifier.weight(1f))
+                    Switch(checked = n.autoAktualizacie, onCheckedChange = { n.autoAktualizacie = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
             }
             Karta {
                 Text(T("poz_chat_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
@@ -1197,6 +1230,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     }
                     IconButton(onClick = { o.zmazSadu(sd); sady = sady - sd }, enabled = !o.generuje) { Icon(Icons.Default.DeleteOutline, T("zmazat"), tint = Farby.tlmene) }
                 }
+                if (aktivny && o.koderKluc(sd) != null) KoderVolba(sd)
             }
             modely.forEach { f ->
                 val aktivny = o.jeAktivny(f)
@@ -1600,6 +1634,18 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
 
 @Composable
 private fun Aktualizacia() {
+    Aktualizacie.pripravena?.let { pv ->
+        var neskor by remember { mutableStateOf(false) }
+        if (!neskor) AlertDialog(
+            onDismissRequest = { neskor = true }, containerColor = Farby.plocha,
+            icon = { Icon(Icons.Default.SystemUpdate, null, tint = Farby.zelena) },
+            title = { Text(T("akt_pripravena", pv), color = Farby.text) },
+            text = { Text(T("akt_pripravena_text"), color = Farby.tlmene) },
+            confirmButton = { TextButton(onClick = { Aktualizacie.restartuj() }) { Text(T("akt_restart"), color = Farby.ruzova) } },
+            dismissButton = { TextButton(onClick = { neskor = true }) { Text(T("akt_neskor"), color = Farby.tlmene) } },
+        )
+        return
+    }
     val v = Aktualizacie.novaVerzia ?: return
     val p = Aktualizacie.priebeh
     AlertDialog(

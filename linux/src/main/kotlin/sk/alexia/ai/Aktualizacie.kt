@@ -58,7 +58,8 @@ object Aktualizacie {
                 val preskocena = File(Platforma.priecinok, "preskocit-verziu").takeIf { it.exists() }?.readText()?.trim()
                 val nova = novsia(v, mojaVerzia) && (rucne || v != preskocena)
                 Platforma.naHlavnom {
-                    if (nova) { chyba = ""; novaVerzia = v }
+                    if (nova && ChatJadro.nastavenia.autoAktualizacie && !rucne && moze()) stiahniTicho(v)
+                    else if (nova) { chyba = ""; novaVerzia = v }
                     else if (rucne) Platforma.oznam(T("akt_najnovsia", mojaVerzia))
                 }
             }
@@ -67,6 +68,89 @@ object Aktualizacie {
                 if (rucne) r.onFailure { Platforma.oznam(T("akt_nepodarilo")) }
             }
         }
+    }
+
+    // ------------------------------------------------ automatická aktualizácia
+
+    /** verzia, ktorá je už stiahnutá a čaká na reštart */
+    var pripravena by mutableStateOf<String?>(null)
+    private val docasny get() = File(Platforma.priecinok, "aktualizacia")
+    private val zipKoren: String = if (Platforma.jeWindows) "AlexiaAI-Windows" else "AlexiaAI-Linux"
+
+    /** priečinok, kam je appka rozbalená zo ZIP (podľa cesty spúšťača) */
+    private fun instalacia(): File? {
+        val app = System.getProperty("jpackage.app-path")?.let { File(it) } ?: return null
+        var d: File? = app.parentFile
+        while (d != null) { if (d.name == zipKoren && d.canWrite()) return d; d = d.parentFile }
+        return null
+    }
+
+    /** dá sa aktualizovať samo? (AppImage alebo rozbalený ZIP s pôvodným názvom priečinka) */
+    fun moze() = appImage != null || instalacia() != null
+
+    private fun stiahniTicho(v: String) {
+        if (priebeh != null || pripravena != null) return
+        thread(isDaemon = true) {
+            val r = runCatching {
+                val ciel = appImage
+                if (ciel != null) {
+                    val k = otvor(BASE + "AlexiaAI-x86_64.AppImage"); val spolu = k.contentLengthLong
+                    val tmp = File("$ciel.novy")
+                    k.inputStream.use { i -> tmp.outputStream().use { i.copyTo(it, 1 shl 16) } }
+                    if (spolu > 0 && tmp.length() != spolu) { tmp.delete(); throw IllegalStateException("neúplné") }
+                    tmp.setExecutable(true, false)
+                    // bežiaci AppImage sa dá prepísať – nová verzia sa spustí pri ďalšom štarte
+                    if (!tmp.renameTo(File(ciel))) { tmp.delete(); throw IllegalStateException("nedá sa prepísať") }
+                } else {
+                    val d = docasny.apply { deleteRecursively(); mkdirs() }
+                    val zip = File(d, "nova.zip")
+                    val k = otvor(BASE + "$zipKoren.zip"); val spolu = k.contentLengthLong
+                    k.inputStream.use { i -> zip.outputStream().use { i.copyTo(it, 1 shl 16) } }
+                    if (spolu > 0 && zip.length() != spolu) throw IllegalStateException("neúplné")
+                    val von = File(d, "nova")
+                    java.util.zip.ZipInputStream(zip.inputStream()).use { z ->
+                        while (true) {
+                            val e = z.nextEntry ?: break
+                            val f = File(von, e.name)
+                            if (!f.canonicalPath.startsWith(von.canonicalPath)) continue
+                            if (e.isDirectory) f.mkdirs() else { f.parentFile?.mkdirs(); f.outputStream().use { z.copyTo(it) } }
+                        }
+                    }
+                    zip.delete()
+                    if (!File(von, zipKoren).isDirectory) throw IllegalStateException("zlý ZIP")
+                    File(d, "verzia.txt").writeText(v)
+                }
+            }
+            Platforma.naHlavnom { r.onSuccess { pripravena = v }; r.onFailure { novaVerzia = v } }
+        }
+    }
+
+    /** pri štarte: ZIP aktualizácia stiahnutá minule, ešte nenainštalovaná */
+    fun skontrolujPripravenu() {
+        val v = runCatching { File(docasny, "verzia.txt").readText().trim() }.getOrNull() ?: return
+        if (novsia(v, mojaVerzia) && File(docasny, "nova/$zipKoren").isDirectory && instalacia() != null) pripravena = v
+        else docasny.deleteRecursively()
+    }
+
+    /** reštart do novej verzie */
+    fun restartuj() {
+        val ciel = appImage
+        if (ciel != null) { runCatching { ProcessBuilder(ciel).start() }; exitProcess(0) }
+        val inst = instalacia() ?: return
+        val zdroj = File(docasny, "nova/$zipKoren")
+        if (Platforma.jeWindows) {
+            val bat = File(docasny, "aktualizuj.bat")
+            bat.writeText("@echo off\r\ntimeout /t 3 /nobreak >nul\r\nrobocopy \"${zdroj.path}\" \"${inst.path}\" /E /NFL /NDL /NJH /NJS /NP >nul\r\n" +
+                "start \"\" \"${File(inst, "AlexiaAI.exe").path}\"\r\nrmdir /s /q \"${File(docasny, "nova").path}\"\r\ndel \"${File(docasny, "verzia.txt").path}\"\r\n")
+            ProcessBuilder("cmd", "/c", "start", "\"\"", "/min", bat.path).start()
+        } else {
+            val sh = File(docasny, "aktualizuj.sh")
+            sh.writeText("#!/bin/sh\nsleep 2\ncp -a \"${zdroj.path}/.\" \"${inst.path}/\"\nrm -rf \"${File(docasny, "nova").path}\" \"${File(docasny, "verzia.txt").path}\"\n" +
+                "nohup \"${File(inst, "AlexiaAI/bin/AlexiaAI").path}\" >/dev/null 2>&1 &\n")
+            sh.setExecutable(true)
+            ProcessBuilder("setsid", "sh", sh.path).redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        }
+        exitProcess(0)
     }
 
     fun preskoc() {

@@ -645,6 +645,10 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(c, rucne = true) }
+                Row(Modifier.fillMaxWidth().clickable { n.autoAktualizacie = !n.autoAktualizacie; n.uloz() }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("akt_auto"), color = Farby.text, modifier = Modifier.weight(1f))
+                    Switch(checked = n.autoAktualizacie, onCheckedChange = { n.autoAktualizacie = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
             }
             Karta {
                 Text(T("poz_chat_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
@@ -976,6 +980,20 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
 @Composable
 private fun Aktualizacia() {
     val c = LocalContext.current
+    Aktualizacie.stiahnuta?.let { sv ->
+        AlertDialog(
+            onDismissRequest = { Aktualizacie.stiahnuta = null }, containerColor = Farby.plocha,
+            icon = { Icon(Icons.Default.SystemUpdate, null, tint = Farby.zelena) },
+            title = { Text(T("akt_pripravena", sv), color = Farby.text) },
+            text = { Text(T("akt_android_text"), color = Farby.tlmene) },
+            confirmButton = { TextButton(onClick = {
+                runCatching { c.startActivity(android.content.Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                Aktualizacie.stiahnuta = null
+            }) { Text(T("akt_android_otvorit"), color = Farby.ruzova) } },
+            dismissButton = { TextButton(onClick = { Aktualizacie.stiahnuta = null }) { Text(stringResource(R.string.akt_neskor), color = Farby.tlmene) } },
+        )
+        return
+    }
     val v = Aktualizacie.novaVerzia ?: return
     AlertDialog(
         onDismissRequest = { Aktualizacie.novaVerzia = null },

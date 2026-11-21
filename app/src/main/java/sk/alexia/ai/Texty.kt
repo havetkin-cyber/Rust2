@@ -14,6 +14,13 @@ object T {
     }
 
     private val sk = mapOf(
+        "akt_android_notif" to "Ťukni sem po stiahnutí a nainštaluj novú verziu",
+        "akt_android_text" to "Nová verzia je v Stiahnutých. Ťukni na notifikáciu „Alexia AI“ alebo ju otvor v Stiahnutých a potvrď inštaláciu. Chaty ani modely sa nestratia.",
+        "akt_android_otvorit" to "Otvoriť Stiahnuté",
+        "akt_auto" to "Sťahovať aktualizácie automaticky",
+        "akt_pripravena" to "Aktualizácia %1\$s je stiahnutá",
+        "akt_pripravena_text" to "Nová verzia je pripravená. Reštartuj appku teraz, alebo sa spustí pri ďalšom zapnutí.",
+        "akt_restart" to "Reštartovať",
         "hist_nadpis" to "História chatov",
         "hist_info" to "Rozhovory sú uložené zašifrované (AES-256, kľúč v bezpečnom úložisku telefónu) len v tomto zariadení.",
         "hist_prazdna" to "Zatiaľ žiadne uložené rozhovory.",
@@ -229,6 +236,13 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "akt_android_notif" to "Tap here after download to install the new version",
+        "akt_android_text" to "The new version is in Downloads. Tap the “Alexia AI” notification or open it in Downloads and confirm the install. Chats and models are kept.",
+        "akt_android_otvorit" to "Open Downloads",
+        "akt_auto" to "Download updates automatically",
+        "akt_pripravena" to "Update %1\$s is downloaded",
+        "akt_pripravena_text" to "The new version is ready. Restart the app now, or it starts next time.",
+        "akt_restart" to "Restart",
         "hist_nadpis" to "Chat history",
         "hist_info" to "Conversations are stored encrypted (AES-256) only on this device.",
         "hist_prazdna" to "No saved conversations yet.",

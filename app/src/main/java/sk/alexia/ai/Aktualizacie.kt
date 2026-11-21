@@ -43,12 +43,34 @@ object Aktualizacie {
                 val n = tag.substringAfterLast('.').toLong()
                 val v = tag.removePrefix("v")
                 Platforma.naHlavnom {
-                    if (n > moja && (rucne || n > preskocena)) novaVerzia = v
+                    if (n > moja && !rucne && n > preskocena && ChatJadro.nastavenia.autoAktualizacie) stiahniNaPozadi(c, v)
+                    else if (n > moja && (rucne || n > preskocena)) novaVerzia = v
                     else if (rucne) Platforma.oznam(T("akt_najnovsia", "1.0.$moja"))
                 }
             }
             Platforma.naHlavnom { kontroluje = false; if (rucne) r.onFailure { Platforma.oznam(T("akt_nepodarilo")) } }
         }
+    }
+
+    /** stiahnutá verzia – APK je v Stiahnutých, inštaláciu spustí ťuknutie na notifikáciu */
+    var stiahnuta by mutableStateOf<String?>(null)
+
+    /**
+     * Automatické stiahnutie cez systémový DownloadManager (appka nepotrebuje žiadne oprávnenie navyše).
+     * Inštaláciu musí potvrdiť používateľ – ťuknutím na notifikáciu „Stiahnuté“.
+     */
+    private fun stiahniNaPozadi(c: Context, v: String) {
+        runCatching {
+            val dm = c.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+            val r = android.app.DownloadManager.Request(Uri.parse(APK))
+                .setTitle("Alexia AI $v")
+                .setDescription(T("akt_android_notif"))
+                .setMimeType("application/vnd.android.package-archive")
+                .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "AlexiaAI-$v.apk")
+            dm.enqueue(r)
+            stiahnuta = v
+        }.onFailure { novaVerzia = v }
     }
 
     fun stiahni(c: Context) {

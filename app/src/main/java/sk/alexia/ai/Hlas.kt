@@ -225,7 +225,10 @@ object Hlas {
         stChyba = false
         hovori = text
         val n = ChatJadro.nastavenia
-        val vyska = n.hlasVyska.coerceIn(0.5f, 2f); val speed = n.hlasRychlost.coerceIn(0.3f, 3f) / vyska
+        val vyska = n.hlasVyska.coerceIn(0.5f, 2f); val hrubka = n.hlasHrubka; val plnost = n.hlasPlnost
+        val f = Zvuk.formant(hrubka)
+        // dĺžku posunutú prehrávaním (farba) vyrovná rýchlosť pri tvorbe reči
+        val speed = n.hlasRychlost.coerceIn(0.3f, 3f) / f
         val lang = if (n.jazykOdpovedi == "en") "en" else "sk"
         val rad = java.util.concurrent.LinkedBlockingQueue<Pair<ShortArray, Int>>(3)
         val koniec = ShortArray(0) to 0
@@ -235,8 +238,8 @@ object Hlas {
                 for (kus in kusky(t)) {
                     if (hovori != text) break
                     val a = m.generateWithConfig(kus, com.k2fsa.sherpa.onnx.GenerationConfig(sid = sid, speed = speed, numSteps = 8, extra = mapOf("lang" to lang)))
-                    val s = ShortArray(a.samples.size) { (a.samples[it].coerceIn(-1f, 1f) * 32767).toInt().toShort() }
-                    rad.put(s to a.sampleRate)
+                    if (hovori != text) break
+                    rad.put(Zvuk.naShort(Zvuk.uprav(a.samples, a.sampleRate, vyska, hrubka, plnost)) to a.sampleRate)
                 }
             } catch (e: Throwable) {
                 stChyba = true
@@ -250,12 +253,12 @@ object Hlas {
                     val (pcm, sr) = rad.poll(200, java.util.concurrent.TimeUnit.MILLISECONDS) ?: continue
                     if (pcm.isEmpty()) break
                     if (a == null) {
-                        val f = (sr * vyska).toInt()
-                        val min = AudioTrack.getMinBufferSize(f, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                        val fr = (sr * f).toInt()
+                        val min = AudioTrack.getMinBufferSize(fr, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
                         a = AudioTrack.Builder()
                             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                            .setAudioFormat(AudioFormat.Builder().setSampleRate(f).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-                            .setBufferSizeInBytes(maxOf(min, f / 2))
+                            .setAudioFormat(AudioFormat.Builder().setSampleRate(fr).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                            .setBufferSizeInBytes(maxOf(min, fr / 2))
                             .setTransferMode(AudioTrack.MODE_STREAM).build()
                         stopa = a; a.play()
                     }

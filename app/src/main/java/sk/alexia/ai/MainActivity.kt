@@ -715,7 +715,16 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 Text(T("hlas_vyska", "%.2f".format(n.hlasVyska)), color = Farby.text, fontSize = 14.sp)
                 Slider(value = n.hlasVyska, onValueChange = { n.hlasVyska = (it * 20).roundToInt() / 20f }, onValueChangeFinished = { n.uloz() }, valueRange = 0.7f..1.4f,
                     colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
-                TextButton(onClick = { n.hlasRychlost = 1f; n.hlasVyska = 1f; n.uloz() }) { Text(T("hlas_predvolene"), color = Farby.ruzova) }
+                if (n.hlas != "system") {
+                    Text(T("hlas_hrubka", if (n.hlasHrubka > 1.005f) T("hlas_hrubsi") else if (n.hlasHrubka < 0.995f) T("hlas_tensi") else T("hlas_normal")), color = Farby.text, fontSize = 14.sp)
+                    Slider(value = n.hlasHrubka, onValueChange = { n.hlasHrubka = (it * 100).roundToInt() / 100f }, onValueChangeFinished = { n.uloz() }, valueRange = 0.85f..1.15f,
+                        colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                    Text(T("hlas_plnost", (n.hlasPlnost * 100).roundToInt()), color = Farby.text, fontSize = 14.sp)
+                    Slider(value = n.hlasPlnost, onValueChange = { n.hlasPlnost = (it * 20).roundToInt() / 20f }, onValueChangeFinished = { n.uloz() }, valueRange = 0f..1f,
+                        colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                    Text(T("hlas_uprava_info"), color = Farby.tlmene, fontSize = 12.sp)
+                }
+                TextButton(onClick = { n.hlasRychlost = 1f; n.hlasVyska = 1f; n.hlasHrubka = 1f; n.hlasPlnost = 0f; n.uloz() }) { Text(T("hlas_predvolene"), color = Farby.ruzova) }
             }
             Karta {
                 val c = LocalContext.current

@@ -207,16 +207,29 @@ object Hlas {
         val t = naCitanie(text); if (t.isBlank()) { poKonci?.invoke(); return }
         hovori = text; stChyba = false
         val n = ChatJadro.nastavenia
-        val vyska = n.hlasVyska.coerceIn(0.5f, 2f); val rychlost = n.hlasRychlost.coerceIn(0.3f, 3f)
+        val u = Uprava(n.hlasVyska.coerceIn(0.5f, 2f), n.hlasHrubka, n.hlasPlnost)
+        // dĺžku posunutú prehrávaním (farba) vyrovná rýchlosť pri tvorbe reči
+        val speed = n.hlasRychlost.coerceIn(0.3f, 3f) / u.f
+        val jazyk = if (n.jazykOdpovedi == "en") "en" else "sk"
         Thread {
             val ok = runCatching {
-                if (jeSt(id)) hovorSt(text, t, id.drop(2).toIntOrNull() ?: 0, rychlost / vyska, vyska)
-                else hovorLili(t, vyska / rychlost, vyska)
+                if (jeSt(id)) {
+                    val sid = id.drop(2).toIntOrNull() ?: 0
+                    prehrajKusy(text, t, u) { kus ->
+                        val g = com.k2fsa.sherpa.onnx.GenerationConfig()
+                        g.sid = sid; g.speed = speed; g.numSteps = 8; g.extra = mapOf("lang" to jazyk)
+                        val a = stModel().generateWithConfig(kus, g)
+                        a.samples to a.sampleRate
+                    }
+                } else { opravKonfig(); prehrajKusy(text, t, u) { kus -> lili(kus, 1f / speed) } }
             }.onFailure { e -> if (hovori != null) Platforma.oznam(T("hlas_chyba", e.message ?: "")) }.isSuccess
             val dohovoril = ok && hovori == text && !stChyba
             Platforma.naHlavnom { if (hovori == text) hovori = null; if (dohovoril) poKonci?.invoke() }
         }.start()
     }
+
+    /** úprava hlasu: výška tónu, hrúbka (farba) a plnosť; f = koeficient prehrávania */
+    private class Uprava(val vyska: Float, val hrubka: Float, val plnost: Float) { val f = Zvuk.formant(hrubka) }
 
     private fun otvorLinku(sr: Float): SourceDataLine {
         val f = AudioFormat(sr, 16, 1, true, false)
@@ -224,21 +237,50 @@ object Hlas {
         l.open(f); l.start(); return l
     }
 
-    private fun hovorLili(t: String, dlzka: Float, vyska: Float) {
-        opravKonfig()
+    /** Lili: jeden kúsok cez Piper (surový 16-bit zvuk) */
+    private fun lili(kus: String, dlzka: Float): Pair<FloatArray, Int> {
         val pb = ProcessBuilder(program().path, "--model", model().path, "--output_raw", "--length_scale", "%.3f".format(java.util.Locale.ROOT, dlzka),
             "--espeak_data", File(program().parentFile, "espeak-ng-data").path)
             .directory(program().parentFile)
         if (!Platforma.jeWindows) pb.environment()["LD_LIBRARY_PATH"] = program().parentFile.path
         pb.redirectError(File(priecinok(), "piper-chyba.log"))
         val p = pb.start(); proces = p
-        Thread { runCatching { p.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(t); it.newLine() } } }.start()
-        val l = otvorLinku(VZORKOVANIE * vyska)
-        p.inputStream.use { i ->
-            val b = ByteArray(4096); var n: Int
-            while (i.read(b).also { n = it } > 0) l.write(b, 0, n - n % 2)
+        Thread { runCatching { p.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(kus); it.newLine() } } }.start()
+        val b = p.inputStream.use { it.readBytes() }
+        p.waitFor()
+        val x = FloatArray(b.size / 2) { ((b[2 * it + 1].toInt() shl 8) or (b[2 * it].toInt() and 0xff)).toShort() / 32768f }
+        return x to VZORKOVANIE.toInt()
+    }
+
+    /** kúsky sa tvoria v pozadí a prehrávajú za sebou (ďalší sa robí, kým hrá predchádzajúci) */
+    private fun prehrajKusy(povodny: String, t: String, u: Uprava, tvor: (String) -> Pair<FloatArray, Int>) {
+        val rad = java.util.concurrent.LinkedBlockingQueue<Pair<ByteArray, Float>>(3)
+        val KONIEC = ByteArray(0) to 0f
+        val tvorca = Thread {
+            try {
+                for (kus in kusky(t)) {
+                    if (hovori != povodny) break
+                    val (x, sr) = tvor(kus)
+                    if (hovori != povodny) break
+                    val y = Zvuk.uprav(x, sr, u.vyska, u.hrubka, u.plnost)
+                    rad.put(naPcm(y) to sr.toFloat())
+                }
+            } catch (e: Throwable) {
+                stChyba = true
+                runCatching { File(priecinok(), "sherpa-chyba.log").writeText(e.stackTraceToString()) }
+                if (hovori == povodny) Platforma.oznam(T("hlas_chyba", e.message ?: e.toString()))
+            } finally { rad.offer(KONIEC) }
         }
-        l.drain(); l.close()
+        tvorca.isDaemon = true; tvorca.start()
+        var l: SourceDataLine? = null
+        while (hovori == povodny) {
+            val (pcm, sr) = rad.poll(200, java.util.concurrent.TimeUnit.MILLISECONDS) ?: continue
+            if (pcm.isEmpty()) break
+            if (l == null) l = otvorLinku(sr * u.f)
+            var o = 0
+            while (o < pcm.size && hovori == povodny) { val k = minOf(8192, pcm.size - o); l.write(pcm, o, k - k % 2); o += k }
+        }
+        l?.let { runCatching { if (hovori == povodny) it.drain(); it.close() } }
     }
 
     @Volatile private var stChyba = false
@@ -271,39 +313,6 @@ object Hlas {
         val b = ByteArray(f.size * 2)
         for (i in f.indices) { val v = (f[i].coerceIn(-1f, 1f) * 32767).toInt(); b[2 * i] = v.toByte(); b[2 * i + 1] = (v shr 8).toByte() }
         return b
-    }
-
-    /** Supertonic: kúsky sa tvoria v pozadí, prehrávajú sa za sebou (ďalší sa robí, kým hrá predchádzajúci) */
-    private fun hovorSt(povodny: String, t: String, sid: Int, speed: Float, vyska: Float) {
-        val rad = java.util.concurrent.LinkedBlockingQueue<Pair<ByteArray, Float>>(3)
-        val KONIEC = ByteArray(0) to 0f
-        val tvorca = Thread {
-            try {
-                val m = stModel()
-                for (kus in kusky(t)) {
-                    if (hovori != povodny) break
-                    val g = com.k2fsa.sherpa.onnx.GenerationConfig()
-                    g.sid = sid; g.speed = speed; g.numSteps = 8
-                    g.extra = mapOf("lang" to (if (ChatJadro.nastavenia.jazykOdpovedi == "en") "en" else "sk"))
-                    val a = m.generateWithConfig(kus, g)
-                    rad.put(naPcm(a.samples) to a.sampleRate.toFloat())
-                }
-            } catch (e: Throwable) {
-                stChyba = true
-                runCatching { File(priecinok(), "sherpa-chyba.log").writeText(e.stackTraceToString()) }
-                if (hovori == povodny) Platforma.oznam(T("hlas_chyba", e.message ?: e.toString()))
-            } finally { rad.offer(KONIEC) }
-        }
-        tvorca.isDaemon = true; tvorca.start()
-        var l: SourceDataLine? = null
-        while (hovori == povodny) {
-            val (pcm, sr) = rad.poll(200, java.util.concurrent.TimeUnit.MILLISECONDS) ?: continue
-            if (pcm.isEmpty()) break
-            if (l == null) l = otvorLinku(sr * vyska)
-            var o = 0
-            while (o < pcm.size && hovori == povodny) { val n = minOf(8192, pcm.size - o); l.write(pcm, o, n - n % 2); o += n }
-        }
-        l?.let { runCatching { if (hovori == povodny) it.drain(); it.close() } }
     }
 
     fun zastav() {

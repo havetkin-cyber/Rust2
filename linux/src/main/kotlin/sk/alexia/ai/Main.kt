@@ -1276,20 +1276,23 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     Spacer(Modifier.height(6.dp))
                     if (o.generuje) {
                         if (o.sadaHotovo.second > 1) Text(T("hra_sada", o.sadaHotovo.first + 1, o.sadaHotovo.second), color = Farby.tlmene, fontSize = 13.sp)
+                        if (o.kusText.isNotEmpty()) Text(o.kusText, color = Farby.tlmene, fontSize = 13.sp)
                         Text(T("obr_tvorim", (o.priebeh * 100).roundToInt()), color = Farby.text, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                         TextButton(onClick = { o.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
                     } else if (o.jeVideoModel) {
                         Text(T("vai_dlzka"), color = Farby.text, fontSize = 14.sp)
-                        Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             val ns = ChatJadro.nastavenia
-                            listOf(1, 2, 3, 5).forEach { sek ->
+                            (listOf(1, 2, 3, 5) + (if (o.i2vSada() != null) o.DLHE else emptyList())).forEach { sek ->
                                 FilterChip(selected = ns.dlzkaVidea == sek, onClick = { ns.dlzkaVidea = sek; ns.uloz() }, label = { Text("$sek s") },
                                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                             }
                         }
-                        if (ChatJadro.nastavenia.dlzkaVidea >= 3) Text(T("vai_dlho"), color = Farby.tlmene, fontSize = 12.sp)
+                        if (ChatJadro.nastavenia.dlzkaVidea > 5) Text(T("vai_nadvazovanie"), color = Farby.tlmene, fontSize = 12.sp)
+                        else if (ChatJadro.nastavenia.dlzkaVidea >= 3) Text(T("vai_dlho"), color = Farby.tlmene, fontSize = 12.sp)
+                        if (o.i2vSada() == null) Text(T("vai_dlhe_wan22"), color = Farby.tlmene, fontSize = 12.sp)
                         Row(Modifier.fillMaxWidth().clickable { val ns = ChatJadro.nastavenia; ns.setritVram = !ns.setritVram; ns.uloz() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(T("vai_setrit"), color = Farby.text, fontSize = 14.sp)

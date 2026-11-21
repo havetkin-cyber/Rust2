@@ -470,23 +470,37 @@ object ObrazkyJadro {
     }
 
     /** [sekundy] dĺžka videa; null = podľa Nastavení */
+    /** dĺžky, ktoré sa skladajú z viacerých kúskov (nadväzovanie, len modely s obrázkom → video) */
+    val DLHE = listOf(10, 20, 30, 60)
+    private const val KUS_SEKUND = 2
+    @Volatile private var kusovSpolu = 1
+    @Volatile private var kusHotovych = 0
+    var kusText by mutableStateOf("")
+        private set
+
     fun natocAI(popis: String, sekundy: Int?, predloha: File? = null, hotovo: (File?, String) -> Unit) {
         // rozhýbanie obrázka: len obrázky vytvorené a podpísané appkou
         if (predloha != null && seedObrazka(predloha) == null) { hotovo(null, T("m3d_len_appka")); return }
-        val sada = (if (predloha != null) (aktivnaSada()?.takeIf { it.video?.i2v == true } ?: i2vSada())
+        val dlzka = sekundy ?: ChatJadro.nastavenia.dlzkaVidea
+        val nadvazovat = dlzka > 5
+        val sada = (if (predloha != null || nadvazovat) (aktivnaSada()?.takeIf { it.video?.i2v == true } ?: i2vSada())
                     else (aktivnaSada()?.takeIf { it.video != null } ?: videoSada()))
-            ?: run { hotovo(null, T(if (predloha != null) "vai_ziadny_i2v" else "vai_ziadny")); return }
+            ?: run { hotovo(null, T(if (predloha != null || nadvazovat) "vai_ziadny_i2v" else "vai_ziadny")); return }
         if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
         val ff = VideoJadro.ffmpeg() ?: run { VideoJadro.stiahniFfmpeg { natocAI(popis, sekundy, predloha, hotovo) }; return }
         val v = sada.video!!
         val predtym = aktivnyModel
         ChatJadro.uvolniPamat()
         nacitaj("sada:" + sada.id, uvolnitChat = false)
+        // dlhé video = kúsky po KUS_SEKUND, každý ďalší začína posledným snímkom predchádzajúceho
+        val kusov = if (nadvazovat) (dlzka + KUS_SEKUND - 1) / KUS_SEKUND else 1
+        val snimokKusa = snimokPre(v, if (nadvazovat) KUS_SEKUND else dlzka)
+        kusovSpolu = kusov; kusHotovych = 0; kusText = if (kusov > 1) T("vai_kus", 1, kusov) else ""
         generuje = true; priebeh = 0f; chyba = ""
         Thread {
             while (true) {
                 Thread.sleep(500)
-                val p = Sd.priebeh(); var dalej = true
+                val p = (kusHotovych + Sd.priebeh()) / kusovSpolu; var dalej = true
                 javax.swing.SwingUtilities.invokeAndWait { if (generuje) priebeh = p else dalej = false }
                 if (!dalej) break
             }
@@ -495,41 +509,61 @@ object ObrazkyJadro {
         vlakno.execute {
             var subor: File? = null; var e = ""
             if (h == 0L) e = Sd.chyba().ifBlank { "Video model sa nenačítal" }
-            else runCatching {
-                val r = IntArray(4)
-                val neg = "blurry, static, still frame, low quality, deformed, watermark, text, extra fingers, bad hands"
-                // obrázok → rozmer videa (vyplní celý záber, orežú sa okraje)
-                val px = predloha?.let { f ->
-                    val src = ImageIO.read(f)
-                    val k = maxOf(v.sirka.toDouble() / src.width, v.vyska.toDouble() / src.height)
-                    val dst = BufferedImage(v.sirka, v.vyska, BufferedImage.TYPE_INT_RGB)
-                    dst.createGraphics().apply {
-                        setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
-                        val dw = (src.width * k).toInt(); val dv = (src.height * k).toInt()
-                        drawImage(src, (v.sirka - dw) / 2, (v.vyska - dv) / 2, dw, dv, null); dispose()
-                    }
-                    dst.getRGB(0, 0, v.sirka, v.vyska, null, 0, v.sirka)
-                }
-                val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimokPre(v, sekundy ?: ChatJadro.nastavenia.dlzkaVidea), sada.kroky, sada.cfg, v.posun, seed, sada.metoda, px, r)
-                    ?: throw IllegalStateException(Sd.chyba())
-                val (w, vy, t, fps) = r.toList()
+            else {
                 val out = File(VideoJadro.priecinok(), "ai_video_${System.currentTimeMillis()}.mp4")
-                // náhľad = prvá snímka
-                val obr = BufferedImage(w, vy, BufferedImage.TYPE_INT_RGB)
-                val pxN = IntArray(w * vy) { i -> ((data[i * 3].toInt() and 255) shl 16) or ((data[i * 3 + 1].toInt() and 255) shl 8) or (data[i * 3 + 2].toInt() and 255) }
-                obr.setRGB(0, 0, w, vy, pxN, 0, w); ImageIO.write(obr, "png", File(out.path.removeSuffix(".mp4") + ".png"))
-                // MP4: dvojnásobná plynulosť (dopočítané snímky) a 2× väčšie
-                val p = ProcessBuilder(ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$vy", "-r", "$fps", "-i", "-",
-                    "-vf", "minterpolate=fps=${fps * 2}:mi_mode=mci:mc_mode=aobmc,scale=${w * 2}:${vy * 2}:flags=lanczos",
-                    "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out.path)
-                    .redirectErrorStream(true).start()
-                Thread { runCatching { p.inputStream.readBytes() } }.start()
-                p.outputStream.use { it.write(data, 0, w * vy * 3 * t) }
-                if (p.waitFor() != 0) throw IllegalStateException("ffmpeg zlyhal")
-                subor = out
-            }.onFailure { e = it.message ?: "Video sa nepodarilo" }
+                var ffp: Process? = null
+                var zapisanych = 0
+                runCatching {
+                    val neg = "blurry, static, still frame, low quality, deformed, watermark, text, extra fingers, bad hands"
+                    // obrázok → rozmer videa (vyplní celý záber, orežú sa okraje)
+                    var px = predloha?.let { f ->
+                        val src = ImageIO.read(f)
+                        val k = maxOf(v.sirka.toDouble() / src.width, v.vyska.toDouble() / src.height)
+                        val dst = BufferedImage(v.sirka, v.vyska, BufferedImage.TYPE_INT_RGB)
+                        dst.createGraphics().apply {
+                            setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                            val dw = (src.width * k).toInt(); val dv = (src.height * k).toInt()
+                            drawImage(src, (v.sirka - dw) / 2, (v.vyska - dv) / 2, dw, dv, null); dispose()
+                        }
+                        dst.getRGB(0, 0, v.sirka, v.vyska, null, 0, v.sirka)
+                    }
+                    for (kus in 0 until kusov) {
+                        if (kus > 0) Platforma.naHlavnom { kusText = T("vai_kus", kus + 1, kusov) }
+                        val r = IntArray(4)
+                        val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimokKusa, sada.kroky, sada.cfg, v.posun, seed + kus, sada.metoda, px, r)
+                            ?: throw IllegalStateException(Sd.chyba().ifBlank { "Video sa nepodarilo" })
+                        val (w, vy, t, fps) = r.toList()
+                        val snimka = w * vy * 3
+                        if (ffp == null) {
+                            // náhľad = prvá snímka
+                            val obr = BufferedImage(w, vy, BufferedImage.TYPE_INT_RGB)
+                            val pxN = IntArray(w * vy) { i -> ((data[i * 3].toInt() and 255) shl 16) or ((data[i * 3 + 1].toInt() and 255) shl 8) or (data[i * 3 + 2].toInt() and 255) }
+                            obr.setRGB(0, 0, w, vy, pxN, 0, w); ImageIO.write(obr, "png", File(out.path.removeSuffix(".mp4") + ".png"))
+                            // MP4: dvojnásobná plynulosť (dopočítané snímky) a 2× väčšie; snímky sa zapisujú priebežne
+                            ffp = ProcessBuilder(ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$vy", "-r", "$fps", "-i", "-",
+                                "-vf", "minterpolate=fps=${fps * 2}:mi_mode=mci:mc_mode=aobmc,scale=${w * 2}:${vy * 2}:flags=lanczos",
+                                "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out.path)
+                                .redirectErrorStream(true).start().also { pr -> Thread { runCatching { pr.inputStream.readBytes() } }.start() }
+                        }
+                        // ďalší kúsok začína posledným snímkom predchádzajúceho → prvý vynecháme (bol by dvakrát)
+                        val od = if (kus == 0) 0 else 1
+                        ffp!!.outputStream.write(data, od * snimka, (t - od) * snimka)
+                        zapisanych += t - od
+                        // posledná snímka → predloha ďalšieho kúska
+                        val z = (t - 1) * snimka
+                        px = IntArray(w * vy) { i -> ((data[z + i * 3].toInt() and 255) shl 16) or ((data[z + i * 3 + 1].toInt() and 255) shl 8) or (data[z + i * 3 + 2].toInt() and 255) }
+                        kusHotovych = kus + 1
+                    }
+                }.onFailure { e = it.message ?: "Video sa nepodarilo" }
+                // aj pri zrušení/chybe ostane hotová časť
+                ffp?.let { pr ->
+                    runCatching { pr.outputStream.close() }
+                    if (pr.waitFor() == 0 && zapisanych > 0) { subor = out; if (e.isNotEmpty() && kusHotovych > 0) { e = ""; Platforma.oznam(T("vai_cast", kusHotovych, kusov)) } }
+                    else if (e.isEmpty()) e = "ffmpeg zlyhal"
+                }
+            }
             Platforma.naHlavnom {
-                generuje = false; priebeh = 0f
+                generuje = false; priebeh = 0f; kusText = ""
                 // vráti voľbu obrázkového modelu (načíta sa, keď ho bude treba)
                 if (predtym != null && predtym != "sada:" + sada.id) { uvolniPamat(); aktivnyModel = predtym }
                 hotovo(subor, e)

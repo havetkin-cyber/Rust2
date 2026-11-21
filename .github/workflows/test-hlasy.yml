@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths: ['.github/workflows/test-hlasy.yml', 'test/hlasy/**']
+permissions:
+  contents: write
 jobs:
   hlasy:
     runs-on: ubuntu-22.04
@@ -37,3 +39,8 @@ jobs:
         with:
           name: hlasy
           path: out/*.mp3
+      - name: Ukážky do vydania (na stiahnutie)
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release delete test-hlasy -y --cleanup-tag 2>/dev/null || true
+          gh release create test-hlasy out/*.mp3 --prerelease -t "Test – ukážky hlasov" -n "Dočasné ukážky" 

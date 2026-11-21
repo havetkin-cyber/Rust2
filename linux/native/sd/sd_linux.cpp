@@ -87,7 +87,7 @@ F(jlong, nacitajViac)(JNIEnv* env, jobject, jobjectArray kluce, jobjectArray hod
     v = v && ok(sd_ctx_create(o, &ctx));
     sd_opt_free(o);
     if (!v || !ctx) { if (g_chyba.empty()) g_chyba = "Model sa nedá načítať"; return 0; }
-    if (!sd_ctx_supports_image_generation(ctx)) { sd_ctx_free(ctx); g_chyba = "Tento model nevie tvoriť obrázky"; return 0; }
+    if (!sd_ctx_supports_image_generation(ctx) && !sd_ctx_supports_video_generation(ctx)) { sd_ctx_free(ctx); g_chyba = "Tento model nevie tvoriť obrázky ani video"; return 0; }
     return (jlong)ctx;
 }
 

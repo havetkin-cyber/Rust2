@@ -207,8 +207,10 @@ object ObrazkyJadro {
                         subor = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
                         ImageIO.write(img, "png", subor!!)
                         // údaje o obrázku: seed a popis – podľa nich sa dá obrázok neskôr upraviť
-                        File(subor!!.path + ".json").writeText(JSONObject().put("seed", seed).put("popis", prompt.trim()).put("neg", negativny.trim())
-                            .put("w", r[0]).put("h", r[1]).put("kroky", kroky).put("cfg", cfg.toDouble()).put("model", aktivnyModel ?: "").toString())
+                        val zaznam = JSONObject().put("seed", seed).put("popis", prompt.trim()).put("neg", negativny.trim())
+                            .put("w", r[0]).put("h", r[1]).put("kroky", kroky).put("cfg", cfg.toDouble()).put("model", aktivnyModel ?: "")
+                        Podpis.podpis(subor!!, zaznam)
+                        File(subor!!.path + ".json").writeText(zaznam.toString())
                     }.onFailure { e = it.message ?: "Obrázok sa nepodarilo uložiť" }
                 } else e = Sd.chyba()
             }
@@ -221,7 +223,11 @@ object ObrazkyJadro {
     }
 
     /** seed obrázka vytvoreného v appke (null = nie je z appky, napr. tvoja fotka) */
-    fun seedObrazka(f: File): Long? = runCatching { JSONObject(File(f.path + ".json").readText()).getLong("seed") }.getOrNull()
+    /** seed len pre obrázok, ktorý appka vytvorila a podpísala (fotka zvonka ani podvrhnutý záznam neprejde) */
+    fun seedObrazka(f: File): Long? = runCatching {
+        val j = JSONObject(File(f.path + ".json").readText())
+        if (Podpis.over(f, j)) j.getLong("seed") else null
+    }.getOrNull()
 
     /** najnovší obrázok z appky s týmto seedom */
     fun najdiPodlaSeedu(seed: Long): File? = priecinokObrazkov().listFiles { f -> f.extension == "png" }
@@ -232,6 +238,7 @@ object ObrazkyJadro {
      * Fotky zvonka (bez seedu) sa takto upravovať nedajú.
      */
     fun upravDoChatu(seed: Long, zmena: String, sila: Float, hotovo: (File?, String) -> Unit) {
+        if (Podpis.zakazane(zmena)) { hotovo(null, T("upr_zakazane")); return }
         val f = najdiPodlaSeedu(seed) ?: run { hotovo(null, T("upr_nenajdene", seed)); return }
         val j = runCatching { JSONObject(File(f.path + ".json").readText()) }.getOrNull() ?: run { hotovo(null, T("upr_nenajdene", seed)); return }
         val cesta = aktivnyModel

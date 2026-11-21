@@ -14,7 +14,8 @@ object T {
     }
 
     private val sk = mapOf(
-        "upr_nenajdene" to "Obrázok so seedom %1\$d som nenašiel. Upraviť sa dajú len obrázky vytvorené v appke (pod obrázkom je „Seed …“).",
+        "upr_zakazane" to "Takúto úpravu appka nespraví – úpravy, ktoré robia z obrázka nahý alebo intímny obsah, sú zablokované.",
+        "upr_nenajdene" to "Obrázok so seedom %1\$d som nenašiel. Upraviť sa dajú len obrázky, ktoré vytvorila a podpísala táto appka (pod obrázkom je „Seed …“) – fotky zvonka nie.",
         "upr_vzdialene" to "Úprava obrázka zatiaľ funguje len priamo na zariadení s obrázkovým modelom.",
         "upr_prikaz" to "uprav seed %1\$d a ",
         "upr_skopirovane" to "Skopírované – vlož do chatu a dopíš, čo zmeniť.",
@@ -267,6 +268,7 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "upr_zakazane" to "The app will not make this edit – edits that turn an image into nude or intimate content are blocked.",
         "upr_nenajdene" to "No image with seed %1\$d found. Only images created in the app can be edited (they show “Seed …”).",
         "upr_vzdialene" to "Editing images works only directly on the device with the image model.",
         "upr_prikaz" to "edit seed %1\$d and ",

@@ -49,6 +49,9 @@ object ObrazkyJadro {
 
     fun jeAktivny(f: File) = aktivnyModel == f.path
 
+    /** uvoľní model a zabudne voľbu (napr. prepnutie medzi záložkami Obrázky a Videá) */
+    fun zabudniModel() { if (generuje) return; uvolniPamat(); aktivnyModel = null; stav = StavModelu.ZIADNY }
+
     // ---- modely z viacerých súborov (katalóg)
     fun priecinokSady(s: ObrazkovaSada) = File(priecinokModelov(), s.id)
     fun suborSady(s: ObrazkovaSada, url: String) = File(priecinokSady(s), url.substringAfterLast('/'))

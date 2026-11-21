@@ -79,7 +79,7 @@ fun main() {
                 it.key == Key.Tab && it.isCtrlPressed -> { prepni?.invoke(if (it.isShiftPressed) -1 else 1); true }
                 it.key == Key.PageDown -> { Ovladac.posun.tryEmit(500f); true }
                 it.key == Key.PageUp -> { Ovladac.posun.tryEmit(-500f); true }
-                it.key in listOf(Key.F1, Key.F2, Key.F3, Key.F4, Key.F5) -> { chodNa?.invoke(listOf(Key.F1, Key.F2, Key.F3, Key.F4, Key.F5).indexOf(it.key)); true }
+                it.key in listOf(Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6) -> { chodNa?.invoke(listOf(Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6).indexOf(it.key)); true }
                 else -> false
             }
         }) {
@@ -94,7 +94,7 @@ private var naspat: (() -> Unit)? = null
 private var prepni: ((Int) -> Unit)? = null
 private var chodNa: ((Int) -> Unit)? = null
 
-private enum class Obrazovka { CHAT, OBRAZKY, VYLEPSIT, MODELY, NASTAVENIA }
+private enum class Obrazovka { CHAT, OBRAZKY, VIDEA, VYLEPSIT, MODELY, NASTAVENIA }
 
 @Composable
 private fun Appka() {
@@ -118,8 +118,11 @@ private fun Appka() {
     // v pamäti je vždy len jeden model: obrázky alebo chat
     LaunchedEffect(obrazovka) {
         when (obrazovka) {
-            Obrazovka.OBRAZKY -> ObrazkyJadro.aktivnyModel?.let { m ->
-                if (File(m).exists() || ObrazkyJadro.aktivnaSada()?.let { ObrazkyJadro.mamSadu(it) } == true) ObrazkyJadro.nacitaj(m)
+            Obrazovka.OBRAZKY, Obrazovka.VIDEA -> ObrazkyJadro.aktivnyModel?.let { m ->
+                // načíta sa len model, ktorý patrí do tejto záložky (obrázkový / video)
+                val s = ObrazkyJadro.aktivnaSada()
+                val patri = if (s != null) (s.video != null) == (obrazovka == Obrazovka.VIDEA) else obrazovka == Obrazovka.OBRAZKY
+                if (patri && (File(m).exists() || s?.let { ObrazkyJadro.mamSadu(it) } == true)) ObrazkyJadro.nacitaj(m)
             }
             Obrazovka.CHAT -> { ObrazkyJadro.uvolniPamat(); VylepsenieJadro.uvolniPamat(); ChatJadro.obnov() }
             Obrazovka.VYLEPSIT -> ObrazkyJadro.uvolniPamat()
@@ -159,7 +162,8 @@ private fun Appka() {
             )
             Obrazovka.MODELY -> ModelyObrazovka { obrazovka = Obrazovka.CHAT }
             Obrazovka.NASTAVENIA -> NastaveniaObrazovka { obrazovka = Obrazovka.CHAT }
-            Obrazovka.OBRAZKY -> ObrazkyObrazovka { obrazovka = Obrazovka.CHAT }
+            Obrazovka.OBRAZKY -> key("obrazky") { ObrazkyObrazovka(videa = false) { obrazovka = Obrazovka.CHAT } }
+            Obrazovka.VIDEA -> key("videa") { ObrazkyObrazovka(videa = true) { obrazovka = Obrazovka.CHAT } }
             Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
         }
         }
@@ -218,6 +222,7 @@ private fun Zalozky(aktivna: Obrazovka, zvol: (Obrazovka) -> Unit) {
     val polozky = listOf(
         Triple(Obrazovka.CHAT, Icons.Default.Forum, "chat"),
         Triple(Obrazovka.OBRAZKY, Icons.Default.Image, "obrazky"),
+        Triple(Obrazovka.VIDEA, Icons.Default.Movie, "videa"),
         Triple(Obrazovka.VYLEPSIT, Icons.Default.AutoFixHigh, "vylepsit_kratko"),
         Triple(Obrazovka.MODELY, Icons.Default.Memory, "modely"),
         Triple(Obrazovka.NASTAVENIA, Icons.Default.Tune, "nastavenia"),
@@ -1104,10 +1109,12 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
 // ---------------------------------------------------------------- obrázky
 
 @Composable
-private fun ObrazkyObrazovka(spat: () -> Unit) {
+private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
     val o = ObrazkyJadro
-    var modely by remember { mutableStateOf(o.modely()) }
-    var sady by remember { mutableStateOf(o.sady()) }
+    // záložka Obrázky = obrázkové modely (aj vlastné súbory), záložka Videá = video modely (Wan)
+    fun mojeSady() = o.sady().filter { (it.video != null) == videa }
+    var modely by remember { mutableStateOf(if (videa) emptyList() else o.modely()) }
+    var sady by remember { mutableStateOf(mojeSady()) }
     var popisStahovania by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
     var negativny by remember { mutableStateOf("blurry, low quality, deformed") }
@@ -1139,7 +1146,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     val neulozene = T("obr_neulozene")
 
     fun hotovo(f: File?, e: Throwable?) {
-        priebehStahovania = null; popisStahovania = ""; modely = o.modely(); sady = o.sady()
+        priebehStahovania = null; popisStahovania = ""; modely = if (videa) emptyList() else o.modely(); sady = mojeSady()
         if (f != null) o.nacitaj(f.path)
         if (e != null && e !is InterruptedException) Platforma.oznam("$chybaPrefix: ${e.message}")
     }
@@ -1175,8 +1182,12 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
         }
         }
     }
-    // prvý model sa načíta sám
+    // prvý model sa načíta sám; ak je zvolený model z druhej záložky (obrázky ↔ video), prepne sa
     LaunchedEffect(modely, sady) {
+        if (o.generuje) return@LaunchedEffect
+        val akt = o.aktivnaSada()
+        val cudzi = if (akt != null) (akt.video != null) != videa else videa && o.aktivnyModel != null
+        if (cudzi) { if (sady.isNotEmpty()) pouziSadu(sady.first()) else o.zabudniModel(); return@LaunchedEffect }
         if (o.stav != StavModelu.ZIADNY) return@LaunchedEffect
         val aktivna = sady.find { o.jeAktivna(it) }
         when {
@@ -1196,7 +1207,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
         StavModelu.ZIADNY -> T("ziadny_model_kratko")
     }
     Column(Modifier.fillMaxSize()) {
-        Hlavicka(T("obrazky"), pod, spat = spat)
+        Hlavicka(T(if (videa) "videa" else "obrazky"), pod, spat = spat)
         PosuvnyStlpec {
             priebehStahovania?.let { p ->
                 Karta {
@@ -1210,13 +1221,13 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
 
             if (modely.isEmpty() && sady.isEmpty()) {
                 Karta {
-                    Text(T("obr_bez_modelu"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Text(T(if (videa) "vid_bez_modelu" else "obr_bez_modelu"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
-                    Text(T("obr_bez_modelu_info"), color = Farby.tlmene, fontSize = 13.sp)
+                    Text(T(if (videa) "vid_bez_modelu_info" else "obr_bez_modelu_info"), color = Farby.tlmene, fontSize = 13.sp)
                 }
             } else {
                 // výsledok
-                o.posledny?.let { f ->
+                if (!videa) o.posledny?.let { f ->
                     Karta {
                         val bmp = remember(f) { Platforma.nacitajObrazok(f) }
                         if (bmp != null) Image(bmp, null, Modifier.fillMaxWidth().aspectRatio(bmp.width.toFloat() / bmp.height).clip(RoundedCornerShape(14.dp)).clickable { detail = f }, contentScale = ContentScale.Fit)
@@ -1244,7 +1255,8 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                     )
-                    Text(T("obr_anglicky"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    Text(T(if (videa) "vid_anglicky" else "obr_anglicky"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    if (!videa) {
                     Text(T("poz_nadpis"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         POZADIA.forEach { (id, _) ->
@@ -1301,6 +1313,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                         }
                     }
+                    }
                     Spacer(Modifier.height(6.dp))
                     if (o.generuje) {
                         if (o.sadaHotovo.second > 1) Text(T("hra_sada", o.sadaHotovo.first + 1, o.sadaHotovo.second), color = Farby.tlmene, fontSize = 13.sp)
@@ -1309,7 +1322,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                         TextButton(onClick = { o.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
-                    } else if (o.jeVideoModel) {
+                    } else if (videa) {
                         Text(T("vai_dlzka"), color = Farby.text, fontSize = 14.sp)
                         Row(Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             val ns = ChatJadro.nastavenia
@@ -1329,7 +1342,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                             Switch(checked = ChatJadro.nastavenia.setritVram, onCheckedChange = { val ns = ChatJadro.nastavenia; ns.setritVram = it; ns.uloz() },
                                 colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                         }
-                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(), enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) {
+                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(), enabled = o.stav == StavModelu.PRIPRAVENY && o.jeVideoModel && prompt.isNotBlank()) {
                             o.natocAI(prompt, ChatJadro.nastavenia.dlzkaVidea) { f, e -> if (f != null) { aiVideo = f; Platforma.oznam(T("vai_hotovo")) } else Platforma.oznam("⚠ $e") }
                         }
                         Text(T("vai_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
@@ -1345,14 +1358,14 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         }
                     } else {
                         GradientTlacidlo(T("obr_vytvorit"), Icons.Default.AutoAwesome, Modifier.fillMaxWidth(),
-                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generujHerne(if (typ == "obrazok") popisSPozadim() else prompt, negativny, rozmer, kroky, cfg, typ, pocet) }
+                            enabled = o.stav == StavModelu.PRIPRAVENY && !o.jeVideoModel && prompt.isNotBlank()) { o.generujHerne(if (typ == "obrazok") popisSPozadim() else prompt, negativny, rozmer, kroky, cfg, typ, pocet) }
                         Text(T("obr_cas"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     }
                     if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 }
 
                 // galéria
-                if (o.galeria.isNotEmpty()) {
+                if (!videa && o.galeria.isNotEmpty()) {
                     Text(T("obr_galeria"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     o.galeria.chunked(3).forEach { riadok ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1369,7 +1382,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
             }
 
             // modely na obrázky
-            Text(T("obr_modely"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+            Text(T(if (videa) "vid_modely" else "obr_modely"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
             sady.forEach { sd ->
                 val aktivny = o.jeAktivna(sd)
                 Row(
@@ -1379,7 +1392,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         .clickable(enabled = !aktivny && !o.generuje) { pouziSadu(sd) }.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(if (aktivny) Icons.Default.CheckCircle else Icons.Default.Image, null, tint = if (aktivny) Farby.zelena else Farby.tlmene)
+                    Icon(if (aktivny) Icons.Default.CheckCircle else if (videa) Icons.Default.Movie else Icons.Default.Image, null, tint = if (aktivny) Farby.zelena else Farby.tlmene)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(sd.nazov, color = Farby.text, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1407,7 +1420,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     IconButton(onClick = { o.zmazModel(f); modely = modely - f }, enabled = !o.generuje) { Icon(Icons.Default.DeleteOutline, T("zmazat"), tint = Farby.tlmene) }
                 }
             }
-            Katalog.obrazky.filter { k -> sady.none { it.id == k.id } }.forEach { k ->
+            Katalog.obrazky.filter { k -> (k.video != null) == videa && sady.none { it.id == k.id } }.forEach { k ->
                 Karta {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -1418,7 +1431,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     }
                 }
             }
-            Karta {
+            if (!videa) Karta {
                 Text(T("obr_vlastny"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
@@ -1434,7 +1447,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     }
                 }
             }
-            Text(T("obr_info"), color = Farby.tlmene, fontSize = 12.sp)
+            if (!videa) Text(T("obr_info"), color = Farby.tlmene, fontSize = 12.sp)
         }
     }
 

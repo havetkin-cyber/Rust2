@@ -17,6 +17,7 @@ dependencies {
     implementation(compose.materialIconsExtended)
     implementation("org.json:json:20240303")
     implementation("org.apache.commons:commons-compress:1.27.1")   // rozbalenie hlasov (.tar.bz2)
+    implementation("org.apache.pdfbox:pdfbox:3.0.3")               // text z PDF (knihy v chate)
 }
 
 // Java API sherpa-onnx (Apache 2.0) – hlasy Supertonic; zdrojáky sa stiahnu pri zostavení, natívne knižnice si appka stiahne sama

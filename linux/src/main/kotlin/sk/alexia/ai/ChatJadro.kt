@@ -17,6 +17,8 @@ class Sprava(val rola: String, text: String, val jeObrazkova: Boolean = false, o
     var video by mutableStateOf(video)
     var priebeh by mutableStateOf(0f)
     var stavText by mutableStateOf("")
+    /** úryvky z dokumentu pre model (nezobrazujú sa) */
+    var kontext: String? = null
 }
 
 /** „uprav seed 12345 a sprav tam …“ / „edit 12345: …“ → (seed, zmena), inak null */
@@ -208,7 +210,7 @@ object ChatJadro {
         val popis = if (obrazok) text.trim() else popisObrazka(text)
         if (popis != null) { nakresli(text.trim(), popis); return }
         if (generuje || stav != StavModelu.PRIPRAVENY) return
-        spravy += Sprava("user", text.trim())
+        spravy += Sprava("user", text.trim()).apply { kontext = Dokumenty.kontextPreOtazku(text, nastavenia.kontext) }
         generuj()
     }
 
@@ -298,7 +300,9 @@ object ChatJadro {
     }
 
     private fun generuj() {
-        val historia = spravy.filter { !it.jeObrazkova }.map { it.rola to it.text }.toMutableList()
+        val bez = spravy.filter { !it.jeObrazkova }
+        // úryvky z dokumentu len pri poslednej otázke (staršie by zbytočne zaberali pamäť)
+        val historia = bez.mapIndexed { i, it -> it.rola to (if (i == bez.lastIndex && it.kontext != null) it.kontext + "\n\n" + T("dok_otazka") + " " + it.text else it.text) }.toMutableList()
         val sys = nastavenia.systemSJazykom()
         val odpoved = Sprava("assistant", ""); spravy += odpoved
         generuje = true; tokenovZaSekundu = 0f

@@ -48,7 +48,7 @@ object Hlas {
     private fun program() = File(priecinok(), if (Platforma.jeWindows) "piper/piper.exe" else "piper/piper")
     private fun model() = File(priecinok(), "sk_SK-lili-medium.onnx")
     private fun jeSt(id: String) = id.startsWith("st")
-    private fun sherpaDir() = File(priecinok(), "sherpa")
+    internal fun sherpaDir() = File(priecinok(), "sherpa")
     private fun sherpa() = File(sherpaDir(), System.mapLibraryName("sherpa-onnx-jni"))
     private fun stDir() = File(priecinok(), "supertonic")
     private fun mamSt() = sherpa().exists() && File(stDir(), "vector_estimator.int8.onnx").length() > 50_000_000 && File(stDir(), "voice.bin").exists()
@@ -83,21 +83,7 @@ object Hlas {
         priebeh = 0f; chyba = ""
         Thread {
             val r = runCatching {
-                if (!sherpa().exists()) {
-                    val arch = File(priecinok(), "sherpa.jar")
-                    stiahniSubor(if (Platforma.jeWindows) SHERPA_WINDOWS else SHERPA_LINUX, arch) { Platforma.naHlavnom { priebeh = it * 0.1f } }
-                    // z jar-u len knižnice (sherpa-onnx/native/<os>/…), naplocho
-                    sherpaDir().mkdirs()
-                    ZipInputStream(arch.inputStream()).use { z ->
-                        while (true) {
-                            val e = z.nextEntry ?: break
-                            if (e.isDirectory || !e.name.startsWith("sherpa-onnx/native/")) continue
-                            File(sherpaDir(), e.name.substringAfterLast('/')).outputStream().use { z.copyTo(it) }
-                        }
-                    }
-                    arch.delete()
-                    if (!sherpa().exists()) throw IllegalStateException("sherpa-onnx sa nepodarilo rozbaliť")
-                }
+                pripravSherpa { Platforma.naHlavnom { priebeh = it * 0.1f } }
                 if (!mamSt()) {
                     val arch = File(priecinok(), "supertonic.tar.bz2")
                     stiahniSubor(ST_MODEL, arch) { Platforma.naHlavnom { priebeh = 0.1f + it * 0.85f } }
@@ -111,8 +97,30 @@ object Hlas {
         }.start()
     }
 
+    internal fun mamSherpa() = sherpa().exists()
+
+    /** natívne knižnice sherpa-onnx (spoločné pre hlasy aj rozpoznávanie reči); blokuje */
+    internal fun pripravSherpa(p: (Float) -> Unit) {
+        if (!sherpa().exists()) {
+            val arch = File(priecinok(), "sherpa.jar")
+            stiahniSubor(if (Platforma.jeWindows) SHERPA_WINDOWS else SHERPA_LINUX, arch, p)
+            // z jar-u len knižnice (sherpa-onnx/native/<os>/…), naplocho
+            sherpaDir().mkdirs()
+            ZipInputStream(arch.inputStream()).use { z ->
+                while (true) {
+                    val e = z.nextEntry ?: break
+                    if (e.isDirectory || !e.name.startsWith("sherpa-onnx/native/")) continue
+                    File(sherpaDir(), e.name.substringAfterLast('/')).outputStream().use { z.copyTo(it) }
+                }
+            }
+            arch.delete()
+            if (!sherpa().exists()) throw IllegalStateException("sherpa-onnx sa nepodarilo rozbaliť")
+        }
+        System.setProperty("sherpa_onnx.native.path", sherpaDir().path)
+    }
+
     /** rozbalí .tar.bz2 bez prvého priečinka; ber(cesta) rozhodne, či súbor treba */
-    private fun rozbalTarBz2(arch: File, kam: File, ber: (String) -> Boolean) {
+    internal fun rozbalTarBz2(arch: File, kam: File, ber: (String) -> Boolean) {
         kam.mkdirs()
         org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
             org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(arch.inputStream().buffered(1 shl 16))
@@ -131,7 +139,7 @@ object Hlas {
         }
     }
 
-    private fun stiahniSubor(odkaz: String, ciel: File, p: (Float) -> Unit) {
+    internal fun stiahniSubor(odkaz: String, ciel: File, p: (Float) -> Unit) {
         var url = URL(odkaz); var k: HttpURLConnection; var skoky = 0
         while (true) {
             k = url.openConnection() as HttpURLConnection
@@ -193,19 +201,20 @@ object Hlas {
         return out
     }
 
-    fun hovor(text: String, id: String = ChatJadro.nastavenia.hlas) {
+    fun hovor(text: String, id: String = ChatJadro.nastavenia.hlas, poKonci: (() -> Unit)? = null) {
         zastav()
         if (!mam(id)) { Platforma.oznam(T("hlas_najprv")); return }
-        val t = naCitanie(text); if (t.isBlank()) return
-        hovori = text
+        val t = naCitanie(text); if (t.isBlank()) { poKonci?.invoke(); return }
+        hovori = text; stChyba = false
         val n = ChatJadro.nastavenia
         val vyska = n.hlasVyska.coerceIn(0.5f, 2f); val rychlost = n.hlasRychlost.coerceIn(0.3f, 3f)
         Thread {
-            runCatching {
+            val ok = runCatching {
                 if (jeSt(id)) hovorSt(text, t, id.drop(2).toIntOrNull() ?: 0, rychlost / vyska, vyska)
                 else hovorLili(t, vyska / rychlost, vyska)
-            }.onFailure { e -> if (hovori != null) Platforma.oznam(T("hlas_chyba", e.message ?: "")) }
-            Platforma.naHlavnom { if (hovori == text) hovori = null }
+            }.onFailure { e -> if (hovori != null) Platforma.oznam(T("hlas_chyba", e.message ?: "")) }.isSuccess
+            val dohovoril = ok && hovori == text && !stChyba
+            Platforma.naHlavnom { if (hovori == text) hovori = null; if (dohovoril) poKonci?.invoke() }
         }.start()
     }
 
@@ -232,13 +241,14 @@ object Hlas {
         l.drain(); l.close()
     }
 
+    @Volatile private var stChyba = false
     @Volatile private var st: com.k2fsa.sherpa.onnx.OfflineTts? = null
     private val stZamok = Any()
 
     /** model sa načíta raz (~1–2 s) a ostane v pamäti */
     private fun stModel(): com.k2fsa.sherpa.onnx.OfflineTts = synchronized(stZamok) {
         st?.let { return it }
-        System.setProperty("sherpa_onnx.native.path", sherpaDir().path)
+        pripravSherpa {}
         val d = stDir()
         val sc = com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig.builder()
             .setDurationPredictor(File(d, "duration_predictor.int8.onnx").path)
@@ -279,6 +289,7 @@ object Hlas {
                     rad.put(naPcm(a.samples) to a.sampleRate.toFloat())
                 }
             } catch (e: Throwable) {
+                stChyba = true
                 runCatching { File(priecinok(), "sherpa-chyba.log").writeText(e.stackTraceToString()) }
                 if (hovori == povodny) Platforma.oznam(T("hlas_chyba", e.message ?: e.toString()))
             } finally { rad.offer(KONIEC) }

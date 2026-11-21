@@ -322,6 +322,8 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
     var historia by remember { mutableStateOf(false) }
     if (historia) HistoriaDialog { historia = false }
     var rezimVidea by remember { mutableStateOf(false) }
+    var citac by remember { mutableStateOf(false) }
+    if (citac && Dokumenty.aktualny != null) CitacDialog { citac = false }
     val o = ObrazkyJadro
     val posledny = j.spravy.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(j.spravy.size, posledny) { if (j.spravy.isNotEmpty()) zoznam.scrollToItem(j.spravy.lastIndex, Int.MAX_VALUE / 2) }
@@ -357,6 +359,26 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
             }
         }
 
+        // vložený dokument (kniha, PDF…) – otázky sa pýtajú naň, dá sa čítať nahlas
+        val dok = Dokumenty.aktualny
+        if (dok != null || Dokumenty.nacitava) {
+            Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Farby.plocha2).padding(start = 12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.MenuBook, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                if (dok == null) Text(T("dok_nacitavam"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.weight(1f).padding(vertical = 12.dp))
+                else {
+                    Column(Modifier.weight(1f)) {
+                        Text(dok.nazov, color = Farby.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(T("dok_info"), color = Farby.tlmene, fontSize = 11.sp)
+                    }
+                    TextButton(onClick = { Citac.otvor(); citac = true }) {
+                        Icon(Icons.Default.VolumeUp, null, tint = Farby.ruzova, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp))
+                        Text(T("dok_citat"), color = Farby.ruzova, fontSize = 13.sp)
+                    }
+                    IconButton(onClick = { Dokumenty.zavri() }) { Icon(Icons.Default.Close, T("dok_zavriet"), tint = Farby.tlmene, modifier = Modifier.size(18.dp)) }
+                }
+            }
+        }
         // vstup
         Row(
             Modifier.padding(12.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Farby.plocha)
@@ -369,9 +391,12 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
             IconButton(onClick = { rezimVidea = !rezimVidea; if (rezimVidea) rezimObrazka = false }) {
                 Icon(Icons.Default.Movie, T("video_rezim"), tint = if (rezimVidea) Farby.ruzova else Farby.tlmene)
             }
+            IconButton(onClick = { Platforma.vyberSubor(T("dok_vyber"), Dokumenty.PRIPONY) { Dokumenty.otvor(it) } }) {
+                Icon(Icons.Default.AttachFile, T("dok_pridat"), tint = if (Dokumenty.aktualny != null) Farby.ruzova else Farby.tlmene)
+            }
             TextField(
                 value = vstup, onValueChange = { vstup = it },
-                placeholder = { Text(T(if (rezimVidea) "video_popis" else if (rezimObrazka) "chat_obr_popis" else if (j.stav == StavModelu.PRIPRAVENY) "napis_spravu" else "ziadny_model_kratko"), color = Farby.tlmene) },
+                placeholder = { Text(T(if (Rec.nahrava) "rec_pocuvam" else if (Rec.spracuva) "rec_prepisujem" else if (rezimVidea) "video_popis" else if (rezimObrazka) "chat_obr_popis" else if (j.stav == StavModelu.PRIPRAVENY) "napis_spravu" else "ziadny_model_kratko"), color = Farby.tlmene) },
                 modifier = Modifier.weight(1f).nadKlavesnicou(), maxLines = 6,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
@@ -379,6 +404,19 @@ private fun ChatObrazovka(naModely: () -> Unit, naNastavenia: () -> Unit, naObra
                     cursorColor = Farby.ruzova, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text,
                 ),
             )
+            // mikrofón: hovor → text do poľa (Whisper, offline)
+            Box(contentAlignment = Alignment.Center) {
+                val rp = Rec.priebeh
+                if (rp != null) CircularProgressIndicator(progress = { rp }, modifier = Modifier.size(36.dp), color = Farby.ruzova, strokeWidth = 3.dp)
+                else if (Rec.spracuva) CircularProgressIndicator(modifier = Modifier.size(36.dp), color = Farby.ruzova, strokeWidth = 3.dp)
+                IconButton(onClick = {
+                    if (!Rec.mam()) { if (Rec.priebeh == null) { Platforma.oznam(T("rec_stahujem", Rec.MB)); Rec.stiahni() } }
+                    else Rec.prepni { t -> vstup = if (vstup.isBlank()) t else vstup.trimEnd() + " " + t }
+                }) {
+                    Icon(if (Rec.nahrava) Icons.Default.StopCircle else Icons.Default.Mic, T("rec_tlacidlo"),
+                        tint = if (Rec.nahrava) Farby.cervena.copy(alpha = 0.6f + 0.4f * Rec.hlasitost) else Farby.tlmene)
+                }
+            }
             val jeObr = rezimObrazka || rezimVidea || popisObrazka(vstup) != null || popisVidea(vstup) != null
             val moze = vstup.isNotBlank() && (if (jeObr) !o.generuje && !VideoJadro.pracuje else j.stav == StavModelu.PRIPRAVENY && !j.generuje)
             Box(
@@ -1759,6 +1797,44 @@ private fun Aktualizacia() {
 }
 
 // ---------------------------------------------------------------- história chatov (šifrovaná)
+
+@Composable
+private fun CitacDialog(zavri: () -> Unit) {
+    val d = Dokumenty.aktualny ?: return
+    val n = ChatJadro.nastavenia
+    androidx.compose.ui.window.Dialog(onDismissRequest = zavri) {
+        Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().heightIn(max = 640.dp).clip(RoundedCornerShape(24.dp)).background(Farby.plocha).padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.MenuBook, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                Text(d.nazov, color = Farby.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                IconButton(onClick = zavri) { Icon(Icons.Default.Close, T("zrusit"), tint = Farby.text) }
+            }
+            Text(T("citac_info", Hlas.meno(n.hlas), Citac.index + 1, d.odseky.size), color = Farby.tlmene, fontSize = 12.sp)
+            // aktuálny odsek + pár ďalších
+            val stav = rememberScrollState()
+            LaunchedEffect(Citac.index) { stav.scrollTo(0) }
+            Column(Modifier.weight(1f, fill = false).padding(vertical = 10.dp).verticalScroll(stav)) {
+                for (i in Citac.index until minOf(Citac.index + 4, d.odseky.size)) {
+                    Text(d.odseky[i], color = if (i == Citac.index) Farby.text else Farby.tlmene, fontSize = if (i == Citac.index) 16.sp else 14.sp,
+                        modifier = Modifier.padding(bottom = 10.dp).clickable { Citac.chodNa(i) })
+                }
+            }
+            var pos by remember(Citac.index) { mutableStateOf(Citac.index.toFloat()) }
+            Slider(value = pos, onValueChange = { pos = it }, onValueChangeFinished = { Citac.chodNa(pos.roundToInt()) }, valueRange = 0f..(d.odseky.size - 1).coerceAtLeast(1).toFloat(),
+                colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { Citac.posun(-1) }) { Icon(Icons.Default.SkipPrevious, null, tint = Farby.text) }
+                Spacer(Modifier.width(12.dp))
+                Box(Modifier.size(56.dp).clip(CircleShape).background(Farby.prechod).clickable { if (Citac.cita) Citac.zastav() else Citac.spusti() }, contentAlignment = Alignment.Center) {
+                    Icon(if (Citac.cita) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(30.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                IconButton(onClick = { Citac.posun(1) }) { Icon(Icons.Default.SkipNext, null, tint = Farby.text) }
+            }
+            if (!Hlas.mam()) Text(T("hlas_najprv"), color = Farby.cervena, fontSize = 12.sp)
+        }
+    }
+}
 
 @Composable
 private fun HistoriaDialog(zavri: () -> Unit) {

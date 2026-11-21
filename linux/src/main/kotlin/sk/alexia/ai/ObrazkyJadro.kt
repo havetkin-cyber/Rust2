@@ -148,7 +148,9 @@ object ObrazkyJadro {
 
     /** načíta model; jazykový model sa najprv uvoľní, aby sa zmestili do pamäte */
     fun nacitaj(cesta: String, uvolnitChat: Boolean = true) {
-        if (nacitany == cesta && (stav == StavModelu.PRIPRAVENY || stav == StavModelu.NACITAVA)) return
+        val sadaV = Katalog.obrazky.find { "sada:" + it.id == cesta }
+        val setrit = sadaV?.video != null && ChatJadro.nastavenia.setritVram
+        if (nacitany == cesta && nacitaneSetrenie == setrit && (stav == StavModelu.PRIPRAVENY || stav == StavModelu.NACITAVA)) return
         aktivnyModel = cesta
         if (uvolnitChat) ChatJadro.uvolniPamat()
         stav = StavModelu.NACITAVA; chyba = ""
@@ -157,13 +159,17 @@ object ObrazkyJadro {
             if (h != 0L) { Sd.uvolni(h); h = 0L }
             val sada = Katalog.obrazky.find { "sada:" + it.id == cesta }
             val novy = if (sada != null) {
-                val k = sada.subory.keys.toTypedArray()
-                Sd.nacitajViac(k, k.map { kk -> koderSubor(sada, kk) ?: suborSady(sada, sada.subory.getValue(kk)).absolutePath }.toTypedArray(), vl, sada.fa)
+                val k = sada.subory.keys.toList()
+                val hod = k.map { kk -> koderSubor(sada, kk) ?: suborSady(sada, sada.subory.getValue(kk)).absolutePath }
+                // Šetriť VRAM: textový kodér a VAE počítajú na CPU (v RAM), grafika ostane celá pre hlavný model
+                val kk = if (setrit) k + "backend" else k
+                val hh = if (setrit) hod + "te=cpu,vae=cpu" else hod
+                Sd.nacitajViac(kk.toTypedArray(), hh.toTypedArray(), vl, sada.fa)
             } else Sd.nacitaj(cesta, vl)
             val e = if (novy == 0L) Sd.chyba() else ""
             h = novy
             Platforma.naHlavnom {
-                if (novy != 0L) { stav = StavModelu.PRIPRAVENY; nacitany = cesta }
+                if (novy != 0L) { stav = StavModelu.PRIPRAVENY; nacitany = cesta; nacitaneSetrenie = setrit }
                 else { stav = StavModelu.CHYBA; nacitany = null; chyba = e }
             }
         }
@@ -455,14 +461,23 @@ object ObrazkyJadro {
 
     fun i2vSada(): ObrazkovaSada? = Katalog.obrazky.firstOrNull { it.video?.i2v == true && mamSadu(it) }
 
-    fun natocAI(popis: String, snimok: Int?, predloha: File? = null, hotovo: (File?, String) -> Unit) {
+    private var nacitaneSetrenie = false
+
+    /** sekundy → počet snímok (Wan chce 4·k+1), najviac ~5 s podľa modelu */
+    fun snimokPre(v: VideoNastavenie, sekundy: Int): Int {
+        val max = if (v.fps >= 24) 121 else 81
+        return ((sekundy * v.fps) / 4 * 4 + 1).coerceIn(9, max)
+    }
+
+    /** [sekundy] dĺžka videa; null = podľa Nastavení */
+    fun natocAI(popis: String, sekundy: Int?, predloha: File? = null, hotovo: (File?, String) -> Unit) {
         // rozhýbanie obrázka: len obrázky vytvorené a podpísané appkou
         if (predloha != null && seedObrazka(predloha) == null) { hotovo(null, T("m3d_len_appka")); return }
         val sada = (if (predloha != null) (aktivnaSada()?.takeIf { it.video?.i2v == true } ?: i2vSada())
                     else (aktivnaSada()?.takeIf { it.video != null } ?: videoSada()))
             ?: run { hotovo(null, T(if (predloha != null) "vai_ziadny_i2v" else "vai_ziadny")); return }
         if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
-        val ff = VideoJadro.ffmpeg() ?: run { VideoJadro.stiahniFfmpeg { natocAI(popis, snimok, predloha, hotovo) }; return }
+        val ff = VideoJadro.ffmpeg() ?: run { VideoJadro.stiahniFfmpeg { natocAI(popis, sekundy, predloha, hotovo) }; return }
         val v = sada.video!!
         val predtym = aktivnyModel
         ChatJadro.uvolniPamat()
@@ -495,7 +510,7 @@ object ObrazkyJadro {
                     }
                     dst.getRGB(0, 0, v.sirka, v.vyska, null, 0, v.sirka)
                 }
-                val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimok ?: v.snimok, sada.kroky, sada.cfg, v.posun, seed, sada.metoda, px, r)
+                val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimokPre(v, sekundy ?: ChatJadro.nastavenia.dlzkaVidea), sada.kroky, sada.cfg, v.posun, seed, sada.metoda, px, r)
                     ?: throw IllegalStateException(Sd.chyba())
                 val (w, vy, t, fps) = r.toList()
                 val out = File(VideoJadro.priecinok(), "ai_video_${System.currentTimeMillis()}.mp4")

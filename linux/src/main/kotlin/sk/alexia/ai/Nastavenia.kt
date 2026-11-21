@@ -31,6 +31,9 @@ class Nastavenia {
     var hudbaVidea by mutableStateOf(p.getProperty("hudbaVidea"))
     var citatNahlas by mutableStateOf(p.getProperty("citatNahlas") == "true")
     var hlas by mutableStateOf(p.getProperty("hlas") ?: "lili")
+    /** dĺžka AI videa v sekundách a šetrenie VRAM (kodér a VAE videa v RAM) */
+    var dlzkaVidea by mutableIntStateOf(p.getProperty("dlzkaVidea")?.toIntOrNull() ?: 2)
+    var setritVram by mutableStateOf(p.getProperty("setritVram") == "true")
     var hlasRychlost by mutableFloatStateOf(p.getProperty("hlasRychlost")?.toFloatOrNull() ?: 1f)
     var hlasVyska by mutableFloatStateOf(p.getProperty("hlasVyska")?.toFloatOrNull() ?: 1f)
     var jazykOdpovedi by mutableStateOf(p.getProperty("jazykOdpovedi") ?: if (java.util.Locale.getDefault().language in setOf("sk", "cs")) "sk" else "auto")
@@ -67,6 +70,8 @@ class Nastavenia {
         p.setProperty("jazykOdpovedi", jazykOdpovedi)
         p.setProperty("citatNahlas", citatNahlas.toString())
         p.setProperty("hlas", hlas)
+        p.setProperty("dlzkaVidea", dlzkaVidea.toString())
+        p.setProperty("setritVram", setritVram.toString())
         p.setProperty("hlasRychlost", hlasRychlost.toString())
         p.setProperty("hlasVyska", hlasVyska.toString())
         aktualnyChat?.let { p.setProperty("aktualnyChat", it) }

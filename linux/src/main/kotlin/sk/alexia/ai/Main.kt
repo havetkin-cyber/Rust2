@@ -1059,7 +1059,6 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     }
     var rozmer by remember { mutableIntStateOf(384) }
     var typ by remember { mutableStateOf("obrazok") }
-    var snimokVidea by remember { mutableIntStateOf(33) }
     var aiVideo by remember { mutableStateOf<File?>(null) }
     var pocet by remember { mutableIntStateOf(1) }
     var kroky by remember { mutableIntStateOf(20) }
@@ -1246,13 +1245,23 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     } else if (o.jeVideoModel) {
                         Text(T("vai_dlzka"), color = Farby.text, fontSize = 14.sp)
                         Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(17 to "1 s", 33 to "2 s", 49 to "3 s").forEach { (n, nazov) ->
-                                FilterChip(selected = snimokVidea == n, onClick = { snimokVidea = n }, label = { Text(nazov) },
+                            val ns = ChatJadro.nastavenia
+                            listOf(1, 2, 3, 5).forEach { sek ->
+                                FilterChip(selected = ns.dlzkaVidea == sek, onClick = { ns.dlzkaVidea = sek; ns.uloz() }, label = { Text("$sek s") },
                                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                             }
                         }
+                        if (ChatJadro.nastavenia.dlzkaVidea >= 3) Text(T("vai_dlho"), color = Farby.tlmene, fontSize = 12.sp)
+                        Row(Modifier.fillMaxWidth().clickable { val ns = ChatJadro.nastavenia; ns.setritVram = !ns.setritVram; ns.uloz() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(T("vai_setrit"), color = Farby.text, fontSize = 14.sp)
+                                Text(T("vai_setrit_info"), color = Farby.tlmene, fontSize = 12.sp)
+                            }
+                            Switch(checked = ChatJadro.nastavenia.setritVram, onCheckedChange = { val ns = ChatJadro.nastavenia; ns.setritVram = it; ns.uloz() },
+                                colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                        }
                         GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(), enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) {
-                            o.natocAI(prompt, snimokVidea) { f, e -> if (f != null) { aiVideo = f; Platforma.oznam(T("vai_hotovo")) } else Platforma.oznam("⚠ $e") }
+                            o.natocAI(prompt, ChatJadro.nastavenia.dlzkaVidea) { f, e -> if (f != null) { aiVideo = f; Platforma.oznam(T("vai_hotovo")) } else Platforma.oznam("⚠ $e") }
                         }
                         Text(T("vai_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                         aiVideo?.let { f ->

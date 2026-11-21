@@ -239,6 +239,16 @@ object ChatJadro {
         val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
         if (nastavenia.vzdialene) { odpoved.text = "⚠ " + T("video_vzdialene"); ulozChat(); return }
         odpoved.stavText = T("vai_tvorim")
+        val o = ObrazkyJadro
+        val cezObrazok = nastavenia.videoCezObrazok && o.i2vSada() != null && o.obrazkovaPreVideo() != null
+        if (cezObrazok) {
+            o.natocCezObrazok(popis, null) { f, e ->
+                if (f != null) { odpoved.video = f.path; odpoved.obrazok = f.path.removeSuffix(".mp4") + ".png" } else odpoved.text = "⚠ $e"
+                odpoved.stavText = ""
+                ulozChat()
+            }
+            return
+        }
         ObrazkyJadro.natocAI(popis, null) { f, e ->
             if (f != null) { odpoved.video = f.path; odpoved.obrazok = f.path.removeSuffix(".mp4") + ".png" } else odpoved.text = "⚠ $e"
             odpoved.stavText = ""

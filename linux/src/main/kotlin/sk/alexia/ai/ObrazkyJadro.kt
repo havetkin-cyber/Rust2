@@ -480,6 +480,38 @@ object ObrazkyJadro {
     }
 
     /** [sekundy] dĺžka videa; null = podľa Nastavení */
+    /** plynulosť výsledku: Wan 2.2 (24 fps) → 60 fps, Wan 2.1 (16 fps) → 48 fps (dopočítané snímky medzi skutočnými) */
+    private fun cielFps(fps: Int) = if (fps >= 24) 60 else fps * 3
+
+    /** obrázkový model na prvý snímok videa: najpresnejší stiahnutý */
+    fun obrazkovaPreVideo(): ObrazkovaSada? = listOf("flux3-klein", "zimage", "flux-schnell", "sd15")
+        .mapNotNull { id -> Katalog.obrazky.find { it.id == id } }.firstOrNull { mamSadu(it) }
+
+    /**
+     * Video „najprv obrázok“: obrázkový model (FLUX…) nakreslí presný prvý snímok podľa popisu,
+     * Wan 2.2 ho potom rozhýbe. Presnejší vzhľad, tvár a farby ako video priamo z textu.
+     */
+    fun natocCezObrazok(popis: String, sekundy: Int?, hotovo: (File?, String) -> Unit) {
+        val v2 = i2vSada() ?: run { hotovo(null, T("vai_ziadny_i2v")); return }
+        val img = obrazkovaPreVideo() ?: run { hotovo(null, T("vid_bez_obr_modelu")); return }
+        if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
+        val predtym = aktivnyModel
+        ChatJadro.uvolniPamat()
+        nacitaj("sada:" + img.id, uvolnitChat = false)
+        kusText = T("vid_faza_obrazok", img.nazov)
+        val v = v2.video!!
+        // rovnaký pomer strán ako video (násobky 64), aby sa pri rozhýbaní nič neorezalo
+        val (w, h) = if (v.vyska >= v.sirka) 512 to 896 else 896 to 512
+        spust(popis.trim(), "blurry, low quality, deformed, bad anatomy, extra fingers", w, h, img.kroky, img.cfg) { f, e ->
+            kusText = ""
+            if (f == null) { aktivnyModel = predtym; hotovo(null, e.ifBlank { T("vid_bez_obr_modelu") }); return@spust }
+            natocAI(popis, sekundy, f) { video, e2 ->
+                if (predtym != null && predtym != aktivnyModel) { uvolniPamat(); aktivnyModel = predtym }
+                hotovo(video, e2)
+            }
+        }
+    }
+
     /** dĺžky, ktoré sa skladajú z viacerých kúskov (nadväzovanie, len modely s obrázkom → video) */
     val DLHE = listOf(10, 20, 30, 60)
     private const val KUS_SEKUND = 2
@@ -553,7 +585,7 @@ object ObrazkyJadro {
                             obr.setRGB(0, 0, w, vy, pxN, 0, w); ImageIO.write(obr, "png", File(out.path.removeSuffix(".mp4") + ".png"))
                             // MP4: dvojnásobná plynulosť (dopočítané snímky) a 2× väčšie; snímky sa zapisujú priebežne
                             ffp = ProcessBuilder(ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$vy", "-r", "$fps", "-i", "-",
-                                "-vf", "minterpolate=fps=${fps * 2}:mi_mode=mci:mc_mode=aobmc,scale=${w * 2}:${vy * 2}:flags=lanczos",
+                                "-vf", "minterpolate=fps=${cielFps(fps)}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,scale=${w * 2}:${vy * 2}:flags=lanczos",
                                 "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out.path)
                                 .redirectErrorStream(true).start().also { pr -> Thread { runCatching { pr.inputStream.readBytes() } }.start() }
                         }

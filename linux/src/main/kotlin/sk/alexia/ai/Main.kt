@@ -1349,8 +1349,21 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                             Switch(checked = ChatJadro.nastavenia.setritVram, onCheckedChange = { val ns = ChatJadro.nastavenia; ns.setritVram = it; ns.uloz() },
                                 colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                         }
-                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(), enabled = o.stav == StavModelu.PRIPRAVENY && o.jeVideoModel && prompt.isNotBlank()) {
-                            o.natocAI(prompt, ChatJadro.nastavenia.dlzkaVidea) { f, e -> if (f != null) { aiVideo = f; Platforma.oznam(T("vai_hotovo")) } else Platforma.oznam("⚠ $e") }
+                        // najprv presný obrázok (FLUX…), potom ho Wan 2.2 rozhýbe
+                        val ns2 = ChatJadro.nastavenia
+                        val mozeCezObr = o.i2vSada() != null && o.obrazkovaPreVideo() != null
+                        Row(Modifier.fillMaxWidth().clickable(enabled = mozeCezObr) { ns2.videoCezObrazok = !ns2.videoCezObrazok; ns2.uloz() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(T("vid_cez_obr"), color = if (mozeCezObr) Farby.text else Farby.tlmene, fontSize = 14.sp)
+                                Text(if (mozeCezObr) T("vid_cez_obr_info", o.obrazkovaPreVideo()?.nazov ?: "") else T("vid_cez_obr_nejde"), color = Farby.tlmene, fontSize = 12.sp)
+                            }
+                            Switch(checked = ns2.videoCezObrazok && mozeCezObr, enabled = mozeCezObr, onCheckedChange = { ns2.videoCezObrazok = it; ns2.uloz() },
+                                colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                        }
+                        val cezObr = ns2.videoCezObrazok && mozeCezObr
+                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(), enabled = prompt.isNotBlank() && (cezObr || (o.stav == StavModelu.PRIPRAVENY && o.jeVideoModel))) {
+                            val hotovoV: (File?, String) -> Unit = { f, e -> if (f != null) { aiVideo = f; Platforma.oznam(T("vai_hotovo")) } else Platforma.oznam("⚠ $e") }
+                            if (cezObr) o.natocCezObrazok(prompt, ns2.dlzkaVidea, hotovoV) else o.natocAI(prompt, ns2.dlzkaVidea, hotovo = hotovoV)
                         }
                         Text(T("vai_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                         aiVideo?.let { f ->

@@ -1,0 +1,65 @@
+name: Test – MuseTalk (pery podľa hlasu)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/test-musetalk.yml']
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      - name: MuseTalk + knižnice (CPU)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          git clone -q --depth 1 https://github.com/TMElyralab/MuseTalk
+          cd MuseTalk && ls && cat requirements.txt
+          pip -q install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cpu
+          pip -q install -r requirements.txt 2>&1 | tail -3
+          pip -q install -U openmim
+          pip -q install mmcv==2.0.1 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.0/index.html 2>&1 | tail -2
+          pip -q install "mmdet==3.1.0" "mmpose==1.1.0" 2>&1 | tail -2
+          python -c "import mmcv, mmpose, mmdet; print('mm OK', mmcv.__version__)"
+      - name: Váhy
+        run: |
+          cd MuseTalk && ls download_weights.sh && sed -n 1,80p download_weights.sh
+          pip -q install -U "huggingface_hub[cli]" gdown
+          bash download_weights.sh 2>&1 | tail -15
+          find models -type f | xargs ls -la
+      - name: Hlas (Supertonic, slovensky)
+        run: |
+          pip -q install sherpa-onnx==1.13.2 soundfile
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2 | tar -xj
+          python3 - <<'P'
+          import sherpa_onnx, soundfile as sf
+          D="sherpa-onnx-supertonic-3-tts-int8-2026-05-11/"
+          c=sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(supertonic=sherpa_onnx.OfflineTtsSupertonicModelConfig(duration_predictor=D+"duration_predictor.int8.onnx", text_encoder=D+"text_encoder.int8.onnx", vector_estimator=D+"vector_estimator.int8.onnx", vocoder=D+"vocoder.int8.onnx", tts_json=D+"tts.json", unicode_indexer=D+"unicode_indexer.bin", voice_style=D+"voice.bin")))
+          t=sherpa_onnx.OfflineTts(c); g=sherpa_onnx.GenerationConfig(); g.sid=0; g.num_steps=8; g.extra["lang"]="sk"
+          a=t.generate("Ahoj, ja som Alexia. Dnes je krásny deň a ja ti rada pomôžem.", g)
+          sf.write("MuseTalk/hlas.wav", a.samples, a.sample_rate); print(len(a.samples)/a.sample_rate, "s")
+          P
+      - name: Pery podľa hlasu
+        run: |
+          cd MuseTalk
+          ls data/video data/audio 2>/dev/null | head
+          V=$(ls data/video/*.mp4 | head -1); echo "video: $V"
+          ffmpeg -loglevel error -y -i $V -t 6 -an vstup.mp4
+          printf 'task_0:\n  video_path: "vstup.mp4"\n  audio_path: "hlas.wav"\n' > test.yaml
+          ls scripts configs/inference 2>/dev/null
+          start=$(date +%s)
+          python -m scripts.inference --inference_config test.yaml --result_dir vysledok --unet_model_path models/musetalkV15/unet.pth --unet_config models/musetalkV15/musetalk.json --version v15 --use_float16 false 2>&1 | tail -30 || \
+          python -m scripts.inference --inference_config test.yaml --result_dir vysledok 2>&1 | tail -30
+          echo "čas: $(( $(date +%s) - start )) s"
+          find vysledok -name "*.mp4" | xargs ls -la
+          mkdir -p ../out && find vysledok -name "*.mp4" -exec cp {} ../out/ \; ; cp vstup.mp4 ../out/povodne.mp4; cp hlas.wav ../out/
+      - name: Ukážka
+        if: always()
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          ls -la out || exit 0
+          gh release delete test-musetalk -y --cleanup-tag -R ${{ github.repository }} 2>/dev/null || true
+          gh release create test-musetalk out/* --prerelease -t "Test MuseTalk" -n "Dočasné" -R ${{ github.repository }}

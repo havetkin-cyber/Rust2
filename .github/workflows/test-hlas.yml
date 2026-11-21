@@ -1,0 +1,27 @@
+name: Test – hlas (Piper)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/test-hlas.yml']
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Piper + hlas Lili (rovnako ako appka)
+        run: |
+          mkdir h && cd h
+          curl -sL https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz | tar -xz
+          curl -sL -o sk.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/sk/sk_SK/lili/medium/sk_SK-lili-medium.onnx
+          curl -sL -o sk.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/sk/sk_SK/lili/medium/sk_SK-lili-medium.onnx.json
+          ls -la . piper | head -30
+          ldd piper/piper | head -20
+      - name: Spustenie ako v appke
+        run: |
+          cd h
+          printf 'Ahoj, ja som Alexia.\nToto je test hlasu.\n' | LD_LIBRARY_PATH=$PWD/piper ./piper/piper --model sk.onnx --output_raw --espeak_data $PWD/piper/espeak-ng-data > out.raw 2> err.txt; echo "kod=$?"
+          ls -la out.raw; tail -20 err.txt
+      - name: Bez LD_LIBRARY_PATH a bez espeak_data
+        run: |
+          cd h
+          printf 'Ahoj.\n' | ./piper/piper --model sk.onnx --output_raw > out2.raw 2> err2.txt; echo "kod=$?"; ls -la out2.raw; tail -5 err2.txt

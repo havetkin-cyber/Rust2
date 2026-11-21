@@ -34,6 +34,8 @@ object Hlas {
     var chyba by mutableStateOf("")
         private set
     private var cakajuci: String? = null
+    private var cakajuciKoniec: (() -> Unit)? = null
+    private var poKonciSys: (() -> Unit)? = null
     @Volatile private var stopa: AudioTrack? = null
 
     private fun jazyk(): Locale = if (ChatJadro.nastavenia.jazykOdpovedi == "en") Locale.ENGLISH else Locale("sk", "SK")
@@ -51,19 +53,7 @@ object Hlas {
                 val arch = File(Platforma.priecinok, "hlas/supertonic.tar.bz2").apply { parentFile?.mkdirs() }
                 stiahniSubor(ST_MODEL, arch) { Platforma.naHlavnom { priebeh = it * 0.95f } }
                 Platforma.naHlavnom { priebeh = 0.97f }
-                val kam = stDir().apply { mkdirs() }
-                org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
-                    org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(arch.inputStream().buffered(1 shl 16))
-                ).use { t ->
-                    while (true) {
-                        val e = t.nextEntry ?: break
-                        val cesta = e.name.substringAfter('/', "")
-                        if (cesta.isEmpty() || e.isDirectory) continue
-                        val f = File(kam, cesta)
-                        if (!f.canonicalPath.startsWith(kam.canonicalPath)) continue
-                        f.parentFile?.mkdirs(); f.outputStream().use { t.copyTo(it) }
-                    }
-                }
+                rozbalTarBz2(arch, stDir()) { true }
                 arch.delete()
                 if (!mamSt()) throw IllegalStateException("Hlasy sa nepodarilo rozbaliť")
             }
@@ -71,7 +61,24 @@ object Hlas {
         }.start()
     }
 
-    private fun stiahniSubor(odkaz: String, ciel: File, p: (Float) -> Unit) {
+    /** rozbalí .tar.bz2 bez prvého priečinka; ber(cesta) rozhodne, či súbor treba */
+    internal fun rozbalTarBz2(arch: File, kam: File, ber: (String) -> Boolean) {
+        kam.mkdirs()
+        org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
+            org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(arch.inputStream().buffered(1 shl 16))
+        ).use { t ->
+            while (true) {
+                val e = t.nextEntry ?: break
+                val cesta = e.name.substringAfter('/', "")
+                if (cesta.isEmpty() || e.isDirectory || !ber(cesta)) continue
+                val f = File(kam, cesta)
+                if (!f.canonicalPath.startsWith(kam.canonicalPath)) continue
+                f.parentFile?.mkdirs(); f.outputStream().use { t.copyTo(it) }
+            }
+        }
+    }
+
+    internal fun stiahniSubor(odkaz: String, ciel: File, p: (Float) -> Unit) {
         var url = URL(odkaz); var k: HttpURLConnection; var skoky = 0
         while (true) {
             k = url.openConnection() as HttpURLConnection
@@ -105,10 +112,10 @@ object Hlas {
                     ?.firstOrNull { it.name.contains("female", true) || it.features.any { f -> f.contains("female", true) } }?.let { t.voice = it } }
                 t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {}
-                    override fun onDone(id: String?) { if (id == "koniec") Platforma.naHlavnom { hovori = null } }
+                    override fun onDone(id: String?) { if (id == "koniec") Platforma.naHlavnom { hovori = null; val k = poKonciSys; poKonciSys = null; k?.invoke() } }
                     @Deprecated("") override fun onError(id: String?) { Platforma.naHlavnom { hovori = null } }
                 })
-                cakajuci?.let { c -> cakajuci = null; hovor(c) }
+                cakajuci?.let { c -> cakajuci = null; hovor(c, cakajuciKoniec); cakajuciKoniec = null }
             } else Platforma.oznam(T("hlas_chyba", "TTS"))
         }
     }
@@ -120,11 +127,12 @@ object Hlas {
         return s.replace(Regex("[*#_`>|~]"), " ").replace(Regex("\\s+"), " ").trim()
     }
 
-    fun hovor(text: String) {
+    fun hovor(text: String, poKonci: (() -> Unit)? = null) {
         val n = ChatJadro.nastavenia
-        if (jeSt(n.hlas)) { hovorSt(text, n.hlas.drop(2).toIntOrNull() ?: 0); return }
-        if (tts == null || !pripraveny) { cakajuci = text; priprav(); return }
+        if (jeSt(n.hlas)) { hovorSt(text, n.hlas.drop(2).toIntOrNull() ?: 0, poKonci); return }
+        if (tts == null || !pripraveny) { cakajuci = text; cakajuciKoniec = poKonci; priprav(); return }
         zastavSt()
+        poKonciSys = poKonci
         val t = tts!!; t.stop(); t.language = jazyk()
         t.setSpeechRate(n.hlasRychlost); t.setPitch(n.hlasVyska)
         hovori = text
@@ -133,7 +141,7 @@ object Hlas {
         vety.forEachIndexed { i, v ->
             t.speak(v.take(3900), if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, null, if (i == vety.lastIndex) "koniec" else "v$i")
         }
-        if (vety.isEmpty()) hovori = null
+        if (vety.isEmpty()) { hovori = null; poKonciSys = null; poKonci?.invoke() }
     }
 
     // ---------- Supertonic ----------
@@ -169,10 +177,13 @@ object Hlas {
         return out
     }
 
-    private fun hovorSt(text: String, sid: Int) {
+    @Volatile private var stChyba = false
+
+    private fun hovorSt(text: String, sid: Int, poKonci: (() -> Unit)?) {
         zastav()
         if (!mamSt()) { Platforma.oznam(T("hlas_najprv")); return }
-        val t = naCitanie(text); if (t.isBlank()) return
+        val t = naCitanie(text); if (t.isBlank()) { poKonci?.invoke(); return }
+        stChyba = false
         hovori = text
         val n = ChatJadro.nastavenia
         val vyska = n.hlasVyska.coerceIn(0.5f, 2f); val speed = n.hlasRychlost.coerceIn(0.3f, 3f) / vyska
@@ -189,6 +200,7 @@ object Hlas {
                     rad.put(s to a.sampleRate)
                 }
             } catch (e: Throwable) {
+                stChyba = true
                 if (hovori == text) Platforma.oznam(T("hlas_chyba", e.message ?: e.toString()))
             } finally { rad.offer(koniec) }
         }.start()
@@ -217,14 +229,15 @@ object Hlas {
             } finally {
                 runCatching { a?.stop(); a?.release() }
                 if (stopa === a) stopa = null
-                Platforma.naHlavnom { if (hovori == text) hovori = null }
+                val dohovoril = hovori == text && !stChyba
+                Platforma.naHlavnom { if (hovori == text) hovori = null; if (dohovoril) poKonci?.invoke() }
             }
         }.start()
     }
 
     private fun zastavSt() { stopa?.let { runCatching { it.pause(); it.flush() } } }
 
-    fun zastav() { tts?.stop(); zastavSt(); hovori = null; cakajuci = null }
+    fun zastav() { tts?.stop(); zastavSt(); hovori = null; cakajuci = null; cakajuciKoniec = null; poKonciSys = null }
 
     fun poOdpovedi(text: String) { if (ChatJadro.nastavenia.citatNahlas && text.isNotBlank() && !text.startsWith("⚠") && mam()) hovor(text) }
 }

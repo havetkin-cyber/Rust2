@@ -3,18 +3,31 @@ on:
   push:
     branches: [main]
     paths: ['.github/workflows/test-sherpa.yml']
+env:
+  T: v2.0.2
+  D: sherpa-onnx-supertonic-3-tts-int8-2026-05-11
 jobs:
-  t:
+  linux:
     runs-on: ubuntu-22.04
     steps:
-      - env: { GH_TOKEN: '${{ github.token }}' }
-        run: |
-          gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.tag_name, (.assets[] | "\(.name) \(.size)")' | grep -Ei "tag|^v|linux-x64|win-x64|android|jni|java" | head -60
-          gh api repos/k2-fsa/sherpa-onnx/releases/tags/tts-models --jq '.assets[] | select(.name|test("supertonic")) | "\(.name) \(.size)"'
-          T=$(gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq .tag_name); V=${T#v}
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-$T-linux-x64-static.tar.bz2 | tar -xj && ls sherpa-onnx-*/bin | head -50
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2 | tar -xj
-          B=$(ls -d sherpa-onnx-v*/bin); $B/sherpa-onnx-offline-tts --help 2>&1 | grep -iE "supertonic|lang|sid|num-steps|output" | head -30
-          D=sherpa-onnx-supertonic-3-tts-int8-2026-05-11
-          $B/sherpa-onnx-offline-tts --supertonic-duration-predictor=$D/duration_predictor.int8.onnx --supertonic-text-encoder=$D/text_encoder.int8.onnx --supertonic-vector-estimator=$D/vector_estimator.int8.onnx --supertonic-vocoder=$D/vocoder.int8.onnx --supertonic-tts-json=$D/tts.json --supertonic-unicode-indexer=$D/unicode_indexer.bin --supertonic-voice-style=$D/voice.bin --sid=2 --lang=sk --output-filename=o.wav "Ahoj, ja som Alexia." 2>&1 | tail -15; ls -la o.wav $D; du -sh $D
-          ldd $B/sherpa-onnx-offline-tts | head
+      - run: |
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-$T-linux-x64-shared.tar.bz2 | tar -xj
+          find sherpa-onnx-$T-linux-x64-shared -maxdepth 2 | grep -v "/bin/sherpa-onnx-[^o]" | head -40
+          B=sherpa-onnx-$T-linux-x64-shared/bin/sherpa-onnx-offline-tts
+          readelf -d $B | grep -iE "rpath|runpath|NEEDED"
+          $B --help 2>&1 | grep -iE "speed|length|threads" | head
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$D.tar.bz2 | tar -xj
+          $B --supertonic-duration-predictor=$D/duration_predictor.int8.onnx --supertonic-text-encoder=$D/text_encoder.int8.onnx --supertonic-vector-estimator=$D/vector_estimator.int8.onnx --supertonic-vocoder=$D/vocoder.int8.onnx --supertonic-tts-json=$D/tts.json --supertonic-unicode-indexer=$D/unicode_indexer.bin --supertonic-voice-style=$D/voice.bin --sid=1 --lang=sk --num-threads=4 --speed=0.8 --output-filename=o.wav "Ahoj, ja som Alexia. Ako sa máš?" 2>&1 | tail -6
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-$T-android.tar.bz2 | tar -tj | head -40
+          for f in Tts.kt; do curl -sL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/kotlin-api/$f -o $f; echo "== $f $(wc -l < $f)"; done
+          grep -n "class\|val \|var \|fun \|external" Tts.kt | head -150
+  windows:
+    runs-on: windows-latest
+    defaults: { run: { shell: bash } }
+    steps:
+      - run: |
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-$T-win-x64-shared-MT-Release.tar.bz2 | tar -xj
+          find sherpa-onnx-$T-win-x64-shared-MT-Release | grep -E "offline-tts.exe|\.dll" 
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$D.tar.bz2 | tar -xj
+          B=sherpa-onnx-$T-win-x64-shared-MT-Release/bin/sherpa-onnx-offline-tts.exe
+          $B --supertonic-duration-predictor=$D/duration_predictor.int8.onnx --supertonic-text-encoder=$D/text_encoder.int8.onnx --supertonic-vector-estimator=$D/vector_estimator.int8.onnx --supertonic-vocoder=$D/vocoder.int8.onnx --supertonic-tts-json=$D/tts.json --supertonic-unicode-indexer=$D/unicode_indexer.bin --supertonic-voice-style=$D/voice.bin --sid=1 --lang=sk --output-filename=o.wav "Ahoj, ja som Alexia." 2>&1 | tail -4; ls -la o.wav

@@ -54,8 +54,9 @@ int main(int argc, char** argv) {
     auto a = gen(ctx, p, W, H, K, 12345, nullptr, 0, "a_povodny.png");
     auto c = gen(ctx, p, W, H, K, 54321, nullptr, 0, "c_iny_seed.png");
     std::string p2 = std::string(p) + ", a small green leaf on the apple";
-    auto b = gen(ctx, p2.c_str(), W, H, K, 12345, &a, 0.55f, "b_uprava_055.png");
-    auto b2 = gen(ctx, p2.c_str(), W, H, K, 12345, &a, 0.4f, "b_uprava_040.png");
-    printf("ROZDIEL povodny vs uprava(0.55): %.1f\nROZDIEL povodny vs uprava(0.40): %.1f\nROZDIEL povodny vs iny seed: %.1f\n", rozdiel(a, b), rozdiel(a, b2), rozdiel(a, c));
+    auto b7 = gen(ctx, p2.c_str(), W, H, 12, 12345, &a, 0.7f, "b_uprava_070.png");
+    auto b8 = gen(ctx, p2.c_str(), W, H, 12, 12345, &a, 0.8f, "b_uprava_080.png");
+    auto b9 = gen(ctx, p2.c_str(), W, H, 12, 12345, &a, 0.9f, "b_uprava_090.png");
+    printf("ROZDIEL 0.7: %.1f  0.8: %.1f  0.9: %.1f  iny seed: %.1f\n", rozdiel(a, b7), rozdiel(a, b8), rozdiel(a, b9), rozdiel(a, c));
     return 0;
 }

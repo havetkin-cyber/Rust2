@@ -286,11 +286,6 @@ object Hlas {
         }.start()
     }
 
-    private fun naPcm(x: FloatArray): ByteArray {
-        val sh = Zvuk.naShort(x); val b = java.nio.ByteBuffer.allocate(sh.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-        sh.forEach { b.putShort(it) }; return b.array()
-    }
-
     private fun zapisWav(f: File, pcm: ByteArray, sr: Int) {
         val h = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN)
         h.put("RIFF".toByteArray()).putInt(36 + pcm.size).put("WAVE".toByteArray())

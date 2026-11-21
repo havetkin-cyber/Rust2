@@ -1082,8 +1082,8 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     detail?.let { f ->
         val bmp = remember(f) { android.graphics.BitmapFactory.decodeFile(f.path) }
         androidx.compose.ui.window.Dialog(onDismissRequest = { detail = null }) {
-            Column(Modifier.clip(RoundedCornerShape(20.dp)).background(Farby.plocha).padding(12.dp)) {
-                if (bmp != null) Image(bmp.asImageBitmap(), null, Modifier.fillMaxWidth().aspectRatio(bmp.width.toFloat() / bmp.height).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
+            Column(Modifier.clip(RoundedCornerShape(20.dp)).background(Farby.plocha).verticalScroll(rememberScrollState()).padding(12.dp)) {
+                if (bmp != null) Image(bmp.asImageBitmap(), null, Modifier.heightIn(max = 480.dp).aspectRatio(bmp.width.toFloat() / bmp.height, matchHeightConstraintsFirst = true).align(Alignment.CenterHorizontally).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
                 Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (android.os.Build.VERSION.SDK_INT >= 29) {
                         GradientTlacidlo(stringResource(R.string.obr_ulozit), Icons.Default.SaveAlt) {

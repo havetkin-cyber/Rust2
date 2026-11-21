@@ -1527,8 +1527,9 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
     detail?.let { f ->
         val bmp = remember(f) { Platforma.nacitajObrazok(f) }
         androidx.compose.ui.window.Dialog(onDismissRequest = { detail = null }) {
-            Column(Modifier.clip(RoundedCornerShape(20.dp)).background(Farby.plocha).padding(12.dp)) {
-                if (bmp != null) Image(bmp, null, Modifier.fillMaxWidth().aspectRatio(bmp.width.toFloat() / bmp.height).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
+            // okno sa dá posúvať a obrázok má obmedzenú výšku – inak obrázok na výšku vytlačí rozhýbanie mimo obrazovky
+            Column(Modifier.heightIn(max = 900.dp).clip(RoundedCornerShape(20.dp)).background(Farby.plocha).verticalScroll(rememberScrollState()).padding(12.dp)) {
+                if (bmp != null) Image(bmp, null, Modifier.heightIn(max = 520.dp).aspectRatio(bmp.width.toFloat() / bmp.height, matchHeightConstraintsFirst = true).align(Alignment.CenterHorizontally).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
                 Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     run {
                         GradientTlacidlo(T("obr_ulozit"), Icons.Default.SaveAlt) {

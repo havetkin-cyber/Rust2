@@ -19,9 +19,11 @@ jobs:
       - name: Spustenie ako v appke
         run: |
           cd h
-          printf 'Ahoj, ja som Alexia.\nToto je test hlasu.\n' | LD_LIBRARY_PATH=$PWD/piper ./piper/piper --model sk.onnx --output_raw --espeak_data $PWD/piper/espeak-ng-data > out.raw 2> err.txt; echo "kod=$?"
+          printf 'Ahoj, ja som Alexia.\nToto je test hlasu.\n' | LD_LIBRARY_PATH=$PWD/piper ./piper/piper --model sk.onnx --output_raw --espeak_data $PWD/piper/espeak-ng-data > out.raw 2> err.txt || echo "kod=$?"
           ls -la out.raw; tail -20 err.txt
+          printf 'Ahoj.\n' | LD_LIBRARY_PATH=$PWD/piper ./piper/piper --model sk.onnx --output_file t.wav --espeak_data $PWD/piper/espeak-ng-data 2>&1 | tail -5 || true; ls -la t.wav || true
+          printf 'Ahoj.\n' | LD_LIBRARY_PATH=$PWD/piper ./piper/piper --model sk.onnx --output_raw --espeak_data $PWD/piper/espeak-ng-data --debug 2>&1 >/dev/null | tail -15 || true
       - name: Bez LD_LIBRARY_PATH a bez espeak_data
         run: |
           cd h
-          printf 'Ahoj.\n' | ./piper/piper --model sk.onnx --output_raw > out2.raw 2> err2.txt; echo "kod=$?"; ls -la out2.raw; tail -5 err2.txt
+          printf 'Ahoj.\n' | ./piper/piper --model sk.onnx --output_raw > out2.raw 2> err2.txt || echo "kod=$?"; ls -la out2.raw; tail -5 err2.txt

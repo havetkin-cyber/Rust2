@@ -45,8 +45,19 @@ val sherpaZdroje by tasks.registering {
         tgz.delete()
     }
 }
-sourceSets.main { java.srcDir(sherpaZdroje) }
-kotlin.sourceSets.named("main") { kotlin.srcDir(sherpaZdroje) }
+val sherpaKompilacia by tasks.registering(JavaCompile::class) {
+    source(sherpaZdroje)
+    classpath = files()
+    destinationDirectory.set(layout.buildDirectory.dir("sherpa-classes"))
+    options.release.set(17)
+    options.encoding = "UTF-8"
+}
+val sherpaJar by tasks.registering(Jar::class) {
+    from(sherpaKompilacia)
+    archiveFileName.set("sherpa-onnx-java.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("sherpa-jar"))
+}
+dependencies { implementation(files(sherpaJar)) }
 
 compose.desktop {
     application {

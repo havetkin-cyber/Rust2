@@ -30,6 +30,9 @@ class Nastavenia {
     var aktualnyChat by mutableStateOf(p.getProperty("aktualnyChat"))
     var hudbaVidea by mutableStateOf(p.getProperty("hudbaVidea"))
     var citatNahlas by mutableStateOf(p.getProperty("citatNahlas") == "true")
+    var hlas by mutableStateOf(p.getProperty("hlas") ?: "lili")
+    var hlasRychlost by mutableFloatStateOf(p.getProperty("hlasRychlost")?.toFloatOrNull() ?: 1f)
+    var hlasVyska by mutableFloatStateOf(p.getProperty("hlasVyska")?.toFloatOrNull() ?: 1f)
     var jazykOdpovedi by mutableStateOf(p.getProperty("jazykOdpovedi") ?: if (java.util.Locale.getDefault().language in setOf("sk", "cs")) "sk" else "auto")
     var aktivnyObrazkovyModel by mutableStateOf(p.getProperty("obrazkovyModel"))
     var posunKlavesnica by mutableStateOf(p.getProperty("posunKlavesnica")?.let { it == "true" } ?: Klavesnica.jeSteamOS)
@@ -63,6 +66,9 @@ class Nastavenia {
         p.setProperty("pinServera", pinServera)
         p.setProperty("jazykOdpovedi", jazykOdpovedi)
         p.setProperty("citatNahlas", citatNahlas.toString())
+        p.setProperty("hlas", hlas)
+        p.setProperty("hlasRychlost", hlasRychlost.toString())
+        p.setProperty("hlasVyska", hlasVyska.toString())
         aktualnyChat?.let { p.setProperty("aktualnyChat", it) }
         p.setProperty("autoAktualizacie", autoAktualizacie.toString())
         p.stringPropertyNames().filter { it.startsWith("koder.") }.forEach { p.remove(it) }

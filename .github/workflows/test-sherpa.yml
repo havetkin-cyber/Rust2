@@ -3,15 +3,35 @@ on:
   push:
     branches: [main]
     paths: ['.github/workflows/test-sherpa.yml']
+permissions:
+  contents: write
 jobs:
   mix:
     runs-on: ubuntu-22.04
     steps:
       - run: |
+          pip -q install sherpa-onnx==1.13.2 numpy 2>&1 | tail -1
+          sudo apt-get install -y -qq ffmpeg >/dev/null
           curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2 | tar -xj
-          D=sherpa-onnx-supertonic-3-tts-int8-2026-05-11
-          grep -n -i "voice" $D/README.md | head -30
-          xxd $D/voice.bin | head -5
-          python3 -c "
-          import struct; b=open('$D/voice.bin','rb').read(); print(len(b)); print(struct.unpack('<16i', b[:64])); print(struct.unpack('<16f', b[:64]))"
-          python3 -c "import json; j=json.load(open('$D/tts.json')); print(list(j.keys())); print({k:(v if not isinstance(v,(list,dict)) else type(v).__name__) for k,v in j.items()})"
+          python3 - <<'P'
+          import numpy as np, struct, sherpa_onnx, wave
+          D="sherpa-onnx-supertonic-3-tts-int8-2026-05-11/"
+          b=open(D+"voice.bin","rb").read(); h=struct.unpack("<6q",b[:48]); n1,d1,e1,n2,d2,e2=h
+          f=np.frombuffer(b[48:],np.float32); ttl=f[:n1*d1*e1].reshape(n1,d1*e1); dp=f[n1*d1*e1:].reshape(n2,d2*e2)
+          w=0.5; mt=(1-w)*ttl[0]+w*ttl[4]; md=(1-w)*dp[0]+w*dp[4]
+          out=struct.pack("<6q",n1+1,d1,e1,n2+1,d2,e2)+np.vstack([ttl,mt]).astype(np.float32).tobytes()+np.vstack([dp,md]).astype(np.float32).tobytes()
+          open(D+"voice-mix.bin","wb").write(out)
+          c=sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(supertonic=sherpa_onnx.OfflineTtsSupertonicModelConfig(duration_predictor=D+"duration_predictor.int8.onnx", text_encoder=D+"text_encoder.int8.onnx", vector_estimator=D+"vector_estimator.int8.onnx", vocoder=D+"vocoder.int8.onnx", tts_json=D+"tts.json", unicode_indexer=D+"unicode_indexer.bin", voice_style=D+"voice-mix.bin")))
+          t=sherpa_onnx.OfflineTts(c); print("speakers", t.num_speakers)
+          txt="Ahoj, ja som mix Emy a Hany. Takto znie nový hlas, ktorý vznikol zmiešaním dvoch hlasov."
+          for sid,meno in [(0,"Ema"),(4,"Hana"),(10,"Mix-Ema-Hana")]:
+              g=sherpa_onnx.GenerationConfig(); g.sid=sid; g.num_steps=8; g.extra["lang"]="sk"
+              a=t.generate(txt,g); x=(np.clip(np.array(a.samples),-1,1)*32767).astype(np.int16)
+              with wave.open(meno+".wav","wb") as wv: wv.setnchannels(1); wv.setsampwidth(2); wv.setframerate(a.sample_rate); wv.writeframes(x.tobytes())
+              print(meno, len(x)/a.sample_rate)
+          P
+          for f in *.wav; do ffmpeg -loglevel error -y -i $f -b:a 128k ${f%.wav}.mp3; done
+      - env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release delete test-mix -y --cleanup-tag -R ${{ github.repository }} 2>/dev/null || true
+          gh release create test-mix *.mp3 --prerelease -t "Test mix" -n "Dočasné" -R ${{ github.repository }}

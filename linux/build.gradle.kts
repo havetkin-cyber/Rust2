@@ -36,6 +36,12 @@ val sherpaZdroje by tasks.registering {
             }
             into(out)
         }
+        val n = out.walkTopDown().count { it.isFile }
+        println("sherpa-java: ${tgz.length()} B, súborov $n")
+        if (n == 0) {
+            tarTree(resources.gzip(tgz)).visit { if (relativePath.pathString.contains("java-api")) println(relativePath.pathString) }
+            throw GradleException("sherpa-onnx Java API sa nepodarilo pripraviť")
+        }
         tgz.delete()
     }
 }

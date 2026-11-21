@@ -99,9 +99,22 @@ object Hlas {
         return s.lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
     }
 
+    /**
+     * Novšie súbory hlasov (piper-voices) majú v phoneme_id_map aj viacznakové fonémy („aɪ“…),
+     * s ktorými starší Piper spadne („Phonemes must be one codepoint“). Tieto položky odstránime – Piper ich aj tak nepoužíva.
+     */
+    private fun opravKonfig() = runCatching {
+        val f = File(model().path + ".json")
+        val j = org.json.JSONObject(f.readText())
+        val m = j.getJSONObject("phoneme_id_map")
+        val zle = m.keys().asSequence().filter { it.codePointCount(0, it.length) != 1 }.toList()
+        if (zle.isNotEmpty()) { zle.forEach { m.remove(it) }; f.writeText(j.toString()) }
+    }
+
     fun hovor(text: String) {
         zastav()
         if (!mam()) { Platforma.oznam(T("hlas_najprv")); return }
+        opravKonfig()
         val t = naCitanie(text); if (t.isBlank()) return
         hovori = text
         Thread {
@@ -109,7 +122,7 @@ object Hlas {
                 val pb = ProcessBuilder(program().path, "--model", model().path, "--output_raw", "--espeak_data", File(program().parentFile, "espeak-ng-data").path)
                     .directory(program().parentFile)
                 if (!Platforma.jeWindows) pb.environment()["LD_LIBRARY_PATH"] = program().parentFile.path
-                pb.redirectError(ProcessBuilder.Redirect.DISCARD)
+                pb.redirectError(File(priecinok(), "piper-chyba.log"))
                 val p = pb.start(); proces = p
                 Thread { runCatching { p.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(t); it.newLine() } } }.start()
                 val f = AudioFormat(VZORKOVANIE, 16, 1, true, false)

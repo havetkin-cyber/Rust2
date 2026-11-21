@@ -899,14 +899,34 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                     Text(T("hlas_citat"), color = Farby.text, modifier = Modifier.weight(1f))
                     Switch(checked = n.citatNahlas, onCheckedChange = { n.citatNahlas = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                 }
-                Text(T("hlas_lili", Hlas.MB), color = Farby.tlmene, fontSize = 12.sp)
+                Text(T("hlas_vyber"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Hlas.HLASY.forEach { (id, meno) ->
+                        FilterChip(selected = n.hlas == id, onClick = { Hlas.zastav(); n.hlas = id; n.uloz() }, label = { Text(meno) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                Text(T("hlas_st_info", Hlas.ST_MB), color = Farby.tlmene, fontSize = 12.sp)
                 val p = Hlas.priebeh
                 when {
                     p != null -> LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
-                    Hlas.mam() -> Text(T("hlas_mam"), color = Farby.zelena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
-                    else -> GradientTlacidlo(T("hlas_stiahnut"), Icons.Default.Download, Modifier.padding(top = 6.dp)) { Hlas.stiahni() }
+                    Hlas.mam(n.hlas) -> Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(T("hlas_mam"), color = Farby.zelena, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        val vzorka = T("hlas_vzorka", Hlas.meno(n.hlas))
+                        GradientTlacidlo(if (Hlas.hovori == vzorka) T("hlas_stop") else T("hlas_skusit"), if (Hlas.hovori == vzorka) Icons.Default.StopCircle else Icons.Default.VolumeUp) {
+                            if (Hlas.hovori == vzorka) Hlas.zastav() else Hlas.hovor(vzorka)
+                        }
+                    }
+                    else -> GradientTlacidlo(T("hlas_stiahnut"), Icons.Default.Download, Modifier.padding(top = 6.dp)) { Hlas.stiahni(n.hlas) }
                 }
                 if (Hlas.chyba.isNotBlank()) Text(Hlas.chyba, color = Farby.cervena, fontSize = 13.sp)
+                Text(T("hlas_rychlost", "%.2f".format(n.hlasRychlost)), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+                Slider(value = n.hlasRychlost, onValueChange = { n.hlasRychlost = (it * 20).roundToInt() / 20f }, onValueChangeFinished = { n.uloz() }, valueRange = 0.5f..2f,
+                    colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                Text(T("hlas_vyska", "%.2f".format(n.hlasVyska)), color = Farby.text, fontSize = 14.sp)
+                Slider(value = n.hlasVyska, onValueChange = { n.hlasVyska = (it * 20).roundToInt() / 20f }, onValueChangeFinished = { n.uloz() }, valueRange = 0.7f..1.4f,
+                    colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
+                TextButton(onClick = { n.hlasRychlost = 1f; n.hlasVyska = 1f; n.uloz() }) { Text(T("hlas_predvolene"), color = Farby.ruzova) }
             }
             Karta {
                 Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)

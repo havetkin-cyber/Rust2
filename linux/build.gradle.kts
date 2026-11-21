@@ -1,3 +1,4 @@
+import java.net.URI
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
@@ -26,7 +27,7 @@ val sherpaZdroje by tasks.registering {
         val out = sherpaJava.get().asFile
         if (File(out, "com/k2fsa/sherpa/onnx/OfflineTts.java").exists()) return@doLast
         val tgz = File(temporaryDir, "sherpa.tgz")
-        java.net.URI("https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/refs/tags/v2.0.2").toURL().openStream().use { i -> tgz.outputStream().use { i.copyTo(it) } }
+        URI("https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/refs/tags/v2.0.2").toURL().openStream().use { i -> tgz.outputStream().use { i.copyTo(it) } }
         project.copy {
             from(tarTree(resources.gzip(tgz))) {
                 include("*/sherpa-onnx/java-api/src/main/java/**")

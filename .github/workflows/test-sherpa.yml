@@ -6,16 +6,17 @@ on:
 env:
   T: v2.0.2
 jobs:
-  java:
+  asr:
     runs-on: ubuntu-22.04
     steps:
       - env: { GH_TOKEN: '${{ github.token }}' }
         run: |
-          gh api "repos/k2-fsa/sherpa-onnx/contents/sherpa-onnx/java-api/src/main/java/com/k2fsa/sherpa/onnx?ref=$T" --jq '.[].name' | tr '\n' ' '
-          echo
-          mkdir j && cd j
-          for f in OfflineTts OfflineTtsConfig OfflineTtsModelConfig OfflineTtsSupertonicModelConfig GenerationConfig GeneratedAudio LibraryUtils; do
-            curl -sfL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/java-api/src/main/java/com/k2fsa/sherpa/onnx/$f.java -o $f.java && echo "=== $f" && grep -vE "^\s*(//|\*|/\*)|^\s*$|^import" $f.java | head -80
-          done
-          cd .. && curl -sL -o n.jar https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-native-lib-linux-x64-2.0.2.jar && unzip -l n.jar
-          curl -sL -o w.jar https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-native-lib-win-x64-2.0.2.jar && unzip -l w.jar
+          gh api repos/k2-fsa/sherpa-onnx/releases/tags/asr-models --paginate --jq '.assets[] | select(.name|test("whisper")) | "\(.name) \(.size)"' | sort | head -40
+          gh api "repos/k2-fsa/sherpa-onnx/contents/sherpa-onnx/kotlin-api?ref=$T" --jq '.[].name' | tr '\n' ' '; echo
+          curl -sL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/kotlin-api/OfflineRecognizer.kt -o r.kt; grep -n "^import\|class \|data class\|fun \|var whisper\|Whisper" r.kt | head -80
+          grep -rhn "^import" r.kt
+          for f in FeatureConfig.kt OfflineStream.kt QnnConfig.kt HomophoneReplacerConfig.kt; do curl -sfL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/kotlin-api/$f -o $f && echo "== $f" && grep -n "class \|fun \|^import" $f | head -20; done
+          curl -sL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/java-api/src/main/java/com/k2fsa/sherpa/onnx/OfflineWhisperModelConfig.java | grep -n "public\|private" | head -30
+          curl -sL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/java-api/src/main/java/com/k2fsa/sherpa/onnx/OfflineRecognizer.java | grep -n "public" | head -30
+          curl -sL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/java-api/src/main/java/com/k2fsa/sherpa/onnx/OfflineStream.java | grep -n "public" | head -30
+          curl -sL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/java-api/src/main/java/com/k2fsa/sherpa/onnx/OfflineModelConfig.java | grep -n "public Builder set" | head -40

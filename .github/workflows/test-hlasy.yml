@@ -1,0 +1,39 @@
+name: Test – porovnanie slovenských hlasov
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/test-hlasy.yml', 'test/hlasy/**']
+jobs:
+  hlasy:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Knižnice
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg espeak-ng
+          pip install -q sherpa-onnx soundfile numpy onnxruntime pygoruut
+      - name: Modely
+        run: |
+          mkdir -p m && cd m
+          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2 | tar -xj
+          ls -la sherpa-onnx-supertonic-3-tts-int8-2026-05-11
+          curl -sL https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz | tar -xz
+          curl -sL -o lili.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/sk/sk_SK/lili/medium/sk_SK-lili-medium.onnx
+          curl -sL -o lili.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/sk/sk_SK/lili/medium/sk_SK-lili-medium.onnx.json
+          curl -sL -o neur.onnx https://huggingface.co/neurlang/piper-onnx-slovakspeech-female-slovak/resolve/main/piper-onnx-slovakspeech-female-slovak.onnx
+          curl -sL -o neur.onnx.json https://huggingface.co/neurlang/piper-onnx-slovakspeech-female-slovak/resolve/main/piper-onnx-slovakspeech-female-slovak.onnx.json
+          ls -la
+      - name: Ukážky
+        run: python3 -I test/hlasy/ukazky.py m out
+      - name: MP3
+        run: |
+          cd out
+          for f in *.wav; do ffmpeg -loglevel error -y -i "$f" -b:a 128k "${f%.wav}.mp3"; done
+          ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hlasy
+          path: out/*.mp3

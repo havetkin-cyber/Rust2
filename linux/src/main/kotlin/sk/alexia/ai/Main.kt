@@ -947,7 +947,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                     Switch(checked = n.citatNahlas, onCheckedChange = { n.citatNahlas = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                 }
                 Text(T("hlas_vyber"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Zalamuj {
                     Hlas.HLASY.forEach { (id, meno) ->
                         FilterChip(selected = n.hlas == id, onClick = { Hlas.zastav(); n.hlas = id; n.uloz() }, label = { Text(meno) },
                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
@@ -960,7 +960,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                         Triple(T("mix_b"), n.mixB) { i: Int -> n.mixB = i },
                     )) {
                         Text(nadpis, color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Zalamuj {
                             zeny.forEachIndexed { i, meno ->
                                 FilterChip(selected = vybrany == i, onClick = { Hlas.zastav(); nastav(i); n.uloz() }, label = { Text(meno) },
                                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
@@ -1845,6 +1845,13 @@ private fun Aktualizacia() {
 }
 
 // ---------------------------------------------------------------- história chatov (šifrovaná)
+
+/** riadok, ktorý sa zalomí na ďalší (žiadne skryté položky za okrajom) */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Zalamuj(obsah: @Composable () -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { obsah() }
+}
 
 @Composable
 private fun CitacDialog(zavri: () -> Unit) {

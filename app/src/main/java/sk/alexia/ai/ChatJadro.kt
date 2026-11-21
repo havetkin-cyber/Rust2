@@ -13,9 +13,10 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /** jeObrazkova = žiadosť o obrázok alebo hotový obrázok v chate; jazykovému modelu sa neposiela */
-class Sprava(val rola: String, text: String, val jeObrazkova: Boolean = false, obrazok: String? = null) {
+class Sprava(val rola: String, text: String, val jeObrazkova: Boolean = false, obrazok: String? = null, video: String? = null) {
     var text by mutableStateOf(text)
     var obrazok by mutableStateOf(obrazok)
+    var video by mutableStateOf(video)   // videá robí PC / Legion Go S; tu sa len zachová
 }
 
 /** "/obrazok mačka", "nakresli mačku", "draw a cat" → popis obrázka, inak null */

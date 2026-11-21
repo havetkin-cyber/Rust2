@@ -1,6 +1,13 @@
 // Alexia AI pre Linux: všetko z mobilnej verzie (sd_jni.cpp) + vylepšenie fotky, ktoré je len na Linuxe.
 #include "../../../obrazky/src/main/cpp/sd_jni.cpp"
 
+// nekonečná textúra (obrázok na seba nadväzuje zo všetkých strán) – platí pre ďalšie generovanie
+static bool g_kruh = false;
+F(void, nastavTexturu)(JNIEnv*, jobject, jboolean x) { g_kruh = x; }
+static bool kruhove(sd_img_gen_opt_t* o) {
+    return !g_kruh || (sd_opt_set_bool(o, "circular_x", true) == SD_STATUS_OK && sd_opt_set_bool(o, "circular_y", true) == SD_STATUS_OK);
+}
+
 // ---------------------------------------------------------------- vylepšenie fotky: zväčšenie (Real-ESRGAN)
 // Obsah fotky sa nemení – model len doplní detaily pri zväčšení.
 
@@ -97,7 +104,7 @@ F(jintArray, generujEx)(JNIEnv* env, jobject, jlong h, jstring prompt, jstring n
                   && ok(sd_opt_set_int(o, "width", w)) && ok(sd_opt_set_int(o, "height", v))
                   && ok(sd_opt_set_int(o, "seed", seed))
                   && ok(sd_opt_set_int(o, "sample.steps", kroky))
-                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg))
+                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg)) && kruhove(o)
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
                   && ok(sd_generate_image(ctx, o, &res));
     sd_opt_free(o);
@@ -142,7 +149,7 @@ F(jintArray, generujZPredlohy)(JNIEnv* env, jobject, jlong h, jstring prompt, js
                   && ok(sd_opt_set_int(o, "width", w)) && ok(sd_opt_set_int(o, "height", v))
                   && ok(sd_opt_set_int(o, "seed", seed))
                   && ok(sd_opt_set_int(o, "sample.steps", kroky))
-                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg))
+                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg)) && kruhove(o)
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
                   && ok(sd_opt_set_tensor(o, "init_image", t))
                   && ok(sd_opt_set_float(o, "strength", sila))

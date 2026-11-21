@@ -23,4 +23,6 @@ object Sd {
     external fun generujEx(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, seed: Long, metoda: String, rozmer: IntArray): IntArray?
     /** úprava obrázka z appky podľa predlohy (argb) a nového popisu; sila 0..1 */
     external fun generujZPredlohy(h: Long, prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, seed: Long, metoda: String, argb: IntArray, sila: Float, rozmer: IntArray): IntArray?
+    /** nekonečná textúra pre ďalšie obrázky (generujEx / generujZPredlohy) */
+    external fun nastavTexturu(zapnut: Boolean)
 }

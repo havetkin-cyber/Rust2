@@ -970,6 +970,8 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
         return if (p.isEmpty()) prompt else "${prompt.trim().trimEnd(',', '.')}, background: $p"
     }
     var rozmer by remember { mutableIntStateOf(384) }
+    var typ by remember { mutableStateOf("obrazok") }
+    var pocet by remember { mutableIntStateOf(1) }
     var kroky by remember { mutableIntStateOf(20) }
     var cfg by remember { mutableFloatStateOf(7f) }
     var viac by remember { mutableStateOf(false) }
@@ -1127,15 +1129,33 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                                 colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
                         }
                     }
+                    // pre hry: typ obrázka a sada variantov
+                    Text(T("hra_typ"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("obrazok" to Icons.Default.Image, "textura" to Icons.Default.GridOn, "sprite" to Icons.Default.Layers).forEach { (t, ikona) ->
+                            FilterChip(selected = typ == t, onClick = { typ = t }, label = { Text(T("hra_$t")) },
+                                leadingIcon = { Icon(ikona, null, modifier = Modifier.size(16.dp)) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White, labelColor = Farby.text, iconColor = Farby.text))
+                        }
+                    }
+                    if (typ != "obrazok") Text(T("hra_${typ}_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(T("hra_pocet"), color = Farby.text, fontSize = 14.sp)
+                        listOf(1, 4, 8).forEach { n ->
+                            FilterChip(selected = pocet == n, onClick = { pocet = n }, label = { Text("$n") },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                        }
+                    }
                     Spacer(Modifier.height(6.dp))
                     if (o.generuje) {
+                        if (o.sadaHotovo.second > 1) Text(T("hra_sada", o.sadaHotovo.first + 1, o.sadaHotovo.second), color = Farby.tlmene, fontSize = 13.sp)
                         Text(T("obr_tvorim", (o.priebeh * 100).roundToInt()), color = Farby.text, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                         TextButton(onClick = { o.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
                     } else {
                         GradientTlacidlo(T("obr_vytvorit"), Icons.Default.AutoAwesome, Modifier.fillMaxWidth(),
-                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generuj(popisSPozadim(), negativny, rozmer, kroky, cfg) }
+                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generujHerne(if (typ == "obrazok") popisSPozadim() else prompt, negativny, rozmer, kroky, cfg, typ, pocet) }
                         Text(T("obr_cas"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     }
                     if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
@@ -1245,6 +1265,15 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene)
                     }
                     SeedStitok(f)
+                }
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.SportsEsports, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp))
+                    Text(T("hra_export"), color = Farby.text, fontSize = 13.sp)
+                    val hotovo = T("hra_exportovane")
+                    listOf(512, 1024, 2048, 4096).forEach { n ->
+                        AssistChip(onClick = { o.exportujPreHru(f, n) { e -> Platforma.oznam(if (e != null) "$hotovo ${e.path}" else T("obr_neulozene")) } },
+                            label = { Text("$n", fontSize = 12.sp) }, colors = AssistChipDefaults.assistChipColors(labelColor = Farby.text))
+                    }
                 }
             }
         }

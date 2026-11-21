@@ -102,9 +102,112 @@ object ObrazkyJadro {
         if (stav != StavModelu.CHYBA) stav = StavModelu.ZIADNY
     }
 
-    fun generuj(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float) {
+    fun generuj(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float) = generujHerne(prompt, negativny, rozmer, kroky, cfg, "obrazok", 1)
+
+    /** koľko obrázkov zo sady je hotových (pri sade variantov) */
+    var sadaHotovo by mutableStateOf(0 to 0)
+        private set
+
+    /**
+     * Tvorba aj pre hry: typ "obrazok", "textura" (nekonečná, nadväzuje zo všetkých strán) alebo "sprite" (priehľadné pozadie);
+     * pocet > 1 = sada variantov so seedmi idúcimi po sebe (napr. 12345, 12346 …).
+     */
+    fun generujHerne(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, typ: String, pocet: Int) {
         if (generuje || stav != StavModelu.PRIPRAVENY || prompt.isBlank()) return
-        spust(prompt, negativny, rozmer, rozmer, kroky, cfg) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
+        val p = when (typ) {
+            "textura" -> "${prompt.trim()}, seamless tileable texture, flat even lighting, no shadows, top-down view, high detail"
+            "sprite" -> "${prompt.trim()}, single object, centered, full view, isolated on a plain solid bright green background, no shadow, game asset"
+            else -> prompt
+        }
+        val neg = if (typ == "sprite") listOf(negativny, "green object, background scenery, shadow").filter { it.isNotBlank() }.joinToString(", ") else negativny
+        val zaklad = (10000L..99990L).random()
+        vlakno.execute { Sd.nastavTexturu(typ == "textura") }
+        sadaHotovo = 0 to pocet
+        fun dalsi(i: Int) {
+            if (i >= pocet) { vlakno.execute { Sd.nastavTexturu(false) }; return }
+            spust(p, neg, rozmer, rozmer, kroky, cfg, pevnySeed = zaklad + i, sprite = typ == "sprite") { f, e ->
+                f?.let { posledny = it }
+                if (f == null) { chyba = e; vlakno.execute { Sd.nastavTexturu(false) }; sadaHotovo = 0 to 0; return@spust }
+                sadaHotovo = (i + 1) to pocet
+                dalsi(i + 1)
+            }
+        }
+        dalsi(0)
+    }
+
+    /** sprite: odstráni jednofarebné pozadie (vyplnenie od okrajov), okraje zjemní */
+    private fun odstranPozadie(img: BufferedImage): BufferedImage {
+        val w = img.width; val v = img.height
+        val px = img.getRGB(0, 0, w, v, null, 0, w)
+        // farba pozadia = priemer rohov
+        val rohy = listOf(px[0], px[w - 1], px[(v - 1) * w], px[v * w - 1])
+        val br = rohy.sumOf { it shr 16 and 255 } / 4; val bg = rohy.sumOf { it shr 8 and 255 } / 4; val bb = rohy.sumOf { it and 255 } / 4
+        fun vzdialenost(c: Int): Int { val r = (c shr 16 and 255) - br; val g = (c shr 8 and 255) - bg; val b = (c and 255) - bb; return r * r + g * g + b * b }
+        val prah = 70 * 70
+        val pozadie = BooleanArray(w * v)
+        val fronta = ArrayDeque<Int>()
+        for (x in 0 until w) { fronta += x; fronta += (v - 1) * w + x }
+        for (y in 0 until v) { fronta += y * w; fronta += y * w + w - 1 }
+        while (fronta.isNotEmpty()) {
+            val i = fronta.removeFirst()
+            if (pozadie[i] || vzdialenost(px[i]) > prah) continue
+            pozadie[i] = true
+            val x = i % w; val y = i / w
+            if (x > 0) fronta += i - 1; if (x < w - 1) fronta += i + 1
+            if (y > 0) fronta += i - w; if (y < v - 1) fronta += i + w
+        }
+        val out = BufferedImage(w, v, BufferedImage.TYPE_INT_ARGB)
+        val o = IntArray(w * v)
+        for (i in 0 until w * v) {
+            if (pozadie[i]) { o[i] = 0; continue }
+            // okraj: pixel vedľa pozadia → polopriehľadný a bez zeleného nádychu
+            val x = i % w; val y = i / w
+            val okraj = (x > 0 && pozadie[i - 1]) || (x < w - 1 && pozadie[i + 1]) || (y > 0 && pozadie[i - w]) || (y < v - 1 && pozadie[i + w])
+            var c = px[i] and 0xFFFFFF
+            if (okraj) {
+                val r = c shr 16 and 255; var g = c shr 8 and 255; val b = c and 255
+                g = minOf(g, maxOf(r, b))   // odstráni zelený lem
+                c = (r shl 16) or (g shl 8) or b
+            }
+            o[i] = ((if (okraj) 0xB0 else 0xFF) shl 24) or c
+        }
+        out.setRGB(0, 0, w, v, o, 0, w)
+        return out
+    }
+
+    /** export pre hru: presne N×N (mocnina dvoch); malé obrázky najprv AI zväčší; priehľadnosť ostane */
+    fun exportujPreHru(f: File, n: Int, hotovo: (File?) -> Unit) {
+        Thread {
+            val r = runCatching {
+                var img = ImageIO.read(f)
+                val alfa = img.colorModel.hasAlpha()
+                if (maxOf(img.width, img.height) * 1.5 < n && VylepsenieJadro.mamModel()) {
+                    val px = img.getRGB(0, 0, img.width, img.height, null, 0, img.width)
+                    val roz = IntArray(2)
+                    val v = VylepsenieJadro.zvacsiSnimku(px.map { it or -0x1000000 }.toIntArray(), img.width, img.height, roz)
+                    val vacsi = BufferedImage(roz[0], roz[1], if (alfa) BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB)
+                    if (alfa) {
+                        // priehľadnosť zväčšíme zvlášť (AI pracuje len s farbami)
+                        val maska = BufferedImage(roz[0], roz[1], BufferedImage.TYPE_INT_ARGB)
+                        maska.createGraphics().apply { setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR); drawImage(img, 0, 0, roz[0], roz[1], null); dispose() }
+                        val m = maska.getRGB(0, 0, roz[0], roz[1], null, 0, roz[0])
+                        for (i in v.indices) v[i] = (m[i] and -0x1000000) or (v[i] and 0xFFFFFF)
+                    }
+                    vacsi.setRGB(0, 0, roz[0], roz[1], v, 0, roz[0]); img = vacsi
+                }
+                val out = BufferedImage(n, n, if (alfa) BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB)
+                val g = out.createGraphics()
+                g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY)
+                // sprite sa zmestí celý (priehľadný okraj), obrázok/textúra vyplní celý štvorec
+                val k = if (alfa) n.toDouble() / maxOf(img.width, img.height) else n.toDouble() / minOf(img.width, img.height)
+                val w = (img.width * k).toInt(); val v = (img.height * k).toInt()
+                g.drawImage(img, (n - w) / 2, (n - v) / 2, w, v, null); g.dispose()
+                val d = File(Platforma.obrazkyPouzivatela, "Alexia AI/hra").apply { mkdirs() }
+                File(d, f.nameWithoutExtension + "_${n}.png").also { ImageIO.write(out, "png", it) }
+            }
+            Platforma.naHlavnom { hotovo(r.getOrNull()) }
+        }.start()
     }
 
     /** veľkosť obrázkového modelu na disku */
@@ -178,7 +281,7 @@ object ObrazkyJadro {
 
     /** spustí tvorbu na vlákne sd (po prípadnom načítaní modelu, ktoré je v rade pred ňou) */
     private fun spust(prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, doGalerie: Boolean = true,
-                      pevnySeed: Long? = null, predloha: IntArray? = null, sila: Float = 0.6f, hotovo: (File?, String) -> Unit) {
+                      pevnySeed: Long? = null, predloha: IntArray? = null, sila: Float = 0.6f, sprite: Boolean = false, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
         // krátky seed (5 číslic), aby sa dal ľahko napísať: „uprav seed 12345 …“
         val seed = pevnySeed ?: (10000L..99999L).random()
@@ -202,8 +305,9 @@ object ObrazkyJadro {
                          else Sd.generujEx(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, r)
                 if (px != null) {
                     runCatching {
-                        val img = BufferedImage(r[0], r[1], BufferedImage.TYPE_INT_RGB)
+                        var img = BufferedImage(r[0], r[1], BufferedImage.TYPE_INT_RGB)
                         img.setRGB(0, 0, r[0], r[1], px, 0, r[0])
+                        if (sprite) img = odstranPozadie(img)
                         subor = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
                         ImageIO.write(img, "png", subor!!)
                         // údaje o obrázku: seed a popis – podľa nich sa dá obrázok neskôr upraviť

@@ -14,6 +14,16 @@ object T {
     }
 
     private val sk = mapOf(
+        "hra_typ" to "Typ",
+        "hra_obrazok" to "Obrázok",
+        "hra_textura" to "Nekonečná textúra",
+        "hra_sprite" to "Sprite (priehľadný)",
+        "hra_textura_info" to "Obrázok na seba nadväzuje zo všetkých strán – tráva, kameň, piesok, stena…",
+        "hra_sprite_info" to "Postava alebo predmet bez pozadia – uloží sa ako PNG s priehľadnosťou.",
+        "hra_pocet" to "Počet variantov",
+        "hra_sada" to "Variant %1\$d z %2\$d",
+        "hra_export" to "Pre hru:",
+        "hra_exportovane" to "Uložené:",
         "upr_zakazane" to "Takúto úpravu appka nespraví – úpravy, ktoré robia z obrázka nahý alebo intímny obsah, sú zablokované.",
         "upr_nenajdene" to "Obrázok so seedom %1\$d som nenašiel. Upraviť sa dajú len obrázky, ktoré vytvorila a podpísala táto appka (pod obrázkom je „Seed …“) – fotky zvonka nie.",
         "upr_vzdialene" to "Úprava obrázka zatiaľ funguje len priamo na zariadení s obrázkovým modelom.",
@@ -268,6 +278,16 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "hra_typ" to "Type",
+        "hra_obrazok" to "Image",
+        "hra_textura" to "Seamless texture",
+        "hra_sprite" to "Sprite (transparent)",
+        "hra_textura_info" to "The image tiles on all sides – grass, stone, sand, wall…",
+        "hra_sprite_info" to "A character or item without background – saved as PNG with transparency.",
+        "hra_pocet" to "Variants",
+        "hra_sada" to "Variant %1\$d of %2\$d",
+        "hra_export" to "For a game:",
+        "hra_exportovane" to "Saved:",
         "upr_zakazane" to "The app will not make this edit – edits that turn an image into nude or intimate content are blocked.",
         "upr_nenajdene" to "No image with seed %1\$d found. Only images created in the app can be edited (they show “Seed …”).",
         "upr_vzdialene" to "Editing images works only directly on the device with the image model.",

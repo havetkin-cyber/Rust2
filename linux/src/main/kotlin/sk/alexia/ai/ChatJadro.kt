@@ -31,9 +31,9 @@ fun upravaObrazka(t: String): Pair<Long, String>? {
 fun silaUpravy(t: String): Float {
     val x = t.lowercase()
     return when {
-        listOf("jemne", "trochu", "mierne", "slightly", "drž sa", "drz sa", "predloh").any { it in x } -> 0.45f
-        listOf("výrazne", "vyrazne", "úplne", "uplne", "silno", "strongly", "completely").any { it in x } -> 0.8f
-        else -> 0.6f
+        listOf("jemne", "trochu", "mierne", "slightly", "drž sa", "drz sa", "predloh").any { it in x } -> 0.4f
+        listOf("výrazne", "vyrazne", "úplne", "uplne", "silno", "strongly", "completely").any { it in x } -> 0.75f
+        else -> 0.55f
     }
 }
 

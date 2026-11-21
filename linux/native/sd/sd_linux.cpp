@@ -153,6 +153,9 @@ F(jintArray, generujZPredlohy)(JNIEnv* env, jobject, jlong h, jstring prompt, js
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
                   && ok(sd_opt_set_tensor(o, "init_image", t))
                   && ok(sd_opt_set_float(o, "strength", sila))
+                  // sila = skutočná úroveň šumu (0.4 = 60 % predlohy ostane). Bez toho by pri Z-Image/FLUX
+                  // aj „0.6“ začínalo takmer z čistého šumu a vznikol by úplne nový obrázok.
+                  && ok(sd_opt_set_string(o, "sample.args", "strength_as_noise_level=true,force_first_sigma=true"))
                   && ok(sd_generate_image(ctx, o, &res));
     sd_opt_free(o);
     if (t) sd_tensor_free(t);

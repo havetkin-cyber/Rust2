@@ -19,6 +19,7 @@ jobs:
       - name: Spustenie ako v appke
         run: |
           cd h
+          python3 -c "import json; j=json.load(open('sk.onnx.json')); m=j['phoneme_id_map']; print('viacznakove', [k for k in m if len(k)!=1]); j['phoneme_id_map']={k:v for k,v in m.items() if len(k)==1}; json.dump(j, open('sk.onnx.json','w'), ensure_ascii=False)"
           printf 'Ahoj, ja som Alexia.\nToto je test hlasu.\n' | LD_LIBRARY_PATH=$PWD/piper ./piper/piper --model sk.onnx --output_raw --espeak_data $PWD/piper/espeak-ng-data > out.raw 2> err.txt || echo "kod=$?"
           ls -la out.raw; tail -20 err.txt
           printf 'Ahoj.\n' | LD_LIBRARY_PATH=$PWD/piper ./piper/piper --model sk.onnx --output_file t.wav --espeak_data $PWD/piper/espeak-ng-data 2>&1 | tail -5 || true; ls -la t.wav || true

@@ -160,7 +160,9 @@ object ObrazkyJadro {
     fun nacitaj(cesta: String, uvolnitChat: Boolean = true) {
         val sadaV = Katalog.obrazky.find { "sada:" + it.id == cesta }
         val setrit = sadaV?.video != null && ChatJadro.nastavenia.setritVram
-        if (nacitany == cesta && nacitaneSetrenie == setrit && (stav == StavModelu.PRIPRAVENY || stav == StavModelu.NACITAVA)) return
+        val tae = sadaV?.let { suborSkladania(it) }?.takeIf { it.exists() && it.length() > 1_000_000 }
+        val kluc = "$setrit|${tae?.name}"
+        if (nacitany == cesta && nacitaneSetrenie == kluc && (stav == StavModelu.PRIPRAVENY || stav == StavModelu.NACITAVA)) return
         aktivnyModel = cesta
         if (uvolnitChat) ChatJadro.uvolniPamat()
         stav = StavModelu.NACITAVA; chyba = ""
@@ -172,14 +174,16 @@ object ObrazkyJadro {
                 val k = sada.subory.keys.toList()
                 val hod = k.map { kk -> koderSubor(sada, kk) ?: suborSady(sada, sada.subory.getValue(kk)).absolutePath }
                 // Šetriť VRAM: textový kodér počíta na CPU (v RAM, raz na začiatku); VAE ostane na grafike a skladá po kúskoch
-                val kk = if (setrit) k + "backend" else k
-                val hh = if (setrit) hod + "te=cpu" else hod
+                var kk = if (setrit) k + "backend" else k
+                var hh = if (setrit) hod + "te=cpu" else hod
+                // rýchle skladanie videa: malý autoenkóder (TAE / LightTAE) namiesto plného VAE
+                if (tae != null) { kk = kk + "taesd_path"; hh = hh + tae.absolutePath }
                 Sd.nacitajViac(kk.toTypedArray(), hh.toTypedArray(), vl, sada.fa)
             } else Sd.nacitaj(cesta, vl)
             val e = if (novy == 0L) Sd.chyba() else ""
             h = novy
             Platforma.naHlavnom {
-                if (novy != 0L) { stav = StavModelu.PRIPRAVENY; nacitany = cesta; nacitaneSetrenie = setrit }
+                if (novy != 0L) { stav = StavModelu.PRIPRAVENY; nacitany = cesta; nacitaneSetrenie = kluc }
                 else { stav = StavModelu.CHYBA; nacitany = null; chyba = e }
             }
         }
@@ -471,7 +475,37 @@ object ObrazkyJadro {
 
     fun i2vSada(): ObrazkovaSada? = Katalog.obrazky.firstOrNull { it.video?.i2v == true && mamSadu(it) }
 
-    private var nacitaneSetrenie = false
+    private var nacitaneSetrenie = ""
+
+    /** skladanie videa: "vae" (plné, najkvalitnejšie), "tae" (rýchle), "lighttae" (rýchle, kvalita blízka VAE) – lightx2v/Autoencoders */
+    private fun suborySkladania(s: ObrazkovaSada): Map<String, String> = when (s.id) {
+        "wan22-5b" -> mapOf("tae" to "taew2_2.safetensors", "lighttae" to "lighttaew2_2.safetensors")
+        "wan21-1.3b" -> mapOf("tae" to "taew2_1.safetensors", "lighttae" to "lighttaew2_1.safetensors")
+        else -> emptyMap()
+    }
+    fun maSkladanie(s: ObrazkovaSada) = suborySkladania(s).isNotEmpty()
+    fun suborSkladania(s: ObrazkovaSada): File? = suborySkladania(s)[ChatJadro.nastavenia.skladanie]?.let { File(priecinokSady(s), it) }
+    var skladaniePriebeh by mutableStateOf<Float?>(null)
+        private set
+
+    /** zvolí spôsob skladania; malý súbor (~25–45 MB) sa stiahne raz, model sa potom načíta znova */
+    fun nastavSkladanie(typ: String) {
+        val n = ChatJadro.nastavenia
+        n.skladanie = typ; n.uloz()
+        val s = aktivnaSada()?.takeIf { maSkladanie(it) } ?: Katalog.obrazky.firstOrNull { it.video != null && mamSadu(it) && maSkladanie(it) }
+        val f = s?.let { suborSkladania(it) }
+        fun znova() { if (s != null && jeAktivna(s)) { nacitany = null; nacitaj("sada:" + s.id, uvolnitChat = false) } }
+        if (f == null || (f.exists() && f.length() > 1_000_000)) { znova(); return }
+        if (skladaniePriebeh != null) return
+        skladaniePriebeh = 0f
+        Thread {
+            val r = runCatching { Hlas.stiahniSubor("https://huggingface.co/lightx2v/Autoencoders/resolve/main/${f.name}", f) { p -> Platforma.naHlavnom { skladaniePriebeh = p } } }
+            Platforma.naHlavnom {
+                skladaniePriebeh = null
+                r.onSuccess { znova() }.onFailure { Platforma.oznam("⚠ " + (it.message ?: "")) }
+            }
+        }.start()
+    }
 
     /** sekundy → počet snímok (Wan chce 4·k+1), najviac ~5 s podľa modelu */
     fun snimokPre(v: VideoNastavenie, sekundy: Int): Int {
@@ -513,11 +547,14 @@ object ObrazkyJadro {
     }
 
     /** dĺžky, ktoré sa skladajú z viacerých kúskov (nadväzovanie, len modely s obrázkom → video) */
-    val DLHE = listOf(10, 20, 30, 60)
+    val DLHE = listOf(10, 20, 30, 60, 120, 180)
     private const val KUS_SEKUND = 2
     @Volatile private var kusovSpolu = 1
     @Volatile private var kusHotovych = 0
     var kusText by mutableStateOf("")
+    /** po krokoch sa skladajú snímky (VAE/TAE hlási vlastný priebeh od nuly) */
+    var skladam by mutableStateOf(false)
+        private set
         private set
 
     fun natocAI(popis: String, sekundy: Int?, predloha: File? = null, hotovo: (File?, String) -> Unit) {
@@ -539,11 +576,19 @@ object ObrazkyJadro {
         val snimokKusa = snimokPre(v, if (nadvazovat) KUS_SEKUND else dlzka)
         kusovSpolu = kusov; kusHotovych = 0; kusText = if (kusov > 1) T("vai_kus", 1, kusov) else ""
         generuje = true; priebeh = 0f; chyba = ""
+        skladam = false; zrusVideo = false
         Thread {
+            var kusPredtym = -1; var videlKonec = false; var sklada = false
             while (true) {
                 Thread.sleep(500)
-                val p = (kusHotovych + Sd.priebeh()) / kusovSpolu; var dalej = true
-                javax.swing.SwingUtilities.invokeAndWait { if (generuje) priebeh = p else dalej = false }
+                val sp = Sd.priebeh(); val kus = kusHotovych
+                if (kus != kusPredtym) { kusPredtym = kus; videlKonec = false; sklada = false }
+                if (sp >= 0.99f) videlKonec = true
+                else if (videlKonec && sp < 0.9f) sklada = true     // kroky dobehli, teraz VAE/TAE hlási vlastný priebeh
+                val p = if (sklada) sp else (kus + sp) / kusovSpolu
+                val sk = sklada || sp >= 0.99f
+                var dalej = true
+                javax.swing.SwingUtilities.invokeAndWait { if (generuje) { priebeh = p; skladam = sk } else dalej = false }
                 if (!dalej) break
             }
         }.apply { isDaemon = true }.start()
@@ -578,20 +623,40 @@ object ObrazkyJadro {
                         // fps podľa modelu (Wan 2.1 = 16, Wan 2.2 = 24) – engine vracia 16 pre všetky, video by bolo spomalené
                         val fps = v.fps
                         val snimka = w * vy * 3
+                        // „rovno vo Full HD / 4K“: AI zväčší len skutočné snímky (nie dopočítané), až potom sa dopočíta plynulosť
+                        val zv = ChatJadro.nastavenia.videoZvacsenie.takeIf { it > 0 && VylepsenieJadro.mamModel() } ?: 0
                         if (ffp == null) {
                             // náhľad = prvá snímka
                             val obr = BufferedImage(w, vy, BufferedImage.TYPE_INT_RGB)
                             val pxN = IntArray(w * vy) { i -> ((data[i * 3].toInt() and 255) shl 16) or ((data[i * 3 + 1].toInt() and 255) shl 8) or (data[i * 3 + 2].toInt() and 255) }
                             obr.setRGB(0, 0, w, vy, pxN, 0, w); ImageIO.write(obr, "png", File(out.path.removeSuffix(".mp4") + ".png"))
                             // MP4: dvojnásobná plynulosť (dopočítané snímky) a 2× väčšie; snímky sa zapisujú priebežne
-                            ffp = ProcessBuilder(ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$vy", "-r", "$fps", "-i", "-",
-                                "-vf", "minterpolate=fps=${cielFps(fps)}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,scale=${w * 2}:${vy * 2}:flags=lanczos",
+                            val vstupRoz = if (zv > 0) "${w * 4}x${vy * 4}" else "${w}x$vy"
+                            val k = if (zv > 0) zv.toDouble() / minOf(w, vy) else 2.0
+                            val tw = (w * k).toInt() / 2 * 2; val th = (vy * k).toInt() / 2 * 2
+                            val filter = if (zv > 0) "scale=$tw:$th:flags=lanczos,minterpolate=fps=${cielFps(fps)}:mi_mode=mci:mc_mode=aobmc:vsbmc=1"
+                                         else "minterpolate=fps=${cielFps(fps)}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,scale=$tw:$th:flags=lanczos"
+                            ffp = ProcessBuilder(ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", vstupRoz, "-r", "$fps", "-i", "-",
+                                "-vf", filter,
                                 "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out.path)
                                 .redirectErrorStream(true).start().also { pr -> Thread { runCatching { pr.inputStream.readBytes() } }.start() }
                         }
                         // ďalší kúsok začína posledným snímkom predchádzajúceho → prvý vynecháme (bol by dvakrát)
                         val od = if (kus == 0) 0 else 1
-                        ffp!!.outputStream.write(data, od * snimka, (t - od) * snimka)
+                        if (zv > 0) {
+                            val roz = IntArray(2); val obr = IntArray(w * vy)
+                            for (fi in od until t) {
+                                if (zrusVideo) throw IllegalStateException(T("zrusit"))
+                                val b0 = fi * snimka
+                                for (i in 0 until w * vy) obr[i] = -0x1000000 or ((data[b0 + i * 3].toInt() and 255) shl 16) or ((data[b0 + i * 3 + 1].toInt() and 255) shl 8) or (data[b0 + i * 3 + 2].toInt() and 255)
+                                val vys = VylepsenieJadro.zvacsiSnimku(obr, w, vy, roz)
+                                val rgb = ByteArray(roz[0] * roz[1] * 3)
+                                for (i in 0 until roz[0] * roz[1]) { val c = vys[i]; rgb[i * 3] = (c shr 16).toByte(); rgb[i * 3 + 1] = (c shr 8).toByte(); rgb[i * 3 + 2] = c.toByte() }
+                                ffp!!.outputStream.write(rgb)
+                                val n = fi - od + 1; val spolu = t - od
+                                Platforma.naHlavnom { kusText = T("vid_zvacsujem", n, spolu) + if (kusov > 1) " · " + T("vai_kus", kus + 1, kusov) else "" }
+                            }
+                        } else ffp!!.outputStream.write(data, od * snimka, (t - od) * snimka)
                         zapisanych += t - od
                         // posledná snímka → predloha ďalšieho kúska
                         val z = (t - 1) * snimka
@@ -607,7 +672,7 @@ object ObrazkyJadro {
                 }
             }
             Platforma.naHlavnom {
-                generuje = false; priebeh = 0f; kusText = ""
+                generuje = false; priebeh = 0f; kusText = ""; skladam = false
                 // vráti voľbu obrázkového modelu (načíta sa, keď ho bude treba)
                 if (predtym != null && predtym != "sada:" + sada.id) { uvolniPamat(); aktivnyModel = predtym }
                 hotovo(subor, e)
@@ -618,7 +683,8 @@ object ObrazkyJadro {
     /** chat + obrázky spolu do ~10 GB, aby na 16 GB ostalo miesto pre systém */
     private const val LIMIT_SPOLU = 10_000L * 1024 * 1024
 
-    fun zrus() { if (h != 0L) Sd.zrus(h) }
+    @Volatile private var zrusVideo = false
+    fun zrus() { zrusVideo = true; if (h != 0L) Sd.zrus(h) }
 
     fun zmazObrazok(f: File) { galeria.remove(f); if (posledny == f) posledny = null; f.delete(); File(f.path + ".json").delete() }
 

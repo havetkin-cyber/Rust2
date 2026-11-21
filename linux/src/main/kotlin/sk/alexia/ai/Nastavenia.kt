@@ -36,6 +36,10 @@ class Nastavenia {
     var setritVram by mutableStateOf(p.getProperty("setritVram") == "true")
     /** video: najprv presný obrázok (FLUX…), potom ho Wan 2.2 rozhýbe */
     var videoCezObrazok by mutableStateOf(p.getProperty("videoCezObrazok") == "true")
+    /** skladanie videa: vae / tae / lighttae */
+    var skladanie by mutableStateOf(p.getProperty("skladanie") ?: "vae")
+    /** AI zväčšenie priamo pri tvorbe videa: 0 = nie, 1080 = Full HD, 2160 = 4K */
+    var videoZvacsenie by mutableIntStateOf(p.getProperty("videoZvacsenie")?.toIntOrNull() ?: 0)
     var hlasRychlost by mutableFloatStateOf(p.getProperty("hlasRychlost")?.toFloatOrNull() ?: 1f)
     var hlasVyska by mutableFloatStateOf(p.getProperty("hlasVyska")?.toFloatOrNull() ?: 1f)
     var hlasHrubka by mutableFloatStateOf(p.getProperty("hlasHrubka")?.toFloatOrNull() ?: 1f)
@@ -80,6 +84,8 @@ class Nastavenia {
         p.setProperty("dlzkaVidea", dlzkaVidea.toString())
         p.setProperty("setritVram", setritVram.toString())
         p.setProperty("videoCezObrazok", videoCezObrazok.toString())
+        p.setProperty("skladanie", skladanie)
+        p.setProperty("videoZvacsenie", videoZvacsenie.toString())
         p.setProperty("hlasRychlost", hlasRychlost.toString())
         p.setProperty("hlasVyska", hlasVyska.toString())
         p.setProperty("hlasHrubka", hlasHrubka.toString())

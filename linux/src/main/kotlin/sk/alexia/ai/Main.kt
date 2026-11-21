@@ -1322,8 +1322,8 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                     if (o.generuje) {
                         if (o.sadaHotovo.second > 1) Text(T("hra_sada", o.sadaHotovo.first + 1, o.sadaHotovo.second), color = Farby.tlmene, fontSize = 13.sp)
                         if (o.kusText.isNotEmpty()) Text(o.kusText, color = Farby.tlmene, fontSize = 13.sp)
-                        if (videa && o.priebeh >= 0.995f) {
-                            Text(T("vid_skladam"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                        if (videa && o.skladam) {
+                            Text(T("vid_skladam_p", (o.priebeh * 100).roundToInt()), color = Farby.text, fontWeight = FontWeight.SemiBold)
                             Text(T("vid_skladam_info"), color = Farby.tlmene, fontSize = 12.sp)
                         } else Text(T(if (videa) "vid_tvorim" else "obr_tvorim", (o.priebeh * 100).roundToInt()), color = Farby.text, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
@@ -1349,6 +1349,32 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                             Switch(checked = ChatJadro.nastavenia.setritVram, onCheckedChange = { val ns = ChatJadro.nastavenia; ns.setritVram = it; ns.uloz() },
                                 colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                         }
+                        // skladanie snímok: VAE (kvalita) / TAE / LightTAE (rýchle)
+                        val nsk = ChatJadro.nastavenia
+                        if (o.aktivnaSada()?.let { o.maSkladanie(it) } == true || o.videoSada()?.let { o.maSkladanie(it) } == true) {
+                            Text(T("vid_skladanie"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("vae", "lighttae", "tae").forEach { t ->
+                                    FilterChip(selected = nsk.skladanie == t, onClick = { if (!o.generuje) o.nastavSkladanie(t) }, label = { Text(T("vid_skl_$t")) },
+                                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                                }
+                            }
+                            o.skladaniePriebeh?.let { sp -> LinearProgressIndicator(progress = { sp }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = Farby.ruzova, trackColor = Farby.plocha2) }
+                            Text(T("vid_skl_info_${nsk.skladanie}"), color = Farby.tlmene, fontSize = 12.sp)
+                        }
+                        // AI zväčšenie rovno pri tvorbe (zväčšujú sa len skutočné snímky)
+                        Text(T("vid_zvacsenie"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(0 to T("vid_zv_nie"), 1080 to "Full HD", 2160 to "4K").forEach { (r, nazov) ->
+                                FilterChip(selected = nsk.videoZvacsenie == r, onClick = {
+                                    nsk.videoZvacsenie = r; nsk.uloz()
+                                    if (r > 0 && !VylepsenieJadro.mamModel()) VylepsenieJadro.stiahniModel()
+                                }, label = { Text(nazov) },
+                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                            }
+                        }
+                        VylepsenieJadro.priebehStahovania?.let { sp -> LinearProgressIndicator(progress = { sp }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = Farby.ruzova, trackColor = Farby.plocha2) }
+                        if (nsk.videoZvacsenie > 0) Text(T("vid_zv_info"), color = Farby.tlmene, fontSize = 12.sp)
                         // najprv presný obrázok (FLUX…), potom ho Wan 2.2 rozhýbe
                         val ns2 = ChatJadro.nastavenia
                         val mozeCezObr = o.i2vSada() != null && o.obrazkovaPreVideo() != null

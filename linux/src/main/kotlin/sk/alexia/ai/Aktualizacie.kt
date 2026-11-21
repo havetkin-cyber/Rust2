@@ -14,7 +14,8 @@ import kotlin.system.exitProcess
  * Verzia zo ZIP otvorí stiahnutie v prehliadači.
  */
 object Aktualizacie {
-    private const val BASE = "https://github.com/havetkin-cyber/rust2/releases/latest/download/"
+    /** stály kanál (vydanie „aktualizacie“) – Windows a Linux sa tam nahrávajú vždy, nezávisle od vydaní APK */
+    private const val BASE = "https://github.com/havetkin-cyber/Rust2/releases/download/aktualizacie/"
     private val appImage: String? = System.getenv("APPIMAGE")?.takeIf { it.isNotBlank() && File(it).exists() }
     val mojaVerzia: String = System.getProperty("jpackage.app-version") ?: "0"
 

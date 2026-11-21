@@ -8,17 +8,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - run: |
-          for r in leejet/flux-3-image-klein-GGUF Qwen/Qwen3-VL-4B-Instruct-GGUF unsloth/Qwen3-VL-4B-Instruct-GGUF Comfy-Org/flux2-dev Comfy-Org/flux2-klein Comfy-Org/flux-3-image-klein black-forest-labs/flux-3-image-klein-comfy; do
-            echo "== $r"
-            curl -s "https://huggingface.co/api/models/$r?blobs=true" | python3 -c "
-          import sys,json
-          try: j=json.load(sys.stdin)
-          except Exception as e: print('ERR',e); sys.exit()
-          print('gated',j.get('gated'), j.get('error',''))
-          for s in j.get('siblings',[]):
-              n=s['rfilename']
-              if n.endswith(('.gguf','.safetensors')) and ('vae' in n.lower() or 'ae.' in n.lower() or 'Q4' in n or 'Q3' in n or 'Q5' in n or 'Q6' in n or 'Q8' in n or 'klein' in n.lower()): print(' ',n, s.get('size'))
-          "
-          done
-          curl -s "https://huggingface.co/api/models?search=flux2-vae&limit=10" | python3 -c "import sys,json; [print(m['id']) for m in json.load(sys.stdin)]"
-          curl -s "https://huggingface.co/api/models?search=flux.2+vae&limit=10" | python3 -c "import sys,json; [print(m['id']) for m in json.load(sys.stdin)]"
+          curl -s "https://huggingface.co/api/models/lightx2v/Autoencoders" | python3 -c "
+          import sys,json; j=json.load(sys.stdin); print('gated',j.get('gated'))
+          [print(s['rfilename']) for s in j.get('siblings',[])]"
+          curl -sIL -o /dev/null -w "%{http_code} %{size_download}\n" https://github.com/madebyollin/taehv/raw/refs/heads/main/safetensors/taew2_2.safetensors
+          curl -sL https://github.com/madebyollin/taehv/raw/refs/heads/main/safetensors/taew2_2.safetensors -o t.st; ls -la t.st
+          python3 -c "
+          import json,struct; b=open('t.st','rb').read(); n=struct.unpack('<Q',b[:8])[0]; h=json.loads(b[8:8+n]); ks=[k for k in h if k!='__metadata__']; print(len(ks), ks[:8])"
+          for f in lighttaew2_2.safetensors lighttaew2_2.pth; do curl -sL -o $f https://huggingface.co/lightx2v/Autoencoders/resolve/main/$f; ls -la $f; done
+          python3 -c "
+          import json,struct; b=open('lighttaew2_2.safetensors','rb').read(); n=struct.unpack('<Q',b[:8])[0]; h=json.loads(b[8:8+n]); ks=[k for k in h if k!='__metadata__']; print(len(ks), ks[:8])" || true

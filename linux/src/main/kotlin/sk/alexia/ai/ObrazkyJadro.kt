@@ -71,7 +71,12 @@ object ObrazkyJadro {
             "Q8_0 · 4,3 GB · najpresnejší" to "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q8_0.gguf",
         )
         else -> listOf("pôvodný" to "")
-    }
+    }.let { l -> if (koderKluc(s) == "t5xxl_path" && s.video != null) listOf(
+            "Q3_K_M · rýchlejší" to "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q3_K_M.gguf",
+            "Q4_K_M · pôvodný" to "",
+            "Q6_K · presnejší" to "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q6_K.gguf",
+            "Q8_0 · najpresnejší" to "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+        ) else l }
 
     /** zvolený kodér: null = pôvodný zo sady, inak cesta k súboru */
     fun koderSubor(s: ObrazkovaSada, kluc: String): String? {
@@ -87,16 +92,42 @@ object ObrazkyJadro {
     var koderPriebeh by mutableStateOf<Float?>(null)
         private set
 
-    /** nastaví kodér (URL z volieb – stiahne ho; cesta k vlastnému .gguf; "" = pôvodný) a sadu znova načíta */
-    fun nastavKoder(s: ObrazkovaSada, volba: String) {
+    /** aká architektúra kodéra sa hodí k sade (null = nevieme overiť) */
+    private fun potrebnyKoder(s: ObrazkovaSada): Pair<String, Long?>? = when (koderKluc(s)) {
+        "llm_path" -> "qwen3" to 2560L      // Z-Image: Qwen3 4B
+        else -> null
+    }
+
+    /** chyba, ak súbor nie je kompatibilný kodér pre sadu (napr. Mistral 7B namiesto Qwen3 4B) */
+    fun overKoder(s: ObrazkovaSada, f: File): String? {
+        val pot = potrebnyKoder(s) ?: return null
+        if (!f.name.endsWith(".gguf", true)) return null
+        val i = Gguf.info(f) ?: return T("koder_necitatelny")
+        if (i.architektura != pot.first || (pot.second != null && i.embedding != pot.second))
+            return T("koder_nekompatibilny", "${i.architektura}${i.embedding?.let { " · $it" } ?: ""}", "${pot.first} · ${pot.second}")
+        return null
+    }
+
+    /** nastaví kodér (URL – stiahne ho; cesta k vlastnému súboru; "" = pôvodný) a sadu znova načíta */
+    fun nastavKoder(s: ObrazkovaSada, volbaPouzivatela: String) {
         if (koderPriebeh != null) return
         val n = ChatJadro.nastavenia
-        fun hotovo() { n.nastavKoder(s.id, volba.ifEmpty { null }); if (jeAktivna(s)) { nacitany = null; nacitaj("sada:" + s.id) } }
-        if (!volba.startsWith("http") || suborSady(s, volba).exists()) { hotovo(); return }
+        chyba = ""
+        fun hotovo(v: String) {
+            val subor = if (v.startsWith("http")) suborSady(s, v) else File(v)
+            if (v.isNotEmpty()) overKoder(s, subor)?.let { e -> chyba = e; if (v.startsWith("http")) subor.delete(); Platforma.oznam(e); return }
+            n.nastavKoder(s.id, v.ifEmpty { null }); if (jeAktivna(s)) { nacitany = null; nacitaj("sada:" + s.id) }
+        }
         koderPriebeh = 0f
         Thread {
-            val r = runCatching { Modely.stiahni(volba, { p -> Platforma.naHlavnom { koderPriebeh = p } }, { false }, priecinokSady(s), true) }
-            Platforma.naHlavnom { koderPriebeh = null; r.onSuccess { hotovo() }; r.onFailure { chyba = it.message ?: "Sťahovanie zlyhalo" } }
+            val r = runCatching {
+                // odkaz z Hugging Face (aj na celý repozitár) → priamy súbor
+                val v = if (volbaPouzivatela.contains("huggingface.co") || volbaPouzivatela.contains("hf.co")) Modely.upravOdkaz(volbaPouzivatela) else volbaPouzivatela
+                if (v.startsWith("http") && !suborSady(s, v).exists())
+                    Modely.stiahni(v, { p -> Platforma.naHlavnom { koderPriebeh = p } }, { false }, priecinokSady(s), true)
+                v
+            }
+            Platforma.naHlavnom { koderPriebeh = null; r.onSuccess { hotovo(it) }; r.onFailure { chyba = it.message ?: "Sťahovanie zlyhalo"; Platforma.oznam(chyba) } }
         }.start()
     }
 

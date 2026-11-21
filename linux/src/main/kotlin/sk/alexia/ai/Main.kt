@@ -191,9 +191,23 @@ private fun KoderVolba(sd: ObrazkovaSada) {
                 label = { Text(T("koder_vlastny"), fontSize = 12.sp) },
                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
         }
+        // vlastný kodér z Hugging Face (odkaz na súbor alebo celý repozitár)
+        var odkaz by remember { mutableStateOf("") }
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.weight(1f).nadKlavesnicou(),
+                placeholder = { Text(T("koder_hf"), color = Farby.tlmene, fontSize = 12.sp) }, shape = RoundedCornerShape(12.dp),
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+            Spacer(Modifier.width(6.dp))
+            IconButton(onClick = { o.nastavKoder(sd, odkaz.trim()); odkaz = "" }, enabled = odkaz.contains("huggingface.co") || odkaz.contains("hf.co")) {
+                Icon(Icons.Default.Download, T("stiahnut"), tint = Farby.ruzova)
+            }
+        }
+        if (aktualny.isNotEmpty()) Text(T("koder_aktualny", File(aktualny.substringBefore('?')).name), color = Farby.tlmene, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
         o.koderPriebeh?.let { p ->
             LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha)
         }
+        if (o.chyba.isNotBlank() && o.koderPriebeh == null) Text(o.chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

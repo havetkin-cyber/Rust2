@@ -14,6 +14,10 @@ object T {
     }
 
     private val sk = mapOf(
+        "koder_hf" to "Odkaz z Hugging Face (rovnaký typ modelu)",
+        "koder_aktualny" to "Teraz: %1\$s",
+        "koder_necitatelny" to "Súbor sa nedá prečítať ako GGUF model.",
+        "koder_nekompatibilny" to "Tento model sa nehodí: je to %1\$s, ale obrázkový model potrebuje %2\$s. Iný jazykový model (napr. Mistral) obrázkový model nepochopí.",
         "vai_ziadny" to "Video AI nie je stiahnuté – v Obrázkoch stiahni „Wan 2.1 – video AI“.",
         "vai_je_video" to "Teraz je zvolený video model – na obrázky vyber v Obrázkoch obrázkový model.",
         "vai_tvorim" to "Video AI tvorí video… (trvá to dlho, aj desiatky minút)",
@@ -308,6 +312,10 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "koder_hf" to "Hugging Face link (same model type)",
+        "koder_aktualny" to "Now: %1\$s",
+        "koder_necitatelny" to "The file can't be read as a GGUF model.",
+        "koder_nekompatibilny" to "This model doesn't fit: it is %1\$s, but the image model needs %2\$s. A different language model (e.g. Mistral) is not understood by the image model.",
         "vai_ziadny" to "Video AI is not downloaded – in Images download “Wan 2.1 – video AI”.",
         "vai_je_video" to "A video model is selected – pick an image model in Images to draw.",
         "vai_tvorim" to "Video AI is creating the video… (takes long, even tens of minutes)",

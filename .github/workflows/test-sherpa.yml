@@ -7,27 +7,27 @@ env:
   T: v2.0.2
   D: sherpa-onnx-supertonic-3-tts-int8-2026-05-11
 jobs:
-  linux:
-    runs-on: ubuntu-22.04
-    steps:
-      - run: |
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-$T-linux-x64-shared.tar.bz2 | tar -xj
-          find sherpa-onnx-$T-linux-x64-shared -maxdepth 2 | grep -v "/bin/sherpa-onnx-[^o]" | head -40
-          B=sherpa-onnx-$T-linux-x64-shared/bin/sherpa-onnx-offline-tts
-          readelf -d $B | grep -iE "rpath|runpath|NEEDED"
-          $B --help 2>&1 | grep -iE "speed|length|threads" | head
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$D.tar.bz2 | tar -xj
-          $B --supertonic-duration-predictor=$D/duration_predictor.int8.onnx --supertonic-text-encoder=$D/text_encoder.int8.onnx --supertonic-vector-estimator=$D/vector_estimator.int8.onnx --supertonic-vocoder=$D/vocoder.int8.onnx --supertonic-tts-json=$D/tts.json --supertonic-unicode-indexer=$D/unicode_indexer.bin --supertonic-voice-style=$D/voice.bin --sid=1 --lang=sk --num-threads=4 --speed=0.8 --output-filename=o.wav "Ahoj, ja som Alexia. Ako sa máš?" 2>&1 | tail -6
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-$T-android.tar.bz2 | tar -tj | head -40
-          for f in Tts.kt; do curl -sL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/kotlin-api/$f -o $f; echo "== $f $(wc -l < $f)"; done
-          grep -n "class\|val \|var \|fun \|external" Tts.kt | head -150
   windows:
     runs-on: windows-latest
     defaults: { run: { shell: bash } }
     steps:
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
       - run: |
           curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-$T-win-x64-shared-MT-Release.tar.bz2 | tar -xj
-          find sherpa-onnx-$T-win-x64-shared-MT-Release | grep -E "offline-tts.exe|\.dll" 
           curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$D.tar.bz2 | tar -xj
-          B=sherpa-onnx-$T-win-x64-shared-MT-Release/bin/sherpa-onnx-offline-tts.exe
-          $B --supertonic-duration-predictor=$D/duration_predictor.int8.onnx --supertonic-text-encoder=$D/text_encoder.int8.onnx --supertonic-vector-estimator=$D/vector_estimator.int8.onnx --supertonic-vocoder=$D/vocoder.int8.onnx --supertonic-tts-json=$D/tts.json --supertonic-unicode-indexer=$D/unicode_indexer.bin --supertonic-voice-style=$D/voice.bin --sid=1 --lang=sk --output-filename=o.wav "Ahoj, ja som Alexia." 2>&1 | tail -4; ls -la o.wav
+          cat > T.java <<'J'
+          import java.util.*;
+          public class T { public static void main(String[] a) throws Exception {
+            String d = a[1];
+            List<String> c = new ArrayList<>(List.of(a[0], "--supertonic-duration-predictor="+d+"/duration_predictor.int8.onnx","--supertonic-text-encoder="+d+"/text_encoder.int8.onnx","--supertonic-vector-estimator="+d+"/vector_estimator.int8.onnx","--supertonic-vocoder="+d+"/vocoder.int8.onnx","--supertonic-tts-json="+d+"/tts.json","--supertonic-unicode-indexer="+d+"/unicode_indexer.bin","--supertonic-voice-style="+d+"/voice.bin","--sid=1","--lang=sk","--output-filename="+a[2], a[3]));
+            Process p = new ProcessBuilder(c).redirectErrorStream(true).start();
+            byte[] b = p.getInputStream().readAllBytes(); p.waitFor();
+            String s = new String(b, "UTF-8"); for (String l : s.split("\n")) if (l.contains("text is") || l.contains("duration")) System.out.println(l);
+          } }
+          J
+          B=$(cygpath -w sherpa-onnx-$T-win-x64-shared-MT-Release/bin/sherpa-onnx-offline-tts.exe)
+          java T.java "$B" $D a.wav "Ľúbim čiernu kávu, žltý ďateľ"
+          java T.java "$B" $D b.wav "Lubim ciernu kavu, zlty datel"
+          java -Dsun.jnu.encoding=UTF-8 T.java "$B" $D c.wav "Ľúbim čiernu kávu, žltý ďateľ"
+          ls -la *.wav

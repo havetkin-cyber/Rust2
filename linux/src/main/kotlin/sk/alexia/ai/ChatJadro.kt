@@ -19,6 +19,30 @@ class Sprava(val rola: String, text: String, val jeObrazkova: Boolean = false, o
     var stavText by mutableStateOf("")
 }
 
+/** „uprav seed 12345 a sprav tam …“ / „edit 12345: …“ → (seed, zmena), inak null */
+fun upravaObrazka(t: String): Pair<Long, String>? {
+    val m = Regex("^\\s*(uprav(iť|it)?|úprav|zmeň|zmen|edit)\\s+(obr[aá]zok\\s+)?(seed\\s*)?#?(\\d{3,12})\\s*[:,.-]?\\s*(a\\s+|and\\s+)?(.+)",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t) ?: return null
+    val zmena = m.groupValues[7].trim().takeIf { it.isNotEmpty() } ?: return null
+    return m.groupValues[5].toLong() to zmena
+}
+
+/** sila úpravy podľa slov: jemne = drží sa predlohy, výrazne = viac zmien */
+fun silaUpravy(t: String): Float {
+    val x = t.lowercase()
+    return when {
+        listOf("jemne", "trochu", "mierne", "slightly", "drž sa", "drz sa", "predloh").any { it in x } -> 0.45f
+        listOf("výrazne", "vyrazne", "úplne", "uplne", "silno", "strongly", "completely").any { it in x } -> 0.8f
+        else -> 0.6f
+    }
+}
+
+/** „seed 12345“ v popise obrázka → (seed, popis bez neho) */
+fun seedZPopisu(p: String): Pair<Long?, String> {
+    val m = Regex("(?i)\\bseed\\s*[:#]?\\s*(\\d{3,12})").find(p) ?: return null to p
+    return m.groupValues[1].toLong() to p.removeRange(m.range).replace(Regex("\\s{2,}"), " ").trim().trim(',')
+}
+
 /** "/video …", "sprav video: …", "make a video …" → popis videa, inak null */
 fun popisVidea(t: String): String? {
     val m = Regex("^\\s*(/video|sprav(te)? video|vytvor video|urob video|make a video|create a video)[\\s:,]+(.+)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t)
@@ -165,6 +189,7 @@ object ChatJadro {
         if (text.isBlank()) return
         val popisV = if (video) text.trim() else popisVidea(text)
         if (popisV != null) { natoc(text.trim(), popisV); return }
+        upravaObrazka(text)?.let { (seed, zmena) -> uprav(text.trim(), seed, zmena); return }
         val popis = if (obrazok) text.trim() else popisObrazka(text)
         if (popis != null) { nakresli(text.trim(), popis); return }
         if (generuje || stav != StavModelu.PRIPRAVENY) return
@@ -187,7 +212,20 @@ object ChatJadro {
         }
     }
 
-    private fun nakresli(text: String, popis: String) {
+    /** úprava obrázka vytvoreného v appke podľa jeho seedu */
+    private fun uprav(text: String, seed: Long, zmena: String) {
+        if (ObrazkyJadro.generuje) return
+        spravy += Sprava("user", text, jeObrazkova = true)
+        val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
+        if (nastavenia.vzdialene) { odpoved.text = "⚠ " + T("upr_vzdialene"); ulozChat(); return }
+        ObrazkyJadro.upravDoChatu(seed, zmena, silaUpravy(text)) { f, e ->
+            if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"
+            ulozChat()
+        }
+    }
+
+    private fun nakresli(text: String, popisCely: String) {
+        val (seed, popis) = seedZPopisu(popisCely)
         if (ObrazkyJadro.generuje) return
         spravy += Sprava("user", text, jeObrazkova = true)
         val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
@@ -198,7 +236,7 @@ object ChatJadro {
             }
             return
         }
-        ObrazkyJadro.nakresliDoChatu(popis) { f, e ->
+        ObrazkyJadro.nakresliDoChatu(popis, seed) { f, e ->
             if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"
             ulozChat()
         }

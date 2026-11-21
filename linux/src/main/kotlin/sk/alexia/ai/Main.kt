@@ -573,6 +573,19 @@ private fun VideoPrehravac(proj: VideoJadro.Projekt) {
     }
 }
 
+/** „Seed 12345“ pod obrázkom z appky – ťuknutím sa skopíruje príkaz na úpravu */
+@Composable
+private fun SeedStitok(f: File) {
+    val seed = remember(f) { ObrazkyJadro.seedObrazka(f) } ?: return
+    val schranka = LocalClipboardManager.current
+    Row(Modifier.padding(start = 4.dp).clip(RoundedCornerShape(10.dp)).background(Farby.plocha2)
+        .clickable { schranka.setText(AnnotatedString(T("upr_prikaz", seed))); Platforma.oznam(T("upr_skopirovane")) }
+        .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.Tag, null, tint = Farby.ruzova, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp))
+        Text("Seed $seed", color = Farby.text, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+    }
+}
+
 @Composable
 private fun BublinaObrazok(s: Sprava) {
     val o = ObrazkyJadro
@@ -595,6 +608,7 @@ private fun BublinaObrazok(s: Sprava) {
                         IconButton(onClick = { o.nastavPozadieChatu(File(cesta!!)) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Wallpaper, T("poz_chat_tlacidlo"), tint = Farby.tlmene, modifier = Modifier.size(16.dp))
                         }
+                        SeedStitok(File(cesta!!))
                     }
                 }
                 s.text.isNotEmpty() -> Text(s.text, color = Farby.cervena, fontSize = 14.sp)
@@ -1061,6 +1075,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                             OutlinedButton(onClick = { o.zmazObrazok(f) }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                                 Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene); Spacer(Modifier.width(6.dp)); Text(T("zmazat"), color = Farby.tlmene)
                             }
+                            SeedStitok(f)
                         }
                     }
                 }
@@ -1229,6 +1244,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     OutlinedButton(onClick = { o.zmazObrazok(f); detail = null }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                         Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene)
                     }
+                    SeedStitok(f)
                 }
             }
         }

@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import sk.alexia.ai.obrazky.Sd
 import java.awt.image.BufferedImage
 import java.io.File
+import org.json.JSONObject
 import javax.imageio.ImageIO
 import java.util.concurrent.Executors
 
@@ -114,7 +115,7 @@ object ObrazkyJadro {
      * Obrázok pre chat. Ak sa jazykový aj obrázkový model zmestia spolu do pamäte, ostanú načítané oba (rýchle).
      * Inak sa chat na chvíľu uvoľní a po obrázku sa znova načíta.
      */
-    fun nakresliDoChatu(popis: String, hotovo: (File?, String) -> Unit) {
+    fun nakresliDoChatu(popis: String, seed: Long? = null, hotovo: (File?, String) -> Unit) {
         val cesta = aktivnyModel
         val mam = cesta != null && (aktivnaSada()?.let { mamSadu(it) } ?: File(cesta).exists())
         if (!mam) { hotovo(null, T("chat_obr_ziadny")); return }
@@ -124,7 +125,7 @@ object ObrazkyJadro {
         if (uvolnit) ChatJadro.uvolniPamat()
         nacitaj(cesta, uvolnitChat = false)
         val s = aktivnaSada()
-        spust(popis, "", s?.rozmer ?: 512, s?.rozmer ?: 512, s?.kroky ?: 20, s?.cfg ?: 7f) { f, e ->
+        spust(popis, "", s?.rozmer ?: 512, s?.rozmer ?: 512, s?.kroky ?: 20, s?.cfg ?: 7f, pevnySeed = seed) { f, e ->
             hotovo(f, e)
             if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
         }
@@ -176,9 +177,11 @@ object ObrazkyJadro {
     }
 
     /** spustí tvorbu na vlákne sd (po prípadnom načítaní modelu, ktoré je v rade pred ňou) */
-    private fun spust(prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, doGalerie: Boolean = true, hotovo: (File?, String) -> Unit) {
+    private fun spust(prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, doGalerie: Boolean = true,
+                      pevnySeed: Long? = null, predloha: IntArray? = null, sila: Float = 0.6f, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
-        val seed = (Math.random() * Int.MAX_VALUE).toLong()
+        // krátky seed (5 číslic), aby sa dal ľahko napísať: „uprav seed 12345 …“
+        val seed = pevnySeed ?: (10000L..99999L).random()
         // priebeh čítame z iného vlákna, kým generovanie beží
         Thread {
             while (true) {
@@ -195,13 +198,17 @@ object ObrazkyJadro {
             else {
                 val r = IntArray(2)
                 val metoda = aktivnaSada()?.metoda ?: "euler_a"
-                val px = Sd.generujEx(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, r)
+                val px = if (predloha != null) Sd.generujZPredlohy(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, predloha, sila, r)
+                         else Sd.generujEx(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, r)
                 if (px != null) {
                     runCatching {
                         val img = BufferedImage(r[0], r[1], BufferedImage.TYPE_INT_RGB)
                         img.setRGB(0, 0, r[0], r[1], px, 0, r[0])
                         subor = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
                         ImageIO.write(img, "png", subor!!)
+                        // údaje o obrázku: seed a popis – podľa nich sa dá obrázok neskôr upraviť
+                        File(subor!!.path + ".json").writeText(JSONObject().put("seed", seed).put("popis", prompt.trim()).put("neg", negativny.trim())
+                            .put("w", r[0]).put("h", r[1]).put("kroky", kroky).put("cfg", cfg.toDouble()).put("model", aktivnyModel ?: "").toString())
                     }.onFailure { e = it.message ?: "Obrázok sa nepodarilo uložiť" }
                 } else e = Sd.chyba()
             }
@@ -213,12 +220,45 @@ object ObrazkyJadro {
         }
     }
 
+    /** seed obrázka vytvoreného v appke (null = nie je z appky, napr. tvoja fotka) */
+    fun seedObrazka(f: File): Long? = runCatching { JSONObject(File(f.path + ".json").readText()).getLong("seed") }.getOrNull()
+
+    /** najnovší obrázok z appky s týmto seedom */
+    fun najdiPodlaSeedu(seed: Long): File? = priecinokObrazkov().listFiles { f -> f.extension == "png" }
+        ?.filter { seedObrazka(it) == seed }?.maxByOrNull { it.lastModified() }
+
+    /**
+     * Úprava obrázka, ktorý vytvorila appka: rovnaký seed, pôvodný popis + zmena, predloha = pôvodný obrázok.
+     * Fotky zvonka (bez seedu) sa takto upravovať nedajú.
+     */
+    fun upravDoChatu(seed: Long, zmena: String, sila: Float, hotovo: (File?, String) -> Unit) {
+        val f = najdiPodlaSeedu(seed) ?: run { hotovo(null, T("upr_nenajdene", seed)); return }
+        val j = runCatching { JSONObject(File(f.path + ".json").readText()) }.getOrNull() ?: run { hotovo(null, T("upr_nenajdene", seed)); return }
+        val cesta = aktivnyModel
+        val mam = cesta != null && (aktivnaSada()?.let { mamSadu(it) } ?: File(cesta).exists())
+        if (!mam) { hotovo(null, T("chat_obr_ziadny")); return }
+        if (generuje) return
+        val img = runCatching { ImageIO.read(f) }.getOrNull() ?: run { hotovo(null, T("upr_nenajdene", seed)); return }
+        val w = img.width - img.width % 8; val v = img.height - img.height % 8
+        val px = img.getRGB(0, 0, w, v, null, 0, w)
+        val uvolnit = ChatJadro.velkostNacitaneho() + velkost(cesta!!) > LIMIT_SPOLU
+        if (uvolnit) ChatJadro.uvolniPamat()
+        nacitaj(cesta, uvolnitChat = false)
+        val s = aktivnaSada()
+        val popis = j.optString("popis").trimEnd('.', ',', ' ') + ", " + zmena.trim()
+        spust(popis, j.optString("neg"), w, v, s?.kroky ?: j.optInt("kroky", 20), s?.cfg ?: j.optDouble("cfg", 7.0).toFloat(),
+            pevnySeed = seed, predloha = px, sila = sila) { nf, e ->
+            hotovo(nf, e)
+            if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
+        }
+    }
+
     /** chat + obrázky spolu do ~10 GB, aby na 16 GB ostalo miesto pre systém */
     private const val LIMIT_SPOLU = 10_000L * 1024 * 1024
 
     fun zrus() { if (h != 0L) Sd.zrus(h) }
 
-    fun zmazObrazok(f: File) { galeria.remove(f); if (posledny == f) posledny = null; f.delete() }
+    fun zmazObrazok(f: File) { galeria.remove(f); if (posledny == f) posledny = null; f.delete(); File(f.path + ".json").delete() }
 
     fun zmazModel(f: File) {
         if (jeAktivny(f)) { uvolniPamat(); aktivnyModel = null; stav = StavModelu.ZIADNY }

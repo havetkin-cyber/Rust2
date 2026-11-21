@@ -118,3 +118,51 @@ F(jintArray, generujEx)(JNIEnv* env, jobject, jlong h, jstring prompt, jstring n
     g_krok = g_krokov.load();
     return out;
 }
+
+// úprava obrázka vytvoreného v appke: predloha (ARGB) + nový popis, sila 0..1 (menej = drží sa predlohy)
+F(jintArray, generujZPredlohy)(JNIEnv* env, jobject, jlong h, jstring prompt, jstring negativny, jint w, jint v,
+                               jint kroky, jfloat cfg, jlong seed, jstring metoda, jintArray argb, jfloat sila, jintArray rozmer) {
+    auto* ctx = (sd_ctx_t*)h; g_chyba.clear(); g_krok = 0; g_krokov = kroky;
+    sd_cancel_generation(ctx, SD_CANCEL_RESET);
+    std::string p = jstr(env, prompt), n = jstr(env, negativny), m = jstr(env, metoda);
+    jsize pocet = env->GetArrayLength(argb);
+    if (pocet != w * v) { g_chyba = "Zlý rozmer predlohy"; return nullptr; }
+    std::vector<jint> vstup((size_t)pocet); env->GetIntArrayRegion(argb, 0, pocet, vstup.data());
+    std::vector<uint8_t> rgb((size_t)pocet * 3);
+    for (jsize i = 0; i < pocet; i++) {
+        uint32_t q = (uint32_t)vstup[(size_t)i];
+        rgb[(size_t)i * 3] = (uint8_t)(q >> 16); rgb[(size_t)i * 3 + 1] = (uint8_t)(q >> 8); rgb[(size_t)i * 3 + 2] = (uint8_t)q;
+    }
+    int64_t tvar[3] = {3, w, v};
+    sd_tensor_t* t = sd_tensor_create(SD_TENSOR_U8, 3, tvar, rgb.data(), rgb.size());
+    sd_img_gen_opt_t* o = sd_img_gen_opt_create();
+    sd_result_t* res = nullptr;
+    bool good = t && o && ok(sd_opt_set_string(o, "prompt", p.c_str()))
+                  && (n.empty() || ok(sd_opt_set_string(o, "negative_prompt", n.c_str())))
+                  && ok(sd_opt_set_int(o, "width", w)) && ok(sd_opt_set_int(o, "height", v))
+                  && ok(sd_opt_set_int(o, "seed", seed))
+                  && ok(sd_opt_set_int(o, "sample.steps", kroky))
+                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg))
+                  && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
+                  && ok(sd_opt_set_tensor(o, "init_image", t))
+                  && ok(sd_opt_set_float(o, "strength", sila))
+                  && ok(sd_generate_image(ctx, o, &res));
+    sd_opt_free(o);
+    if (t) sd_tensor_free(t);
+    if (!good || !res || sd_result_get_image_count(res) == 0) { sd_result_free(res); if (g_chyba.empty()) g_chyba = "Obrázok sa nepodarilo upraviť"; return nullptr; }
+    const sd_tensor_t* img = sd_result_get_image(res, 0);
+    int64_t c = sd_tensor_dim(img, 0), sw = sd_tensor_dim(img, 1), sv = sd_tensor_dim(img, 2);
+    const auto* d = (const uint8_t*)sd_tensor_data(img);
+    if (sd_tensor_type(img) != SD_TENSOR_U8 || c < 3 || !d) { sd_result_free(res); g_chyba = "Neočakávaný formát obrázka"; return nullptr; }
+    std::vector<jint> px((size_t)(sw * sv));
+    for (int64_t i = 0; i < sw * sv; i++) {
+        const uint8_t* q = d + i * c;
+        px[(size_t)i] = (jint)(0xFF000000u | ((uint32_t)q[0] << 16) | ((uint32_t)q[1] << 8) | q[2]);
+    }
+    sd_result_free(res);
+    jint r[2] = {(jint)sw, (jint)sv}; env->SetIntArrayRegion(rozmer, 0, 2, r);
+    jintArray out = env->NewIntArray((jsize)px.size());
+    env->SetIntArrayRegion(out, 0, (jsize)px.size(), px.data());
+    g_krok = g_krokov.load();
+    return out;
+}

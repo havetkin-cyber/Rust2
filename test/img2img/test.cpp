@@ -2,6 +2,7 @@
 #include "stable-diffusion.h"
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -49,8 +50,18 @@ int main(int argc, char** argv) {
     if (v) ok(sd_ctx_create(o, &ctx));
     sd_opt_free(o);
     if (!ctx) return 1;
-    const int W = 384, H = 384, K = 8;
+    // voliteľne: kroky, rozmer (FLUX.3 Klein: 16 krokov); s 4. argumentom len pôvodný + jedna úprava
+    const int K = argc > 4 ? atoi(argv[4]) : 8;
+    const int W = argc > 5 ? atoi(argv[5]) : 384, H = W;
     const char* p = "a red apple on a wooden table, photo";
+    if (argc > 4) {
+        auto a = gen(ctx, p, W, H, K, 12345, nullptr, 0, "a_povodny.png");
+        std::string p2 = std::string(p) + ", a small green leaf on the apple";
+        auto b = gen(ctx, p2.c_str(), W, H, K, 12345, &a, 0.85f, "b_uprava_085.png");
+        auto d = gen(ctx, "portrait photo of a young woman with long brown hair, freckles, soft window light, 85mm lens", W, H, K, 777, nullptr, 0, "d_portret.png");
+        printf("ROZDIEL 0.85: %.1f\n", rozdiel(a, b));
+        return 0;
+    }
     auto a = gen(ctx, p, W, H, K, 12345, nullptr, 0, "a_povodny.png");
     auto c = gen(ctx, p, W, H, K, 54321, nullptr, 0, "c_iny_seed.png");
     std::string p2 = std::string(p) + ", a small green leaf on the apple";

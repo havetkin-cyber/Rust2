@@ -3,7 +3,6 @@ name: Alexia AI – Linux / SteamOS
 on:
   push:
     branches: [main]
-    paths: ['linux/**', 'app/src/main/cpp/**', 'obrazky/src/main/cpp/**', '.github/workflows/linux.yml']
   workflow_dispatch:
 
 permissions:
@@ -15,6 +14,11 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Spoločné číslo verzie (rovnaké pre mobil, Windows aj Linux)
+        shell: bash
+        run: echo "VERZIA_N=$(git rev-list --count HEAD)" >> $GITHUB_ENV
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -45,7 +49,7 @@ jobs:
         run: |
           cd linux
           chmod +x ./gradlew
-          ./gradlew packageAppImage --no-daemon --stacktrace -Pverzia=1.1.${{ github.run_number }}
+          ./gradlew packageAppImage --no-daemon --stacktrace -Pverzia=1.2.${{ env.VERZIA_N }}
       - name: ZIP a vydanie
         env:
           GH_TOKEN: ${{ github.token }}
@@ -69,7 +73,7 @@ jobs:
           ls -la AlexiaAI-x86_64.AppImage
           # pridá ZIP k najnovšiemu vydaniu (tam, kde je aj APK)
           TAG=$(gh release view --json tagName -q .tagName)
-          echo "1.1.${{ github.run_number }}" > linux-verzia.txt
+          echo "1.2.${{ env.VERZIA_N }}" > linux-verzia.txt
           gh release upload "$TAG" AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage linux-verzia.txt --clobber
           echo "Pridané k vydaniu $TAG"
           # stály kanál aktualizácií – appka sa pozerá sem

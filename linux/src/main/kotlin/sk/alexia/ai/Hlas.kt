@@ -229,6 +229,76 @@ object Hlas {
         }.start()
     }
 
+    // ---------------- nahovoriť text do súboru (WAV / MP3) ----------------
+    var nahrava by mutableStateOf<Float?>(null)
+        private set
+
+    /** text → zvolený hlas s úpravami → WAV alebo MP3 do priečinka Hudba/Alexia AI; [hotovo] dostane súbor alebo null */
+    fun nahovorDoSuboru(text: String, mp3: Boolean, id: String = ChatJadro.nastavenia.hlas, hotovo: (File?, String) -> Unit) {
+        if (nahrava != null) return
+        if (!mam(id)) { hotovo(null, T("hlas_najprv")); return }
+        val t = naCitanie(text); if (t.isBlank()) { hotovo(null, T("nahovor_prazdny")); return }
+        val n = ChatJadro.nastavenia
+        val u = Uprava(n.hlasVyska.coerceIn(0.5f, 2f), n.hlasHrubka, n.hlasPlnost)
+        val speed = n.hlasRychlost.coerceIn(0.3f, 3f) / u.f
+        val jazyk = if (n.jazykOdpovedi == "en") "en" else "sk"
+        nahrava = 0f
+        Thread {
+            val r = runCatching {
+                if (!jeSt(id)) opravKonfig()
+                val kusy = kusky(t)
+                val spolu = java.io.ByteArrayOutputStream(); var sr = 22050
+                kusy.forEachIndexed { i, kus ->
+                    val (x, s0) = if (jeSt(id)) {
+                        val sid = if (id == "mix") -1 else id.drop(2).toIntOrNull() ?: 0
+                        val m = stModel()
+                        val g = com.k2fsa.sherpa.onnx.GenerationConfig()
+                        g.sid = if (sid < 0) mixSid else sid; g.speed = speed; g.numSteps = 8; g.extra = mapOf("lang" to jazyk)
+                        val a = m.generateWithConfig(kus, g); a.samples to a.sampleRate
+                    } else lili(kus, 1f / speed)
+                    sr = s0
+                    spolu.write(naPcm(Zvuk.uprav(x, s0, u.vyska, u.hrubka, u.plnost)))
+                    // krátka pauza medzi vetami
+                    spolu.write(ByteArray((s0 * 0.15).toInt() * 2))
+                    val pr = (i + 1f) / kusy.size; Platforma.naHlavnom { nahrava = pr * 0.95f }
+                }
+                val pcm = spolu.toByteArray()
+                // farba (hrúbka) sa dosiahne inou vzorkovacou frekvenciou – zapíše sa priamo do súboru
+                val frek = (sr * u.f).toInt()
+                val dir = File(System.getProperty("user.home"), "Music/Alexia AI").apply { mkdirs() }
+                val meno = "alexia_" + meno(id).lowercase() + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(java.util.Date())
+                val wav = File(if (mp3) File(priecinok(), "tmp").apply { mkdirs() } else dir, "$meno.wav")
+                zapisWav(wav, pcm, frek)
+                if (!mp3) wav
+                else {
+                    val ff = VideoJadro.ffmpeg() ?: throw IllegalStateException(T("nahovor_ffmpeg"))
+                    val out = File(dir, "$meno.mp3")
+                    val p = ProcessBuilder(ff, "-y", "-v", "error", "-i", wav.path, "-ar", "44100", "-ac", "1", "-b:a", "192k", out.path).redirectErrorStream(true).start()
+                    p.inputStream.readBytes()
+                    if (p.waitFor() != 0) throw IllegalStateException("ffmpeg zlyhal")
+                    wav.delete(); out
+                }
+            }
+            Platforma.naHlavnom {
+                nahrava = null
+                hotovo(r.getOrNull(), r.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "")
+            }
+        }.start()
+    }
+
+    private fun naPcm(x: FloatArray): ByteArray {
+        val sh = Zvuk.naShort(x); val b = java.nio.ByteBuffer.allocate(sh.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        sh.forEach { b.putShort(it) }; return b.array()
+    }
+
+    private fun zapisWav(f: File, pcm: ByteArray, sr: Int) {
+        val h = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        h.put("RIFF".toByteArray()).putInt(36 + pcm.size).put("WAVE".toByteArray())
+        h.put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1).putInt(sr).putInt(sr * 2).putShort(2).putShort(16)
+        h.put("data".toByteArray()).putInt(pcm.size)
+        f.outputStream().use { it.write(h.array()); it.write(pcm) }
+    }
+
     /** úprava hlasu: výška tónu, hrúbka (farba) a plnosť; f = koeficient prehrávania */
     private class Uprava(val vyska: Float, val hrubka: Float, val plnost: Float) { val f = Zvuk.formant(hrubka) }
 

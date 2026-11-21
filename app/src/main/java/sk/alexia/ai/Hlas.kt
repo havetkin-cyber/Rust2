@@ -162,6 +162,63 @@ object Hlas {
         if (vety.isEmpty()) { hovori = null; poKonciSys = null; poKonci?.invoke() }
     }
 
+    // ---------- nahovoriť text do súboru (WAV do Hudba/Alexia AI) ----------
+    var nahrava by mutableStateOf<Float?>(null)
+        private set
+
+    /** text → zvolený hlas (Lili/Supertonic/Mix) so všetkými úpravami → WAV; [hotovo] dostane názov súboru alebo null + chybu */
+    fun nahovorDoSuboru(text: String, hotovo: (String?, String) -> Unit) {
+        if (nahrava != null) return
+        val n = ChatJadro.nastavenia; val id = n.hlas
+        if (!jeSt(id)) { hotovo(null, T("nahovor_len_ai")); return }
+        if (!mam(id)) { hotovo(null, T("hlas_najprv")); return }
+        val t = naCitanie(text); if (t.isBlank()) { hotovo(null, T("nahovor_prazdny")); return }
+        val jeLili = id == "lili"
+        val sid = if (jeLili) 0 else if (id == "mix") -1 else id.drop(2).toIntOrNull() ?: 0
+        val vyska = n.hlasVyska.coerceIn(0.5f, 2f); val hrubka = n.hlasHrubka; val plnost = n.hlasPlnost
+        val f = Zvuk.formant(hrubka)
+        val speed = n.hlasRychlost.coerceIn(0.3f, 3f) / f
+        val lang = if (n.jazykOdpovedi == "en") "en" else "sk"
+        nahrava = 0f
+        Thread {
+            val r = runCatching {
+                val m = if (jeLili) liliModel() else stModel()
+                val kusy = kusky(t)
+                val spolu = java.io.ByteArrayOutputStream(); var sr = 22050
+                kusy.forEachIndexed { i, kus ->
+                    val a = m.generateWithConfig(kus, com.k2fsa.sherpa.onnx.GenerationConfig(sid = if (sid < 0) mixSid else sid, speed = speed, numSteps = 8, extra = mapOf("lang" to lang)))
+                    sr = a.sampleRate
+                    val sh = Zvuk.naShort(Zvuk.uprav(a.samples, a.sampleRate, vyska, hrubka, plnost))
+                    val b = java.nio.ByteBuffer.allocate(sh.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN); sh.forEach { b.putShort(it) }
+                    spolu.write(b.array()); spolu.write(ByteArray((sr * 0.15).toInt() * 2))
+                    val p = (i + 1f) / kusy.size; Platforma.naHlavnom { nahrava = p * 0.95f }
+                }
+                val pcm = spolu.toByteArray(); val frek = (sr * f).toInt()
+                val h = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                h.put("RIFF".toByteArray()).putInt(36 + pcm.size).put("WAVE".toByteArray())
+                h.put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1).putInt(frek).putInt(frek * 2).putShort(2).putShort(16)
+                h.put("data".toByteArray()).putInt(pcm.size)
+                val meno = "alexia_" + meno(id).lowercase() + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(java.util.Date()) + ".wav"
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val cv = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Audio.Media.DISPLAY_NAME, meno)
+                        put(android.provider.MediaStore.Audio.Media.MIME_TYPE, "audio/wav")
+                        put(android.provider.MediaStore.Audio.Media.RELATIVE_PATH, "Music/Alexia AI")
+                    }
+                    val cr = Platforma.app.contentResolver
+                    val uri = cr.insert(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cv)!!
+                    cr.openOutputStream(uri)!!.use { it.write(h.array()); it.write(pcm) }
+                    "Hudba/Alexia AI/$meno"
+                } else {
+                    val d = File(Platforma.app.getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC), "Alexia AI").apply { mkdirs() }
+                    val out = File(d, meno); out.outputStream().use { it.write(h.array()); it.write(pcm) }
+                    out.path
+                }
+            }
+            Platforma.naHlavnom { nahrava = null; hotovo(r.getOrNull(), r.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "") }
+        }.start()
+    }
+
     // ---------- Supertonic ----------
     @Volatile private var st: com.k2fsa.sherpa.onnx.OfflineTts? = null
     private val zamok = Any()

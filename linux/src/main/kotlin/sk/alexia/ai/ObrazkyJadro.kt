@@ -555,7 +555,6 @@ object ObrazkyJadro {
     /** po krokoch sa skladajú snímky (VAE/TAE hlási vlastný priebeh od nuly) */
     var skladam by mutableStateOf(false)
         private set
-        private set
 
     fun natocAI(popis: String, sekundy: Int?, predloha: File? = null, hotovo: (File?, String) -> Unit) {
         // rozhýbanie obrázka: len obrázky vytvorené a podpísané appkou

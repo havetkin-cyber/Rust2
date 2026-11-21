@@ -13,7 +13,7 @@ import java.net.URL
 import kotlin.concurrent.thread
 
 /**
- * Kontrola novej verzie na GitHube (vydania v1.0.N, N = versionCode).
+ * Kontrola novej verzie na GitHube (vydania v1.2.N, N = versionCode).
  * APK stiahne prehliadač a nainštaluje systém – appka nemá oprávnenie inštalovať (kvôli Play Protect).
  */
 object Aktualizacie {
@@ -45,7 +45,7 @@ object Aktualizacie {
                 Platforma.naHlavnom {
                     if (n > moja && !rucne && n > preskocena && ChatJadro.nastavenia.autoAktualizacie) stiahniNaPozadi(c, v)
                     else if (n > moja && (rucne || n > preskocena)) novaVerzia = v
-                    else if (rucne) Platforma.oznam(T("akt_najnovsia", "1.0.$moja"))
+                    else if (rucne) Platforma.oznam(T("akt_najnovsia", "1.2.$moja"))
                 }
             }
             Platforma.naHlavnom { kontroluje = false; if (rucne) r.onFailure { Platforma.oznam(T("akt_nepodarilo")) } }

@@ -18,7 +18,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = kodVerzie
-        versionName = "1.0.$kodVerzie"
+        versionName = "1.2.$kodVerzie"
         ndk { abiFilters.addAll(listOf("arm64-v8a")) }
         externalNativeBuild {
             cmake {

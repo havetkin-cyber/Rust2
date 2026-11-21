@@ -746,6 +746,25 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 TextButton(onClick = { n.hlasRychlost = 1f; n.hlasVyska = 1f; n.hlasHrubka = 1f; n.hlasPlnost = 0f; n.uloz() }) { Text(T("hlas_predvolene"), color = Farby.ruzova) }
             }
             Karta {
+                Text(T("nahovor_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Text(T("nahovor_info_m", Hlas.meno(n.hlas)), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                var nText by remember { mutableStateOf("") }
+                var nVysledok by remember { mutableStateOf("") }
+                var nChyba by remember { mutableStateOf("") }
+                OutlinedTextField(value = nText, onValueChange = { nText = it; nVysledok = ""; nChyba = "" }, minLines = 3, maxLines = 8,
+                    placeholder = { Text(T("nahovor_hint"), color = Farby.tlmene) }, modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+                val np = Hlas.nahrava
+                if (np != null) {
+                    Text(T("nahovor_robim", (np * 100).roundToInt()), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                    LinearProgressIndicator(progress = { np }, modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                } else GradientTlacidlo(T("nahovor_wav"), Icons.Default.SaveAlt, Modifier.padding(top = 8.dp).fillMaxWidth(), enabled = nText.isNotBlank()) {
+                    Hlas.nahovorDoSuboru(nText) { f, e -> nVysledok = f ?: ""; nChyba = if (f == null) e else "" }
+                }
+                if (nVysledok.isNotBlank()) Text(T("nahovor_hotovo_m", nVysledok), color = Farby.zelena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                if (nChyba.isNotBlank()) Text(nChyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+            Karta {
                 val c = LocalContext.current
                 Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))

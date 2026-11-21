@@ -3,7 +3,6 @@ name: Alexia AI – Windows (PC)
 on:
   push:
     branches: [main]
-    paths: ['linux/**', 'app/src/main/cpp/**', 'obrazky/src/main/cpp/**', '.github/workflows/windows.yml']
   workflow_dispatch:
 
 permissions:
@@ -15,6 +14,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Spoločné číslo verzie (rovnaké pre mobil, Windows aj Linux)
+        shell: bash
+        run: echo "VERZIA_N=$(git rev-list --count HEAD)" >> $GITHUB_ENV
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -45,7 +49,7 @@ jobs:
           Get-ChildItem linux/resources/windows-x64
       - name: Balík pre Windows
         shell: bash
-        run: cd linux && ./gradlew createDistributable --no-daemon --stacktrace -Pverzia=1.1.${{ github.run_number }}
+        run: cd linux && ./gradlew createDistributable --no-daemon --stacktrace -Pverzia=1.2.${{ env.VERZIA_N }}
       - name: ZIP a vydanie
         shell: pwsh
         env:
@@ -56,7 +60,7 @@ jobs:
           Set-Content -Encoding UTF8 AlexiaAI-Windows/CITAJ.txt "Alexia AI pre Windows`r`n`r`nSpusti AlexiaAI.exe. Modely, chat a obrazky su v %LOCALAPPDATA%\AlexiaAI.`r`nAktualizaciu rozbal cez tento priecinok - nic sa nestrati."
           Compress-Archive -Path AlexiaAI-Windows -DestinationPath AlexiaAI-Windows.zip
           Get-Item AlexiaAI-Windows.zip
-          "1.1.${{ github.run_number }}" | Set-Content -NoNewline windows-verzia.txt
+          "1.2.${{ env.VERZIA_N }}" | Set-Content -NoNewline windows-verzia.txt
           $tag = gh release view --json tagName -q .tagName
           gh release upload $tag AlexiaAI-Windows.zip windows-verzia.txt --clobber
           Write-Host "Pridane k vydaniu $tag"

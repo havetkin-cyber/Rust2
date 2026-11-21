@@ -1004,6 +1004,33 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 TextButton(onClick = { n.hlasRychlost = 1f; n.hlasVyska = 1f; n.hlasHrubka = 1f; n.hlasPlnost = 0f; n.uloz() }) { Text(T("hlas_predvolene"), color = Farby.ruzova) }
             }
             Karta {
+                Text(T("nahovor_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Text(T("nahovor_info", Hlas.meno(n.hlas)), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                var nText by remember { mutableStateOf("") }
+                var nVysledok by remember { mutableStateOf<File?>(null) }
+                var nChyba by remember { mutableStateOf("") }
+                OutlinedTextField(value = nText, onValueChange = { nText = it; nVysledok = null; nChyba = "" }, minLines = 3, maxLines = 10,
+                    placeholder = { Text(T("nahovor_hint"), color = Farby.tlmene) }, modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+                val np = Hlas.nahrava
+                if (np != null) {
+                    Text(T("nahovor_robim", (np * 100).roundToInt()), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                    LinearProgressIndicator(progress = { np }, modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                } else Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val ok: (File?, String) -> Unit = { f, e -> nVysledok = f; nChyba = if (f == null) e else "" }
+                    GradientTlacidlo("WAV", Icons.Default.SaveAlt, Modifier.weight(1f), enabled = nText.isNotBlank()) { Hlas.nahovorDoSuboru(nText, mp3 = false, hotovo = ok) }
+                    GradientTlacidlo("MP3", Icons.Default.SaveAlt, Modifier.weight(1f), enabled = nText.isNotBlank()) {
+                        if (VideoJadro.ffmpeg() == null) VideoJadro.stiahniFfmpeg { Hlas.nahovorDoSuboru(nText, mp3 = true, hotovo = ok) }
+                        else Hlas.nahovorDoSuboru(nText, mp3 = true, hotovo = ok)
+                    }
+                }
+                nVysledok?.let { f ->
+                    Text(T("nahovor_hotovo", f.path), color = Farby.zelena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)
+                        .clickable { runCatching { java.awt.Desktop.getDesktop().open(f) }.onFailure { Platforma.otvorOdkaz(f.toURI().toString()) } })
+                }
+                if (nChyba.isNotBlank()) Text(nChyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+            Karta {
                 Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
                 if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)

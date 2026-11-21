@@ -3,7 +3,6 @@ name: Alexia AI – APK
 on:
   push:
     branches: [main]
-    paths-ignore: ['linux/**', '.github/workflows/linux.yml', '.github/workflows/windows.yml', 'README.md']
   workflow_dispatch:
 
 permissions:
@@ -14,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Spoločné číslo verzie (rovnaké pre mobil, Windows aj Linux)
+        shell: bash
+        run: echo "VERZIA_N=$(git rev-list --count HEAD)" >> $GITHUB_ENV
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -24,12 +28,12 @@ jobs:
       - name: Zostaviť APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace -PversionCode=${{ github.run_number }}
+          ./gradlew assembleRelease --no-daemon --stacktrace -PversionCode=${{ env.VERZIA_N }}
       - name: Vydať
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          V="1.0.${{ github.run_number }}"
+          V="1.2.${{ env.VERZIA_N }}"
           cp app/build/outputs/apk/release/app-release.apk AlexiaAI.apk
           # linuxový ZIP z predchádzajúceho vydania prenesieme, aby odkaz "latest" fungoval pre oba
           for p in AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage linux-verzia.txt AlexiaAI-Windows.zip windows-verzia.txt; do gh release download --pattern "$p" -D predosle 2>/dev/null || true; done

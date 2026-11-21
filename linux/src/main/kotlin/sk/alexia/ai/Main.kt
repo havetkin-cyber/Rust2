@@ -512,7 +512,28 @@ private fun BublinaVideo(s: Sprava) {
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            if (cesta != null && File(cesta).isDirectory) {
+            if (cesta != null && cesta.endsWith(".mp4") && File(cesta).exists()) {
+                // video AI: náhľad + prehranie v prehrávači
+                val f = File(cesta)
+                val nahlad = remember(cesta) { s.obrazok?.let { Platforma.nacitajObrazok(File(it)) } }
+                Box(Modifier.widthIn(max = 480.dp).clip(RoundedCornerShape(16.dp)).background(Color.Black)
+                    .clickable { runCatching { java.awt.Desktop.getDesktop().open(f) }.onFailure { Platforma.otvorOdkaz(f.toURI().toString()) } },
+                    contentAlignment = Alignment.Center) {
+                    nahlad?.let { Image(it, null, Modifier.fillMaxWidth().aspectRatio(it.width.toFloat() / it.height), contentScale = ContentScale.Fit) }
+                    Box(Modifier.size(56.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.PlayArrow, T("video_prehrat"), tint = Color.White, modifier = Modifier.size(36.dp))
+                    }
+                }
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(onClick = {
+                        val d = File(System.getProperty("user.home"), "Videos/Alexia AI").apply { mkdirs() }
+                        val u = runCatching { f.copyTo(File(d, f.name), overwrite = true) }.getOrNull()
+                        Platforma.oznam(if (u != null) T("video_ulozene") + " " + d.path else T("obr_neulozene"))
+                    }, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.SaveAlt, null, tint = Farby.text, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(T("video_ulozit"), color = Farby.text, fontSize = 13.sp)
+                    }
+                }
+            } else if (cesta != null && File(cesta).isDirectory) {
                 val proj = remember(cesta) { VideoJadro.Projekt(File(cesta)) }
                 key(verzia) { VideoPrehravac(proj) }
                 val z = znova
@@ -1004,6 +1025,8 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
     }
     var rozmer by remember { mutableIntStateOf(384) }
     var typ by remember { mutableStateOf("obrazok") }
+    var snimokVidea by remember { mutableIntStateOf(33) }
+    var aiVideo by remember { mutableStateOf<File?>(null) }
     var pocet by remember { mutableIntStateOf(1) }
     var kroky by remember { mutableIntStateOf(20) }
     var cfg by remember { mutableFloatStateOf(7f) }
@@ -1186,6 +1209,28 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                         TextButton(onClick = { o.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
+                    } else if (o.jeVideoModel) {
+                        Text(T("vai_dlzka"), color = Farby.text, fontSize = 14.sp)
+                        Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(17 to "1 s", 33 to "2 s", 49 to "3 s").forEach { (n, nazov) ->
+                                FilterChip(selected = snimokVidea == n, onClick = { snimokVidea = n }, label = { Text(nazov) },
+                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                            }
+                        }
+                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(), enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) {
+                            o.natocAI(prompt, snimokVidea) { f, e -> if (f != null) { aiVideo = f; Platforma.oznam(T("vai_hotovo")) } else Platforma.oznam("⚠ $e") }
+                        }
+                        Text(T("vai_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                        aiVideo?.let { f ->
+                            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                GradientTlacidlo(T("video_prehrat"), Icons.Default.PlayArrow) { runCatching { java.awt.Desktop.getDesktop().open(f) }.onFailure { Platforma.otvorOdkaz(f.toURI().toString()) } }
+                                OutlinedButton(onClick = {
+                                    val d = File(System.getProperty("user.home"), "Videos/Alexia AI").apply { mkdirs() }
+                                    val u = runCatching { f.copyTo(File(d, f.name), overwrite = true) }.getOrNull()
+                                    Platforma.oznam(if (u != null) T("video_ulozene") + " " + d.path else T("obr_neulozene"))
+                                }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("video_ulozit"), color = Farby.text) }
+                            }
+                        }
                     } else {
                         GradientTlacidlo(T("obr_vytvorit"), Icons.Default.AutoAwesome, Modifier.fillMaxWidth(),
                             enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generujHerne(if (typ == "obrazok") popisSPozadim() else prompt, negativny, rozmer, kroky, cfg, typ, pocet) }

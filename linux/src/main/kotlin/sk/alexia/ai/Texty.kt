@@ -14,6 +14,13 @@ object T {
     }
 
     private val sk = mapOf(
+        "vai_ziadny" to "Video AI nie je stiahnuté – v Obrázkoch stiahni „Wan 2.1 – video AI“.",
+        "vai_je_video" to "Teraz je zvolený video model – na obrázky vyber v Obrázkoch obrázkový model.",
+        "vai_tvorim" to "Video AI tvorí video… (trvá to dlho, aj desiatky minút)",
+        "vai_vytvorit" to "Vytvoriť video",
+        "vai_dlzka" to "Dĺžka",
+        "vai_info" to "Wan 2.1 robí naozaj pohyblivé video z textu. Na Legion Go S trvá ~2 s videa desiatky minút. Popis píš anglicky.",
+        "vai_hotovo" to "Video je hotové",
         "koder_nadpis" to "Textový kodér (číta tvoj popis)",
         "koder_info" to "Väčší = presnejšie pochopí popis, menší = rýchlejšie a menej pamäte. Vlastný súbor musí byť rovnaký typ modelu (pri Z-Image Qwen3 4B), inak sa sada nenačíta.",
         "koder_vlastny" to "Vlastný súbor…",
@@ -301,6 +308,13 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "vai_ziadny" to "Video AI is not downloaded – in Images download “Wan 2.1 – video AI”.",
+        "vai_je_video" to "A video model is selected – pick an image model in Images to draw.",
+        "vai_tvorim" to "Video AI is creating the video… (takes long, even tens of minutes)",
+        "vai_vytvorit" to "Create video",
+        "vai_dlzka" to "Length",
+        "vai_info" to "Wan 2.1 makes real moving video from text. On the Legion Go S ~2 s of video take tens of minutes. Write the prompt in English.",
+        "vai_hotovo" to "The video is ready",
         "koder_nadpis" to "Text encoder (reads your prompt)",
         "koder_info" to "Bigger = understands the prompt better, smaller = faster and less memory. A custom file must be the same model type (Qwen3 4B for Z-Image), otherwise the set won't load.",
         "koder_vlastny" to "Custom file…",

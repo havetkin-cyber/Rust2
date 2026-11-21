@@ -43,6 +43,12 @@ fun seedZPopisu(p: String): Pair<Long?, String> {
     return m.groupValues[1].toLong() to p.removeRange(m.range).replace(Regex("\\s{2,}"), " ").trim().trim(',')
 }
 
+/** „sprav ai video: …“, „/aivideo …“ → popis pre video AI (Wan), inak null */
+fun popisAIVidea(t: String): String? {
+    val m = Regex("^\\s*(/aivideo|/ai-video|sprav(te)? ai video|vytvor ai video|ai video|video ai|make an ai video)[\\s:,]+(.+)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t)
+    return m?.groupValues?.get(3)?.trim()?.takeIf { it.isNotEmpty() }
+}
+
 /** "/video …", "sprav video: …", "make a video …" → popis videa, inak null */
 fun popisVidea(t: String): String? {
     val m = Regex("^\\s*(/video|sprav(te)? video|vytvor video|urob video|make a video|create a video)[\\s:,]+(.+)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t)
@@ -187,6 +193,7 @@ object ChatJadro {
 
     fun posli(text: String, obrazok: Boolean = false, video: Boolean = false) {
         if (text.isBlank()) return
+        popisAIVidea(text)?.let { natocAI(text.trim(), it); return }
         val popisV = if (video) text.trim() else popisVidea(text)
         if (popisV != null) { natoc(text.trim(), popisV); return }
         upravaObrazka(text)?.let { (seed, zmena) -> uprav(text.trim(), seed, zmena); return }
@@ -198,6 +205,20 @@ object ChatJadro {
     }
 
     /** obrázok priamo v chate – kreslí ho obrázkový model (Obrázky) */
+    /** video AI (Wan) priamo v chate */
+    private fun natocAI(text: String, popis: String) {
+        if (ObrazkyJadro.generuje || VideoJadro.pracuje) return
+        spravy += Sprava("user", text, jeObrazkova = true)
+        val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
+        if (nastavenia.vzdialene) { odpoved.text = "⚠ " + T("video_vzdialene"); ulozChat(); return }
+        odpoved.stavText = T("vai_tvorim")
+        ObrazkyJadro.natocAI(popis, null) { f, e ->
+            if (f != null) { odpoved.video = f.path; odpoved.obrazok = f.path.removeSuffix(".mp4") + ".png" } else odpoved.text = "⚠ $e"
+            odpoved.stavText = ""
+            ulozChat()
+        }
+    }
+
     /** krátke video z obrázkov priamo v chate */
     private fun natoc(text: String, popis: String) {
         if (ObrazkyJadro.generuje || VideoJadro.pracuje) return

@@ -262,6 +262,7 @@ object ObrazkyJadro {
      * Inak sa chat na chvíľu uvoľní a po obrázku sa znova načíta.
      */
     fun nakresliDoChatu(popis: String, seed: Long? = null, hotovo: (File?, String) -> Unit) {
+        if (jeVideoModel) { hotovo(null, T("vai_je_video")); return }
         val cesta = aktivnyModel
         val mam = cesta != null && (aktivnaSada()?.let { mamSadu(it) } ?: File(cesta).exists())
         if (!mam) { hotovo(null, T("chat_obr_ziadny")); return }
@@ -404,6 +405,66 @@ object ObrazkyJadro {
             pevnySeed = seed, predloha = px, sila = sila) { nf, e ->
             hotovo(nf, e)
             if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
+        }
+    }
+
+    // ------------------------------------------------ video AI (Wan 2.1)
+
+    fun videoSada(): ObrazkovaSada? = Katalog.obrazky.firstOrNull { it.video != null && mamSadu(it) }
+    val jeVideoModel get() = aktivnaSada()?.video != null
+
+    /**
+     * Krátke video z textu. Ak je aktívny obrázkový model, na čas videa sa načíta Wan a potom sa vráti voľba používateľa.
+     * [snimok] napr. 17 / 33 / 49 (pri 16 fps ≈ 1 / 2 / 3 s). Výsledok: MP4 cez ffmpeg.
+     */
+    fun natocAI(popis: String, snimok: Int?, hotovo: (File?, String) -> Unit) {
+        val sada = aktivnaSada()?.takeIf { it.video != null } ?: videoSada() ?: run { hotovo(null, T("vai_ziadny")); return }
+        if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
+        val ff = VideoJadro.ffmpeg() ?: run { VideoJadro.stiahniFfmpeg { natocAI(popis, snimok, hotovo) }; return }
+        val v = sada.video!!
+        val predtym = aktivnyModel
+        ChatJadro.uvolniPamat()
+        nacitaj("sada:" + sada.id, uvolnitChat = false)
+        generuje = true; priebeh = 0f; chyba = ""
+        Thread {
+            while (true) {
+                Thread.sleep(500)
+                val p = Sd.priebeh(); var dalej = true
+                javax.swing.SwingUtilities.invokeAndWait { if (generuje) priebeh = p else dalej = false }
+                if (!dalej) break
+            }
+        }.apply { isDaemon = true }.start()
+        val seed = (10000L..99999L).random()
+        vlakno.execute {
+            var subor: File? = null; var e = ""
+            if (h == 0L) e = Sd.chyba().ifBlank { "Video model sa nenačítal" }
+            else runCatching {
+                val r = IntArray(4)
+                val neg = "blurry, static, still frame, low quality, deformed, watermark, text, extra fingers, bad hands"
+                val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimok ?: v.snimok, sada.kroky, sada.cfg, v.posun, seed, sada.metoda, r)
+                    ?: throw IllegalStateException(Sd.chyba())
+                val (w, vy, t, fps) = r.toList()
+                val out = File(VideoJadro.priecinok(), "ai_video_${System.currentTimeMillis()}.mp4")
+                // náhľad = prvá snímka
+                val obr = BufferedImage(w, vy, BufferedImage.TYPE_INT_RGB)
+                val px = IntArray(w * vy) { i -> ((data[i * 3].toInt() and 255) shl 16) or ((data[i * 3 + 1].toInt() and 255) shl 8) or (data[i * 3 + 2].toInt() and 255) }
+                obr.setRGB(0, 0, w, vy, px, 0, w); ImageIO.write(obr, "png", File(out.path.removeSuffix(".mp4") + ".png"))
+                // MP4: dvojnásobná plynulosť (dopočítané snímky) a 2× väčšie
+                val p = ProcessBuilder(ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$vy", "-r", "$fps", "-i", "-",
+                    "-vf", "minterpolate=fps=${fps * 2}:mi_mode=mci:mc_mode=aobmc,scale=${w * 2}:${vy * 2}:flags=lanczos",
+                    "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out.path)
+                    .redirectErrorStream(true).start()
+                Thread { runCatching { p.inputStream.readBytes() } }.start()
+                p.outputStream.use { it.write(data, 0, w * vy * 3 * t) }
+                if (p.waitFor() != 0) throw IllegalStateException("ffmpeg zlyhal")
+                subor = out
+            }.onFailure { e = it.message ?: "Video sa nepodarilo" }
+            Platforma.naHlavnom {
+                generuje = false; priebeh = 0f
+                // vráti voľbu obrázkového modelu (načíta sa, keď ho bude treba)
+                if (predtym != null && predtym != "sada:" + sada.id) { uvolniPamat(); aktivnyModel = predtym }
+                hotovo(subor, e)
+            }
         }
     }
 

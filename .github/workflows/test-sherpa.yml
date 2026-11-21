@@ -5,29 +5,17 @@ on:
     paths: ['.github/workflows/test-sherpa.yml']
 env:
   T: v2.0.2
-  D: sherpa-onnx-supertonic-3-tts-int8-2026-05-11
 jobs:
-  windows:
-    runs-on: windows-latest
-    defaults: { run: { shell: bash } }
+  java:
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: '21' }
-      - run: |
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-$T-win-x64-shared-MT-Release.tar.bz2 | tar -xj
-          curl -sL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$D.tar.bz2 | tar -xj
-          cat > T.java <<'J'
-          import java.util.*;
-          public class T { public static void main(String[] a) throws Exception {
-            String d = a[1];
-            List<String> c = new ArrayList<>(List.of(a[0], "--supertonic-duration-predictor="+d+"/duration_predictor.int8.onnx","--supertonic-text-encoder="+d+"/text_encoder.int8.onnx","--supertonic-vector-estimator="+d+"/vector_estimator.int8.onnx","--supertonic-vocoder="+d+"/vocoder.int8.onnx","--supertonic-tts-json="+d+"/tts.json","--supertonic-unicode-indexer="+d+"/unicode_indexer.bin","--supertonic-voice-style="+d+"/voice.bin","--sid=1","--lang=sk","--output-filename="+a[2], a[3]));
-            Process p = new ProcessBuilder(c).redirectErrorStream(true).start();
-            byte[] b = p.getInputStream().readAllBytes(); p.waitFor();
-            String s = new String(b, "UTF-8"); for (String l : s.split("\n")) if (l.contains("text is") || l.contains("duration")) System.out.println(l);
-          } }
-          J
-          B=$(cygpath -w sherpa-onnx-$T-win-x64-shared-MT-Release/bin/sherpa-onnx-offline-tts.exe)
-          java T.java "$B" $D a.wav "Ľúbim čiernu kávu, žltý ďateľ"
-          java T.java "$B" $D b.wav "Lubim ciernu kavu, zlty datel"
-          java -Dsun.jnu.encoding=UTF-8 T.java "$B" $D c.wav "Ľúbim čiernu kávu, žltý ďateľ"
-          ls -la *.wav
+      - env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh api "repos/k2-fsa/sherpa-onnx/contents/sherpa-onnx/java-api/src/main/java/com/k2fsa/sherpa/onnx?ref=$T" --jq '.[].name' | tr '\n' ' '
+          echo
+          mkdir j && cd j
+          for f in OfflineTts OfflineTtsConfig OfflineTtsModelConfig OfflineTtsSupertonicModelConfig GenerationConfig GeneratedAudio LibraryUtils; do
+            curl -sfL https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$T/sherpa-onnx/java-api/src/main/java/com/k2fsa/sherpa/onnx/$f.java -o $f.java && echo "=== $f" && grep -vE "^\s*(//|\*|/\*)|^\s*$|^import" $f.java | head -80
+          done
+          cd .. && curl -sL -o n.jar https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-native-lib-linux-x64-2.0.2.jar && unzip -l n.jar
+          curl -sL -o w.jar https://github.com/k2-fsa/sherpa-onnx/releases/download/$T/sherpa-onnx-native-lib-win-x64-2.0.2.jar && unzip -l w.jar

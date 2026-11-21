@@ -32,12 +32,19 @@ jobs:
           python -c "import mmcv, mmpose, mmdet; print('mm OK', mmcv.__version__)"
       - name: Váhy
         run: |
-          cd MuseTalk && ls download_weights.sh && sed -n 1,80p download_weights.sh
-          pip -q install -U "huggingface_hub[cli]" gdown
-          bash download_weights.sh 2>&1 | tail -15
+          cd MuseTalk
+          H() { mkdir -p "$(dirname models/$2)"; curl -fsSL --retry 3 -o "models/$2" "https://huggingface.co/$1/resolve/main/$3" && echo "OK $2 $(stat -c%s models/$2)"; }
+          H TMElyralab/MuseTalk musetalkV15/unet.pth musetalkV15/unet.pth
+          H TMElyralab/MuseTalk musetalkV15/musetalk.json musetalkV15/musetalk.json
+          H TMElyralab/MuseTalk musetalk/musetalk.json musetalk/musetalk.json
+          for f in config.json diffusion_pytorch_model.bin; do H stabilityai/sd-vae-ft-mse sd-vae/$f $f; done
+          for f in config.json pytorch_model.bin preprocessor_config.json; do H openai/whisper-tiny whisper/$f $f; done
+          H yzd-v/DWPose dwpose/dw-ll_ucoco_384.pth dw-ll_ucoco_384.pth
+          mkdir -p models/face-parse-bisent
+          pip -q install gdown
+          gdown -q 154JgKpzCPW82qINcVieuPH3fZ2e0P812 -O models/face-parse-bisent/79999_iter.pth || H ManyOtherFunctions/face-parse-bisent face-parse-bisent/79999_iter.pth 79999_iter.pth
+          curl -fsSL -o models/face-parse-bisent/resnet18-5c106cde.pth https://download.pytorch.org/models/resnet18-5c106cde.pth
           find models -type f | xargs ls -la
-          # transformers 4.39 potrebuje starší huggingface_hub (CLI na sťahovanie ho zvýšilo)
-          pip -q install "huggingface_hub==0.30.2"
       - name: Hlas (Supertonic, slovensky)
         run: |
           pip -q install sherpa-onnx==1.13.2 soundfile

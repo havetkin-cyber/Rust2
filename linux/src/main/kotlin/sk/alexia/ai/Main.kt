@@ -71,7 +71,11 @@ fun main() {
     if (ChatJadro.nastavenia.zdielat) Server.spusti()
     application {
         val stav = rememberWindowState(placement = WindowPlacement.Maximized, size = DpSize(1280.dp, 800.dp))
-        Window(onCloseRequest = ::exitApplication, title = "Alexia AI", state = stav, onPreviewKeyEvent = {
+        Window(onCloseRequest = {
+            // zatvorenie = koniec celej appky: vlákna modelov by inak držali proces (a RAM) aj po zatvorení okna
+            runCatching { ObrazkyJadro.zrus(); ChatJadro.zastav(); Hlas.zastav() }
+            Runtime.getRuntime().halt(0)
+        }, title = "Alexia AI", state = stav, onPreviewKeyEvent = {
             // Esc = späť
             if (it.type != KeyEventType.KeyDown) false
             else when {

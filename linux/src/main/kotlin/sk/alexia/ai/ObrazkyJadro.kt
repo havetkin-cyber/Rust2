@@ -551,7 +551,8 @@ object ObrazkyJadro {
      * Video „najprv obrázok“: obrázkový model (FLUX…) nakreslí presný prvý snímok podľa popisu,
      * Wan 2.2 ho potom rozhýbe. Presnejší vzhľad, tvár a farby ako video priamo z textu.
      */
-    fun natocCezObrazok(popis: String, sekundy: Int?, hotovo: (File?, String) -> Unit) {
+    /** [pohyb] = samostatný popis pohybu pre Wan (null = rovnaký popis ako obrázok) */
+    fun natocCezObrazok(popis: String, sekundy: Int?, pohyb: String? = null, hotovo: (File?, String) -> Unit) {
         val v2 = i2vSada() ?: run { hotovo(null, T("vai_ziadny_i2v")); return }
         val img = obrazkovaPreVideo() ?: run { hotovo(null, T("vid_bez_obr_modelu")); return }
         if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
@@ -565,7 +566,8 @@ object ObrazkyJadro {
         spust(popis.trim(), "blurry, low quality, deformed, bad anatomy, extra fingers", w, h, img.kroky, img.cfg) { f, e ->
             kusText = ""
             if (f == null) { aktivnyModel = predtym; hotovo(null, e.ifBlank { T("vid_bez_obr_modelu") }); return@spust }
-            natocAI(popis, sekundy, f) { video, e2 ->
+            val popisVidea = if (pohyb == null) popis else listOf(popis.trim(), pohyb.trim().ifBlank { "natural subtle motion, cinematic" }).joinToString(", ")
+            natocAI(popisVidea, sekundy, f) { video, e2 ->
                 if (predtym != null && predtym != aktivnyModel) { uvolniPamat(); aktivnyModel = predtym }
                 hotovo(video, e2)
             }

@@ -98,7 +98,7 @@ object VzdialeneVidea {
                 val popis = listOf(ObrazkyJadro.popisObrazka(predloha).orEmpty(), u.popis.ifBlank { "natural subtle motion, cinematic" }).filter { it.isNotBlank() }.joinToString(", ")
                 ObrazkyJadro.natocAI(popis, u.sekundy, predloha, hotovo)
             }
-            u.cezObrazok -> ObrazkyJadro.natocCezObrazok(u.popis, u.sekundy, hotovo)
+            u.cezObrazok -> ObrazkyJadro.natocCezObrazok(u.popis, u.sekundy, hotovo = hotovo)
             else -> ObrazkyJadro.natocAI(u.popis, u.sekundy, hotovo = hotovo)
         }
     }

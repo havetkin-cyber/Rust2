@@ -1461,41 +1461,58 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                             Switch(checked = ns2.videoCezObrazok && mozeCezObr, enabled = mozeCezObr, onCheckedChange = { ns2.videoCezObrazok = it; ns2.uloz() },
                                 colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                         }
-                        // podľa obrázka: stačí seed obrázka z galérie, popis pohybu je nepovinný
-                        var podlaSeedu by remember { mutableStateOf(false) }
-                        var seedText by remember { mutableStateOf("") }
-                        val mozeSeed = o.i2vSada() != null
-                        Row(Modifier.fillMaxWidth().clickable(enabled = mozeSeed) { podlaSeedu = !podlaSeedu }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = podlaSeedu && mozeSeed, onCheckedChange = { podlaSeedu = it }, enabled = mozeSeed,
+                        // podľa obrázka: do okienka seed obrázka z galérie ALEBO popis, podľa ktorého FLUX… najprv nakreslí postavu;
+                        // hlavný popis je potom len pohyb (nepovinný)
+                        var podlaObr by remember { mutableStateOf(false) }
+                        var obrText by remember { mutableStateOf("") }
+                        val mozePodla = o.i2vSada() != null
+                        Row(Modifier.fillMaxWidth().clickable(enabled = mozePodla) { podlaObr = !podlaObr }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = podlaObr && mozePodla, onCheckedChange = { podlaObr = it }, enabled = mozePodla,
                                 colors = CheckboxDefaults.colors(checkedColor = Farby.fialova, uncheckedColor = Farby.tlmene))
                             Column(Modifier.weight(1f)) {
-                                Text(T("vid_seed"), color = if (mozeSeed) Farby.text else Farby.tlmene, fontSize = 14.sp)
-                                Text(T(if (mozeSeed) "vid_seed_info" else "vai_ziadny_i2v"), color = Farby.tlmene, fontSize = 12.sp)
+                                Text(T("vid_seed"), color = if (mozePodla) Farby.text else Farby.tlmene, fontSize = 14.sp)
+                                Text(T(if (mozePodla) "vid_seed_info" else "vai_ziadny_i2v"), color = Farby.tlmene, fontSize = 12.sp)
                             }
                         }
-                        val seedObr = if (podlaSeedu && mozeSeed) seedText.trim().toLongOrNull()?.let { s -> remember(s, o.galeria.size) { o.najdiPodlaSeedu(s) } } else null
-                        if (podlaSeedu && mozeSeed) Row(Modifier.padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedTextField(value = seedText, onValueChange = { t -> seedText = t.filter { it.isDigit() }.take(12) }, singleLine = true,
-                                label = { Text("Seed") }, modifier = Modifier.width(160.dp).nadKlavesnicou(), shape = RoundedCornerShape(12.dp),
+                        val zapnutePodla = podlaObr && mozePodla
+                        val seed = obrText.trim().takeIf { t -> t.isNotEmpty() && t.all { it.isDigit() } }?.toLongOrNull()
+                        val seedObr = if (zapnutePodla && seed != null) remember(seed, o.galeria.size) { o.najdiPodlaSeedu(seed) } else null
+                        val popisPostavy = obrText.trim().takeIf { zapnutePodla && seed == null && it.isNotEmpty() }
+                        if (zapnutePodla) {
+                            OutlinedTextField(value = obrText, onValueChange = { obrText = it }, minLines = 2, maxLines = 6,
+                                label = { Text(T("vid_seed_pole")) }, placeholder = { Text(T("vid_seed_hint"), color = Farby.tlmene, fontSize = 12.sp) },
+                                modifier = Modifier.fillMaxWidth().nadKlavesnicou(), shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
-                            if (seedObr != null) {
-                                val nb = remember(seedObr) { Platforma.nacitajObrazok(seedObr) }
-                                if (nb != null) Image(nb, null, Modifier.height(72.dp).aspectRatio(nb.width.toFloat() / nb.height).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Fit)
-                                Text(T("vid_seed_najdeny"), color = Farby.zelena, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                            } else if (seedText.isNotBlank()) Text(T("vid_seed_nenajdeny"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                when {
+                                    seedObr != null -> {
+                                        val nb = remember(seedObr) { Platforma.nacitajObrazok(seedObr) }
+                                        if (nb != null) Image(nb, null, Modifier.height(72.dp).aspectRatio(nb.width.toFloat() / nb.height).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Fit)
+                                        Text(T("vid_seed_najdeny"), color = Farby.zelena, fontSize = 12.sp)
+                                    }
+                                    seed != null -> Text(T("vid_seed_nenajdeny"), color = Farby.cervena, fontSize = 12.sp)
+                                    popisPostavy != null -> Text(if (mozeCezObr) T("vid_seed_kresli", o.obrazkovaPreVideo()?.nazov ?: "") else T("vid_cez_obr_nejde"),
+                                        color = if (mozeCezObr) Farby.zelena else Farby.cervena, fontSize = 12.sp)
+                                }
+                            }
                         }
-                        val cezSeed = podlaSeedu && mozeSeed
-                        val cezObr = !cezSeed && ns2.videoCezObrazok && mozeCezObr
-                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(),
-                            enabled = if (cezSeed) seedObr != null && !o.generuje else prompt.isNotBlank() && (cezObr || (o.stav == StavModelu.PRIPRAVENY && o.jeVideoModel))) {
+                        val cezObr = !zapnutePodla && ns2.videoCezObrazok && mozeCezObr
+                        val mozeVytvorit = when {
+                            zapnutePodla && seed != null -> seedObr != null
+                            zapnutePodla && popisPostavy != null -> mozeCezObr
+                            zapnutePodla -> false
+                            else -> prompt.isNotBlank() && (cezObr || (o.stav == StavModelu.PRIPRAVENY && o.jeVideoModel))
+                        }
+                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(), enabled = mozeVytvorit && !o.generuje) {
                             val hotovoV: (File?, String) -> Unit = { f, e -> if (f != null) { aiVideo = f; Platforma.oznam(T("vai_hotovo")) } else Platforma.oznam("⚠ $e") }
                             when {
-                                cezSeed && seedObr != null -> {
+                                seedObr != null -> {
                                     if (Podpis.zakazane(prompt)) { Platforma.oznam(T("upr_zakazane")); return@GradientTlacidlo }
                                     val popis = listOf(o.popisObrazka(seedObr).orEmpty(), prompt.trim().ifBlank { "natural subtle motion, cinematic" }).filter { it.isNotBlank() }.joinToString(", ")
                                     o.natocAI(popis, ns2.dlzkaVidea, seedObr, hotovoV)
                                 }
-                                cezObr -> o.natocCezObrazok(prompt, ns2.dlzkaVidea, hotovoV)
+                                popisPostavy != null -> o.natocCezObrazok(popisPostavy, ns2.dlzkaVidea, pohyb = prompt, hotovo = hotovoV)
+                                cezObr -> o.natocCezObrazok(prompt, ns2.dlzkaVidea, hotovo = hotovoV)
                                 else -> o.natocAI(prompt, ns2.dlzkaVidea, hotovo = hotovoV)
                             }
                         }

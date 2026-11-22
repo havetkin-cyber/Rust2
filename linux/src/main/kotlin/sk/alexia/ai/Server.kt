@@ -57,9 +57,18 @@ object Server {
             s.createContext("/api/chat") { x -> obsluz(x) { chat(x) } }
             s.createContext("/api/stop") { x -> obsluz(x) { ChatJadro.zastav(); odpovedz(x, 200, "{}") } }
             s.createContext("/api/obrazok") { x -> obsluz(x) { obrazok(x) } }
+            // videá zadané z mobilu (rad úloh) a galéria PC
+            s.createContext("/api/video/pridaj") { x -> obsluz(x) { videoPridaj(x) } }
+            s.createContext("/api/video/stav") { x -> obsluz(x) { odpovedz(x, 200, VzdialeneVidea.stav().toString()) } }
+            s.createContext("/api/video/subor") { x -> obsluz(x) { videoSubor(x) } }
+            s.createContext("/api/video/zrus") { x -> obsluz(x) { VzdialeneVidea.zrus(telo(x).optString("id")); odpovedz(x, 200, "{}") } }
+            s.createContext("/api/galeria/zoznam") { x -> obsluz(x) { galeria(x) } }
+            s.createContext("/api/galeria/nahlad") { x -> obsluz(x) { nahlad(x) } }
+            s.createContext("/api/galeria/subor") { x -> obsluz(x) { obrazokSubor(x) } }
             s.start(); http = s
             spustiHladanie()
             bezi = true
+            VzdialeneVidea.obnov()
             null
         }.getOrElse { it.message ?: "Server sa nepodarilo spustiť" }
     }
@@ -121,6 +130,8 @@ object Server {
             .put("model", ChatJadro.nazovModelu())
             .put("pripraveny", ChatJadro.stav == StavModelu.PRIPRAVENY)
             .put("obrazky", ObrazkyJadro.aktivnyModel != null)
+            .put("video", ObrazkyJadro.videoSada() != null)
+            .put("rozhybat", ObrazkyJadro.i2vSada() != null)
         odpovedz(x, 200, j.toString())
     }
 
@@ -155,5 +166,64 @@ object Server {
         x.responseHeaders.add("Content-Type", "image/png")
         x.sendResponseHeaders(200, b.size.toLong())
         x.responseBody.use { it.write(b) }
+    }
+
+    private fun parameter(x: HttpExchange, meno: String): String? =
+        x.requestURI.rawQuery?.split('&')?.map { it.split('=', limit = 2) }?.firstOrNull { it[0] == meno }
+            ?.getOrNull(1)?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+
+    private fun posliSubor(x: HttpExchange, f: File, typ: String) {
+        x.responseHeaders.add("Content-Type", typ)
+        x.sendResponseHeaders(200, f.length())
+        x.responseBody.use { o -> f.inputStream().use { it.copyTo(o, 1 shl 16) } }
+    }
+
+    private fun videoPridaj(x: HttpExchange) {
+        val j = telo(x)
+        val popis = j.optString("popis").trim()
+        val predloha = j.optString("predloha").trim().ifBlank { null }
+        if (popis.isEmpty() && predloha == null) { odpovedz(x, 400, "Chýba popis"); return }
+        if (predloha != null && Podpis.zakazane(popis)) { odpovedz(x, 400, T("upr_zakazane")); return }
+        if (predloha != null && ObrazkyJadro.i2vSada() == null) { odpovedz(x, 400, T("vai_ziadny_i2v")); return }
+        if (predloha == null && ObrazkyJadro.videoSada() == null) { odpovedz(x, 400, T("vai_ziadny")); return }
+        val sek = j.optInt("sekundy", 5).coerceIn(1, 180)
+        val id = VzdialeneVidea.pridaj(popis, sek, j.optBoolean("cezObrazok"), predloha)
+        odpovedz(x, 200, JSONObject().put("id", id).toString())
+    }
+
+    private fun videoSubor(x: HttpExchange) {
+        val u = parameter(x, "id")?.let { VzdialeneVidea.najdi(it) }
+        val f = u?.subor?.let { File(it) }?.takeIf { it.isFile }
+        if (f == null) { odpovedz(x, 404, "Video sa nenašlo"); return }
+        posliSubor(x, f, "video/mp4")
+    }
+
+    private fun galeria(x: HttpExchange) {
+        val a = org.json.JSONArray()
+        ObrazkyJadro.posledneObrazky(60).forEach { f ->
+            a.put(JSONObject().put("meno", f.name).put("popis", ObrazkyJadro.popisObrazka(f).orEmpty()).put("appka", ObrazkyJadro.seedObrazka(f) != null))
+        }
+        odpovedz(x, 200, JSONObject().put("obrazky", a).toString())
+    }
+
+    private fun nahlad(x: HttpExchange) {
+        val f = parameter(x, "meno")?.let { ObrazkyJadro.obrazokZGalerie(it) } ?: run { odpovedz(x, 404, "Nenašiel sa"); return }
+        val img = javax.imageio.ImageIO.read(f) ?: run { odpovedz(x, 500, "Obrázok sa nedá čítať"); return }
+        val k = 320.0 / maxOf(img.width, img.height)
+        val w = maxOf(1, (img.width * k).toInt()); val h = maxOf(1, (img.height * k).toInt())
+        val m = java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        m.createGraphics().apply {
+            setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            drawImage(img, 0, 0, w, h, null); dispose()
+        }
+        val b = java.io.ByteArrayOutputStream(); javax.imageio.ImageIO.write(m, "jpg", b)
+        x.responseHeaders.add("Content-Type", "image/jpeg")
+        x.sendResponseHeaders(200, b.size().toLong())
+        x.responseBody.use { it.write(b.toByteArray()) }
+    }
+
+    private fun obrazokSubor(x: HttpExchange) {
+        val f = parameter(x, "meno")?.let { ObrazkyJadro.obrazokZGalerie(it) } ?: run { odpovedz(x, 404, "Nenašiel sa"); return }
+        posliSubor(x, f, "image/png")
     }
 }

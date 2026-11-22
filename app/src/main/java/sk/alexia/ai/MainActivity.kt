@@ -71,12 +71,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Obrazovka { CHAT, OBRAZKY, VYLEPSIT, MODELY, NASTAVENIA }
+private enum class Obrazovka { CHAT, OBRAZKY, VIDEA_PC, VYLEPSIT, MODELY, NASTAVENIA }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun Appka() {
     var obrazovka by remember { mutableStateOf(Obrazovka.CHAT) }
+    LaunchedEffect(Unit) { PcSpojenie.skontroluj() }
     BackHandler(obrazovka != Obrazovka.CHAT) { obrazovka = Obrazovka.CHAT }
     // v pamäti je vždy len jeden model: obrázky, vylepšenie alebo chat
     LaunchedEffect(obrazovka) {
@@ -111,6 +112,7 @@ private fun Appka() {
                     Obrazovka.NASTAVENIA -> NastaveniaObrazovka { obrazovka = Obrazovka.CHAT }
                     Obrazovka.OBRAZKY -> ObrazkyObrazovka { obrazovka = Obrazovka.CHAT }
                     Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
+                    Obrazovka.VIDEA_PC -> VideaPcObrazovka(naNastavenia = { obrazovka = Obrazovka.NASTAVENIA }) { obrazovka = Obrazovka.CHAT }
                 }
             }
             // spodné záložky (pri písaní sa skryjú, aby nezaberali miesto nad klávesnicou)
@@ -124,6 +126,7 @@ private fun Zalozky(aktivna: Obrazovka, zvol: (Obrazovka) -> Unit) {
     val polozky = listOf(
         Triple(Obrazovka.CHAT, Icons.Default.Forum, "chat"),
         Triple(Obrazovka.OBRAZKY, Icons.Default.Image, "obrazky"),
+        Triple(Obrazovka.VIDEA_PC, Icons.Default.Movie, "pc_zalozka"),
         Triple(Obrazovka.VYLEPSIT, Icons.Default.AutoFixHigh, "vylepsit_kratko"),
         Triple(Obrazovka.MODELY, Icons.Default.Memory, "modely"),
         Triple(Obrazovka.NASTAVENIA, Icons.Default.Tune, "nastavenia"),
@@ -132,7 +135,11 @@ private fun Zalozky(aktivna: Obrazovka, zvol: (Obrazovka) -> Unit) {
         polozky.forEach { (o, ikona, kluc) ->
             NavigationBarItem(
                 selected = o == aktivna, onClick = { zvol(o) },
-                icon = { Icon(ikona, null) }, label = { Text(T(kluc), fontSize = 11.sp, maxLines = 1) },
+                icon = {
+                    // funkcie z PC sú zamknuté, kým sa mobil nepripojí k PC
+                    if (o == Obrazovka.VIDEA_PC && !PcSpojenie.pripojene) BadgedBox(badge = { Icon(Icons.Default.Lock, null, tint = Farby.tlmene, modifier = Modifier.size(12.dp)) }) { Icon(ikona, null) }
+                    else Icon(ikona, null)
+                }, label = { Text(T(kluc), fontSize = 11.sp, maxLines = 1) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color.White, selectedTextColor = Farby.ruzova, indicatorColor = Farby.fialova,
                     unselectedIconColor = Farby.tlmene, unselectedTextColor = Farby.tlmene,
@@ -1400,5 +1407,201 @@ private fun HistoriaDialog(zavri: () -> Unit) {
             confirmButton = { TextButton(onClick = { j.zmazChat(z.id); naZmazanie = null }) { Text(T("hist_zmazat"), color = Farby.cervena) } },
             dismissButton = { TextButton(onClick = { naZmazanie = null }) { Text(stringResource(R.string.zrusit), color = Farby.text) } },
         )
+    }
+}
+
+
+// ---------------------------------------------------------------- Videá a galéria z PC (zamknuté bez pripojenia k PC)
+
+private val DLZKY_PC = listOf(3, 5, 10, 20, 30, 60, 120, 180)
+
+private fun dlzkaText(s: Int) = if (s >= 60) "${s / 60} min" else "$s s"
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
+    val pc = PcSpojenie
+    val c = LocalContext.current
+    LaunchedEffect(Unit) { pc.skontroluj() }
+    // kým je obrazovka otvorená, stav radu sa obnovuje
+    LaunchedEffect(pc.pripojene) {
+        while (pc.pripojene) { pc.obnovStav(); kotlinx.coroutines.delay(4000) }
+    }
+    val farbyPola = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text)
+    Column(Modifier.fillMaxSize()) {
+        Hlavicka(T("pc_nadpis"), pc.info?.let { T("pc_pripojene", it.meno) }, spat = spat)
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!pc.pripojene) {
+                Karta {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, null, tint = Farby.ruzova, modifier = Modifier.size(28.dp)); Spacer(Modifier.width(10.dp))
+                        Text(T("pc_zamknute"), color = Farby.text, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+                    }
+                    Text(T("pc_zamknute_info"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
+                    if (pc.chyba.isNotBlank()) Text(pc.chyba, color = Farby.cervena, fontSize = 12.sp)
+                    if (pc.kontroluje) LinearProgressIndicator(Modifier.padding(top = 8.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    else Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GradientTlacidlo(T("pc_skusit"), Icons.Default.Refresh, Modifier.weight(1f)) { pc.skontroluj() }
+                        OutlinedButton(onClick = naNastavenia, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("nastavenia"), color = Farby.text) }
+                    }
+                }
+                Karta {
+                    Text(T("pc_co_odomkne"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Text(T("pc_co_odomkne_zoznam"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+                return@Column
+            }
+            val info = pc.info!!
+            var dlzka by remember { mutableIntStateOf(5) }
+            // ---- nové video z textu
+            Karta {
+                Text(T("pc_nove_video"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                if (!info.video) Text(T("pc_bez_video_modelu"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                var popis by remember { mutableStateOf("") }
+                var cezObrazok by remember { mutableStateOf(true) }
+                var posiela by remember { mutableStateOf(false) }
+                OutlinedTextField(value = popis, onValueChange = { popis = it }, minLines = 3, maxLines = 8, modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
+                    placeholder = { Text(T("pc_popis_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp), colors = farbyPola)
+                Text(T("pc_dlzka"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DLZKY_PC.forEach { d ->
+                        FilterChip(selected = dlzka == d, onClick = { dlzka = d }, label = { Text(dlzkaText(d)) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                if (dlzka > 5) Text(T("pc_dlzka_info"), color = Farby.tlmene, fontSize = 12.sp)
+                Row(Modifier.fillMaxWidth().clickable { cezObrazok = !cezObrazok }.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(T("pc_najprv_obrazok"), color = Farby.text, fontSize = 14.sp)
+                        Text(T("pc_najprv_obrazok_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    Switch(checked = cezObrazok, onCheckedChange = { cezObrazok = it }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+                GradientTlacidlo(T("pc_poslat"), Icons.AutoMirrored.Filled.Send, Modifier.padding(top = 8.dp).fillMaxWidth(), enabled = popis.isNotBlank() && !posiela && info.video) {
+                    posiela = true
+                    pc.pridaj(popis.trim(), dlzka, cezObrazok, null) { e -> posiela = false; if (e == null) { popis = ""; Platforma.oznam(T("pc_odoslane")) } else Platforma.oznam("⚠ $e") }
+                }
+            }
+            // ---- rozhýbať obrázok z PC
+            Karta {
+                Text(T("pc_rozhybat"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                if (!info.rozhybat) Text(T("pc_bez_i2v"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                var vyber by remember { mutableStateOf(false) }
+                var zvoleny by remember { mutableStateOf<String?>(null) }
+                var pohyb by remember { mutableStateOf("") }
+                var posiela by remember { mutableStateOf(false) }
+                zvoleny?.let { m ->
+                    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, m) {
+                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { pc.nahlad(m)?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+                    }
+                    bmp?.let { Image(it, null, Modifier.padding(top = 8.dp).heightIn(max = 220.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Fit) }
+                    OutlinedTextField(value = pohyb, onValueChange = { pohyb = it }, minLines = 2, maxLines = 6, modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
+                        placeholder = { Text(T("pc_pohyb_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp), colors = farbyPola)
+                    Text(T("pc_dlzka_rovnaka", dlzkaText(dlzka)), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { vyber = true }, enabled = info.rozhybat, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.PhotoLibrary, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(T(if (zvoleny == null) "pc_vybrat_obrazok" else "pc_iny_obrazok"), color = Farby.text)
+                    }
+                    if (zvoleny != null) GradientTlacidlo(T("pc_rozhybat_tlacidlo"), Icons.AutoMirrored.Filled.Send, Modifier.weight(1f), enabled = !posiela) {
+                        posiela = true
+                        pc.pridaj(pohyb.trim(), dlzka, false, zvoleny) { e -> posiela = false; if (e == null) { zvoleny = null; pohyb = ""; Platforma.oznam(T("pc_odoslane")) } else Platforma.oznam("⚠ $e") }
+                    }
+                }
+                if (vyber) GaleriaPcDialog(lenAppka = true, zavri = { vyber = false }) { zvoleny = it; vyber = false }
+            }
+            // ---- galéria PC (stiahnuť obrázky do mobilu)
+            Karta {
+                var galeria by remember { mutableStateOf(false) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(T("pc_galeria"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                        Text(T("pc_galeria_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    OutlinedButton(onClick = { galeria = true }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("pc_otvorit"), color = Farby.text) }
+                }
+                if (galeria) GaleriaPcDialog(lenAppka = false, zavri = { galeria = false }) { pc.ulozObrazok(it) }
+            }
+            // ---- rad videí na PC
+            Karta {
+                Text(T("pc_rad"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                val st = pc.stav
+                val ulohy = st?.optJSONArray("ulohy")
+                if (st?.optBoolean("pcZaneprazdnene") == true) Text(T("pc_zaneprazdnene"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                if (ulohy == null || ulohy.length() == 0) Text(T("pc_rad_prazdny"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                else for (i in 0 until ulohy.length()) {
+                    val u = ulohy.getJSONObject(i)
+                    val id = u.getString("id")
+                    Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(u.optString("popis").ifBlank { T("pc_bez_popisu") }, color = Farby.text, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { pc.zrus(id) }, modifier = Modifier.size(32.dp)) { Icon(if (u.optString("stav") == "bezi") Icons.Default.StopCircle else Icons.Default.DeleteOutline, null, tint = Farby.tlmene) }
+                        }
+                        val druh = if (u.optString("predloha").isNotBlank()) T("pc_druh_rozhybat") else if (u.optBoolean("cezObrazok")) T("pc_druh_obrazok") else T("pc_druh_text")
+                        Text("${dlzkaText(u.optInt("sekundy"))} · $druh", color = Farby.tlmene, fontSize = 12.sp)
+                        when (u.optString("stav")) {
+                            "caka" -> Text(T("pc_caka"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                            "bezi" -> {
+                                val p = st.optDouble("priebeh", 0.0).toFloat()
+                                Text(st.optString("text").ifBlank { T("pc_tvori", (p * 100).roundToInt()) }, color = Farby.text, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                                LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha)
+                            }
+                            "chyba" -> Text("⚠ " + u.optString("chyba"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                            "hotova" -> {
+                                val sp = pc.stahuje[id]
+                                val uri = pc.stiahnute[id]
+                                when {
+                                    sp != null -> LinearProgressIndicator(progress = { sp }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)), color = Farby.zelena, trackColor = Farby.plocha)
+                                    uri != null -> Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        GradientTlacidlo(T("video_prehrat"), Icons.Default.PlayArrow) {
+                                            runCatching {
+                                                c.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(Uri.parse(uri), "video/mp4")
+                                                    .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                                            }.onFailure { Platforma.oznam("⚠ " + (it.message ?: "")) }
+                                        }
+                                        TextButton(onClick = { pc.stiahni(id) }) { Text(T("pc_stiahnut_znova"), color = Farby.tlmene, fontSize = 12.sp) }
+                                    }
+                                    else -> GradientTlacidlo(T("pc_stiahnut", "%.1f".format(u.optLong("velkost") / 1_000_000.0)), Icons.Default.Download, Modifier.padding(top = 6.dp)) { pc.stiahni(id) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** výber obrázka z galérie PC (náhľady sa sťahujú postupne) */
+@Composable
+private fun GaleriaPcDialog(lenAppka: Boolean, zavri: () -> Unit, zvol: (String) -> Unit) {
+    var zoznam by remember { mutableStateOf<List<Triple<String, String, Boolean>>?>(null) }
+    var chyba by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { PcSpojenie.galeria { z, e -> zoznam = z?.filter { !lenAppka || it.third }; chyba = e } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = zavri) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).clip(RoundedCornerShape(20.dp)).background(Farby.plocha).padding(12.dp)) {
+            Text(T(if (lenAppka) "pc_vyber_nadpis" else "pc_galeria"), color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
+            val z = zoznam
+            when {
+                z == null && chyba.isBlank() -> LinearProgressIndicator(Modifier.fillMaxWidth().height(5.dp), color = Farby.ruzova, trackColor = Farby.plocha2)
+                z == null -> Text("⚠ $chyba", color = Farby.cervena, fontSize = 13.sp)
+                z.isEmpty() -> Text(T("pc_galeria_prazdna"), color = Farby.tlmene, fontSize = 13.sp)
+                else -> androidx.compose.foundation.lazy.grid.LazyVerticalGrid(androidx.compose.foundation.lazy.grid.GridCells.Fixed(3), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(z.size) { i ->
+                        val m = z[i].first
+                        val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, m) {
+                            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PcSpojenie.nahlad(m)?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+                        }
+                        Box(Modifier.aspectRatio(0.75f).clip(RoundedCornerShape(10.dp)).background(Farby.plocha2).clickable { zvol(m) }, contentAlignment = Alignment.Center) {
+                            val b = bmp
+                            if (b != null) Image(b, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            else CircularProgressIndicator(Modifier.size(18.dp), color = Farby.ruzova, strokeWidth = 2.dp)
+                            if (!lenAppka) Icon(Icons.Default.Download, null, tint = Color.White, modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).size(18.dp))
+                        }
+                    }
+                }
+            }
+            TextButton(onClick = zavri, modifier = Modifier.align(Alignment.End)) { Text(T("zavriet"), color = Farby.ruzova) }
+        }
     }
 }

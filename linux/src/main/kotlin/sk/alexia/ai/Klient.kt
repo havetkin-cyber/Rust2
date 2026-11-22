@@ -19,7 +19,7 @@ object Klient {
     const val PORT = 8765
     const val PORT_HLADANIA = 8766
 
-    class Info(val meno: String, val model: String, val pripraveny: Boolean, val obrazky: Boolean)
+    class Info(val meno: String, val model: String, val pripraveny: Boolean, val obrazky: Boolean, val video: Boolean = false, val rozhybat: Boolean = false)
 
     private fun url(adresa: String, cesta: String): URL {
         val a = adresa.trim().removePrefix("http://").removeSuffix("/")
@@ -46,7 +46,7 @@ object Klient {
 
     fun info(adresa: String, pin: String): Info {
         val j = JSONObject(spoj(adresa, pin, "/api/info").inputStream.bufferedReader(Charsets.UTF_8).readText())
-        return Info(j.optString("meno"), j.optString("model"), j.optBoolean("pripraveny"), j.optBoolean("obrazky"))
+        return Info(j.optString("meno"), j.optString("model"), j.optBoolean("pripraveny"), j.optBoolean("obrazky"), j.optBoolean("video"), j.optBoolean("rozhybat"))
     }
 
     /** pošle rozhovor; [kus] dostáva text po kúskoch, false = zastaviť. Vráti null (v poriadku) alebo text chyby. */
@@ -80,6 +80,44 @@ object Klient {
     fun obrazok(adresa: String, pin: String, popis: String, ciel: File) {
         val k = spoj(adresa, pin, "/api/obrazok", JSONObject().put("popis", popis), citanie = 30 * 60_000)
         k.inputStream.use { i -> ciel.outputStream().use { i.copyTo(it) } }
+    }
+
+    // ---------- videá na PC (zadané z mobilu) a galéria PC ----------
+
+    /** pridá video do radu na PC; vráti id úlohy */
+    fun videoPridaj(adresa: String, pin: String, popis: String, sekundy: Int, cezObrazok: Boolean, predloha: String?): String {
+        val t = JSONObject().put("popis", popis).put("sekundy", sekundy).put("cezObrazok", cezObrazok).put("predloha", predloha ?: "")
+        return JSONObject(spoj(adresa, pin, "/api/video/pridaj", t).inputStream.bufferedReader(Charsets.UTF_8).readText()).getString("id")
+    }
+
+    fun videoStav(adresa: String, pin: String): JSONObject =
+        JSONObject(spoj(adresa, pin, "/api/video/stav").inputStream.bufferedReader(Charsets.UTF_8).readText())
+
+    fun videoZrus(adresa: String, pin: String, id: String) {
+        spoj(adresa, pin, "/api/video/zrus", JSONObject().put("id", id)).inputStream.close()
+    }
+
+    /** stiahne hotové video; [p] = priebeh 0..1 */
+    fun videoStiahni(adresa: String, pin: String, id: String, ciel: java.io.OutputStream, p: (Float) -> Unit) {
+        val k = spoj(adresa, pin, "/api/video/subor?id=" + java.net.URLEncoder.encode(id, "UTF-8"), citanie = 120_000)
+        val spolu = k.contentLengthLong.coerceAtLeast(1)
+        k.inputStream.use { i ->
+            val b = ByteArray(1 shl 16); var n = 0L
+            while (true) { val r = i.read(b); if (r < 0) break; ciel.write(b, 0, r); n += r; p((n.toFloat() / spolu).coerceIn(0f, 1f)) }
+        }
+    }
+
+    /** posledné obrázky na PC: (meno, popis, vytvorený appkou) */
+    fun galeria(adresa: String, pin: String): List<Triple<String, String, Boolean>> {
+        val a = JSONObject(spoj(adresa, pin, "/api/galeria/zoznam").inputStream.bufferedReader(Charsets.UTF_8).readText()).getJSONArray("obrazky")
+        return (0 until a.length()).map { a.getJSONObject(it).let { o -> Triple(o.getString("meno"), o.optString("popis"), o.optBoolean("appka")) } }
+    }
+
+    fun nahlad(adresa: String, pin: String, meno: String): ByteArray =
+        spoj(adresa, pin, "/api/galeria/nahlad?meno=" + java.net.URLEncoder.encode(meno, "UTF-8")).inputStream.use { it.readBytes() }
+
+    fun obrazokZPc(adresa: String, pin: String, meno: String, ciel: java.io.OutputStream) {
+        spoj(adresa, pin, "/api/galeria/subor?meno=" + java.net.URLEncoder.encode(meno, "UTF-8"), citanie = 60_000).inputStream.use { it.copyTo(ciel) }
     }
 
     /** nájde Alexia AI v domácej sieti (odpovedá zariadenie so zapnutým zdieľaním) → zoznam (adresa, meno) */

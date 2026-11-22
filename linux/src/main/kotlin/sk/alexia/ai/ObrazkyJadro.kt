@@ -473,6 +473,17 @@ object ObrazkyJadro {
     /** popis, s ktorým bol obrázok z appky vytvorený (na rozhýbanie) */
     fun popisObrazka(f: File): String? = runCatching { org.json.JSONObject(File(f.path + ".json").readText()).optString("popis") }.getOrNull()
 
+    /** obrázok z galérie podľa mena súboru (len z priečinka appky – pre mobil) */
+    fun obrazokZGalerie(meno: String): File? {
+        val d = priecinokObrazkov()
+        val f = File(d, File(meno).name)
+        return f.takeIf { it.isFile && it.extension == "png" && it.parentFile.canonicalPath == d.canonicalPath }
+    }
+
+    /** posledné obrázky z galérie (najnovšie prvé) */
+    fun posledneObrazky(max: Int): List<File> = priecinokObrazkov().listFiles { f -> f.extension == "png" }
+        ?.sortedByDescending { it.lastModified() }?.take(max) ?: emptyList()
+
     fun i2vSada(): ObrazkovaSada? = Katalog.obrazky.firstOrNull { it.video?.i2v == true && mamSadu(it) }
 
     private var nacitaneSetrenie = ""

@@ -1288,6 +1288,17 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                     )
                     Text(T(if (videa) "vid_anglicky" else "obr_anglicky"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     if (!videa) {
+                    // tvar obrázka (na výšku = celá postava, na šírku = ležiaca postava, krajina)
+                    Text(T("obr_tvar"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val ns = ChatJadro.nastavenia
+                        listOf("stvorec", "vyska", "sirka").forEach { t ->
+                            val (w, h) = o.rozmerPomeru(rozmer, t)
+                            FilterChip(selected = ns.obrPomer == t, onClick = { ns.obrPomer = t; ns.uloz() }, label = { Text(T("obr_tvar_$t") + "  ${w}×$h") },
+                                leadingIcon = { Icon(when (t) { "vyska" -> Icons.Default.CropPortrait; "sirka" -> Icons.Default.CropLandscape; else -> Icons.Default.CropSquare }, null, modifier = Modifier.size(18.dp)) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text, selectedLeadingIconColor = Color.White, iconColor = Farby.text))
+                        }
+                    }
                     Text(T("poz_nadpis"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         POZADIA.forEach { (id, _) ->
@@ -1431,7 +1442,7 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                         }
                     } else {
                         GradientTlacidlo(T("obr_vytvorit"), Icons.Default.AutoAwesome, Modifier.fillMaxWidth(),
-                            enabled = o.stav == StavModelu.PRIPRAVENY && !o.jeVideoModel && prompt.isNotBlank()) { o.generujHerne(if (typ == "obrazok") popisSPozadim() else prompt, negativny, rozmer, kroky, cfg, typ, pocet) }
+                            enabled = o.stav == StavModelu.PRIPRAVENY && !o.jeVideoModel && prompt.isNotBlank()) { o.generujHerne(if (typ == "obrazok") popisSPozadim() else prompt, negativny, rozmer, kroky, cfg, typ, pocet, ChatJadro.nastavenia.obrPomer) }
                         Text(T("obr_cas"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     }
                     if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))

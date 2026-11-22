@@ -206,7 +206,17 @@ object ObrazkyJadro {
      * Tvorba aj pre hry: typ "obrazok", "textura" (nekonečná, nadväzuje zo všetkých strán) alebo "sprite" (priehľadné pozadie);
      * pocet > 1 = sada variantov so seedmi idúcimi po sebe (napr. 12345, 12346 …).
      */
-    fun generujHerne(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, typ: String, pocet: Int) {
+    /** šírka × výška pre tvar obrázka – približne rovnaký počet pixelov ako štvorec (rovnaká rýchlosť), násobky 64 */
+    fun rozmerPomeru(rozmer: Int, pomer: String): Pair<Int, Int> {
+        fun r64(x: Double) = (Math.round(x / 64.0) * 64).toInt().coerceAtLeast(64)
+        return when (pomer) {
+            "vyska" -> r64(rozmer * 0.75) to r64(rozmer / 0.75)
+            "sirka" -> r64(rozmer / 0.75) to r64(rozmer * 0.75)
+            else -> rozmer to rozmer
+        }
+    }
+
+    fun generujHerne(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, typ: String, pocet: Int, pomer: String = "stvorec") {
         if (generuje || stav != StavModelu.PRIPRAVENY || prompt.isBlank()) return
         val p = when (typ) {
             "textura" -> "${prompt.trim()}, seamless tileable texture, flat even lighting, no shadows, top-down view, high detail"
@@ -219,7 +229,9 @@ object ObrazkyJadro {
         sadaHotovo = 0 to pocet
         fun dalsi(i: Int) {
             if (i >= pocet) { vlakno.execute { Sd.nastavTexturu(false) }; return }
-            spust(p, neg, rozmer, rozmer, kroky, cfg, pevnySeed = zaklad + i, sprite = typ == "sprite") { f, e ->
+            // textúry a sprity ostávajú štvorcové
+            val (w, h) = if (typ == "obrazok") rozmerPomeru(rozmer, pomer) else rozmer to rozmer
+            spust(p, neg, w, h, kroky, cfg, pevnySeed = zaklad + i, sprite = typ == "sprite") { f, e ->
                 f?.let { posledny = it }
                 if (f == null) { chyba = e; vlakno.execute { Sd.nastavTexturu(false) }; sadaHotovo = 0 to 0; return@spust }
                 sadaHotovo = (i + 1) to pocet

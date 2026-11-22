@@ -34,6 +34,8 @@ class Nastavenia {
     /** dĺžka AI videa v sekundách a šetrenie VRAM (kodér a VAE videa v RAM) */
     var dlzkaVidea by mutableIntStateOf(p.getProperty("dlzkaVidea")?.toIntOrNull() ?: 2)
     var setritVram by mutableStateOf(p.getProperty("setritVram") == "true")
+    /** tvar obrázka: stvorec / vyska (na výšku) / sirka (na šírku) */
+    var obrPomer by mutableStateOf(p.getProperty("obrPomer") ?: "stvorec")
     /** video: najprv presný obrázok (FLUX…), potom ho Wan 2.2 rozhýbe */
     var videoCezObrazok by mutableStateOf(p.getProperty("videoCezObrazok") == "true")
     /** skladanie videa: vae / tae / lighttae */
@@ -82,6 +84,7 @@ class Nastavenia {
         p.setProperty("citatNahlas", citatNahlas.toString())
         p.setProperty("hlas", hlas)
         p.setProperty("dlzkaVidea", dlzkaVidea.toString())
+        p.setProperty("obrPomer", obrPomer)
         p.setProperty("setritVram", setritVram.toString())
         p.setProperty("videoCezObrazok", videoCezObrazok.toString())
         p.setProperty("skladanie", skladanie)

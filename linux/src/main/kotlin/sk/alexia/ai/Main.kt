@@ -64,8 +64,8 @@ import androidx.compose.ui.window.rememberWindowState
 
 /** všetko, čo appka vypíše (aj chyby), ide aj do súboru alexia.log v priečinku appky; starý sa premenuje na alexia-predtym.log */
 private fun spustiLog() = runCatching {
-    val f = File(Platforma.priecinok, "alexia.log")
-    if (f.exists()) f.copyTo(File(Platforma.priecinok, "alexia-predtym.log"), overwrite = true)
+    val f = File(Platforma.logy, "alexia.log")
+    if (f.exists()) f.copyTo(File(Platforma.logy, "alexia-predtym.log"), overwrite = true)
     val subor = java.io.FileOutputStream(f, false)
     class Oba(val a: java.io.OutputStream) : java.io.OutputStream() {
         override fun write(b: Int) { runCatching { a.write(b) }; synchronized(subor) { subor.write(b) } }
@@ -79,6 +79,7 @@ private fun spustiLog() = runCatching {
 }
 
 fun main() {
+    Platforma.presunDoDokumentov()
     spustiLog()
     ChatJadro.init()
     ObrazkyJadro.init()
@@ -1051,8 +1052,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
                 TextButton(onClick = {
-                    val f = File(Platforma.priecinok, "alexia.log")
-                    runCatching { java.awt.Desktop.getDesktop().open(if (f.exists()) f else Platforma.priecinok) }.onFailure { runCatching { java.awt.Desktop.getDesktop().open(Platforma.priecinok) } }
+                    runCatching { java.awt.Desktop.getDesktop().open(Platforma.logy) }.onFailure { Platforma.otvorOdkaz(Platforma.logy.toURI().toString()) }
                 }) { Icon(Icons.Default.Description, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(T("log_otvorit"), color = Farby.ruzova) }
                 if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(rucne = true) }
@@ -1461,10 +1461,43 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                             Switch(checked = ns2.videoCezObrazok && mozeCezObr, enabled = mozeCezObr, onCheckedChange = { ns2.videoCezObrazok = it; ns2.uloz() },
                                 colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                         }
-                        val cezObr = ns2.videoCezObrazok && mozeCezObr
-                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(), enabled = prompt.isNotBlank() && (cezObr || (o.stav == StavModelu.PRIPRAVENY && o.jeVideoModel))) {
+                        // podľa obrázka: stačí seed obrázka z galérie, popis pohybu je nepovinný
+                        var podlaSeedu by remember { mutableStateOf(false) }
+                        var seedText by remember { mutableStateOf("") }
+                        val mozeSeed = o.i2vSada() != null
+                        Row(Modifier.fillMaxWidth().clickable(enabled = mozeSeed) { podlaSeedu = !podlaSeedu }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = podlaSeedu && mozeSeed, onCheckedChange = { podlaSeedu = it }, enabled = mozeSeed,
+                                colors = CheckboxDefaults.colors(checkedColor = Farby.fialova, uncheckedColor = Farby.tlmene))
+                            Column(Modifier.weight(1f)) {
+                                Text(T("vid_seed"), color = if (mozeSeed) Farby.text else Farby.tlmene, fontSize = 14.sp)
+                                Text(T(if (mozeSeed) "vid_seed_info" else "vai_ziadny_i2v"), color = Farby.tlmene, fontSize = 12.sp)
+                            }
+                        }
+                        val seedObr = if (podlaSeedu && mozeSeed) seedText.trim().toLongOrNull()?.let { s -> remember(s, o.galeria.size) { o.najdiPodlaSeedu(s) } } else null
+                        if (podlaSeedu && mozeSeed) Row(Modifier.padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(value = seedText, onValueChange = { t -> seedText = t.filter { it.isDigit() }.take(12) }, singleLine = true,
+                                label = { Text("Seed") }, modifier = Modifier.width(160.dp).nadKlavesnicou(), shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+                            if (seedObr != null) {
+                                val nb = remember(seedObr) { Platforma.nacitajObrazok(seedObr) }
+                                if (nb != null) Image(nb, null, Modifier.height(72.dp).aspectRatio(nb.width.toFloat() / nb.height).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Fit)
+                                Text(T("vid_seed_najdeny"), color = Farby.zelena, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            } else if (seedText.isNotBlank()) Text(T("vid_seed_nenajdeny"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        }
+                        val cezSeed = podlaSeedu && mozeSeed
+                        val cezObr = !cezSeed && ns2.videoCezObrazok && mozeCezObr
+                        GradientTlacidlo(T("vai_vytvorit"), Icons.Default.Movie, Modifier.fillMaxWidth(),
+                            enabled = if (cezSeed) seedObr != null && !o.generuje else prompt.isNotBlank() && (cezObr || (o.stav == StavModelu.PRIPRAVENY && o.jeVideoModel))) {
                             val hotovoV: (File?, String) -> Unit = { f, e -> if (f != null) { aiVideo = f; Platforma.oznam(T("vai_hotovo")) } else Platforma.oznam("⚠ $e") }
-                            if (cezObr) o.natocCezObrazok(prompt, ns2.dlzkaVidea, hotovoV) else o.natocAI(prompt, ns2.dlzkaVidea, hotovo = hotovoV)
+                            when {
+                                cezSeed && seedObr != null -> {
+                                    if (Podpis.zakazane(prompt)) { Platforma.oznam(T("upr_zakazane")); return@GradientTlacidlo }
+                                    val popis = listOf(o.popisObrazka(seedObr).orEmpty(), prompt.trim().ifBlank { "natural subtle motion, cinematic" }).filter { it.isNotBlank() }.joinToString(", ")
+                                    o.natocAI(popis, ns2.dlzkaVidea, seedObr, hotovoV)
+                                }
+                                cezObr -> o.natocCezObrazok(prompt, ns2.dlzkaVidea, hotovoV)
+                                else -> o.natocAI(prompt, ns2.dlzkaVidea, hotovo = hotovoV)
+                            }
                         }
                         Text(T("vai_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                         aiVideo?.let { f ->

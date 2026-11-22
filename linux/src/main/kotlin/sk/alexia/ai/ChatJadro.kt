@@ -420,7 +420,7 @@ object ChatJadro {
     private fun zobraz(id: String) {
         spravy.clear()
         val a = Historia.obsah(id) ?: return
-        for (i in 0 until a.length()) a.getJSONObject(i).let { spravy += Sprava(it.getString("r"), it.getString("t"), it.optBoolean("k"), it.optString("o").ifEmpty { null }, it.optString("v").ifEmpty { null }) }
+        for (i in 0 until a.length()) a.getJSONObject(i).let { spravy += Sprava(it.getString("r"), it.getString("t"), it.optBoolean("k"), Platforma.cesta(it.optString("o").ifEmpty { null }), Platforma.cesta(it.optString("v").ifEmpty { null })) }
     }
 
     /** po zadaní hesla načíta históriu */

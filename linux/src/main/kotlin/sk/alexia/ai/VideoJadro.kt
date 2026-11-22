@@ -57,7 +57,7 @@ object VideoJadro {
     var priebeh by mutableStateOf(0f)
         private set
 
-    fun priecinok() = File(Platforma.priecinok, "videa").apply { mkdirs() }
+    fun priecinok() = Platforma.videa
 
     // ------------------------------------------------ ffmpeg
 

@@ -19,6 +19,53 @@ object Platforma {
         File(System.getenv("LOCALAPPDATA")?.takeIf { it.isNotBlank() } ?: (System.getProperty("user.home") + "\\AppData\\Local"), "AlexiaAI")
     else File(System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() } ?: (System.getProperty("user.home") + "/.local/share"), "AlexiaAI")).apply { mkdirs() }
 
+    // ---------------- Dokumenty/Alexia AI – tvoje výtvory (modely a nastavenia ostávajú v priečinku appky)
+
+    /** priečinok Dokumenty (na Windows aj presmerovaný, napr. do OneDrive) */
+    val dokumenty: File = runCatching {
+        if (jeWindows) javax.swing.filechooser.FileSystemView.getFileSystemView().defaultDirectory
+        else runCatching {
+            val p = ProcessBuilder("xdg-user-dir", "DOCUMENTS").redirectErrorStream(true).start()
+            File(p.inputStream.bufferedReader().readText().trim()).takeIf { p.waitFor() == 0 && it.path.isNotBlank() && it.path != System.getProperty("user.home") }
+        }.getOrNull() ?: File(System.getProperty("user.home"), "Documents")
+    }.getOrNull()?.takeIf { it.path.isNotBlank() } ?: File(System.getProperty("user.home"), "Documents")
+
+    /** Dokumenty/Alexia AI */
+    val alexia: File get() = File(dokumenty, "Alexia AI").apply { mkdirs() }
+    private fun pod(meno: String) = File(alexia, meno).apply { mkdirs() }
+    val rozhovory get() = pod("Rozhovory")
+    val obrazky get() = pod("Obrazky")
+    val videa get() = pod("Videa")
+    val hlasy get() = pod("Hlasy")
+    val logy get() = pod("Logy")
+
+    /** staré umiestnenia → nové (pre cesty uložené v chatoch a v rade videí) */
+    private val presuny get() = listOf(File(priecinok, "obrazky") to obrazky, File(priecinok, "videa") to videa, File(priecinok, "historia") to rozhovory)
+
+    /** jednorazovo presunie tvoje výtvory z priečinka appky do Dokumenty/Alexia AI */
+    fun presunDoDokumentov() = runCatching {
+        presuny.forEach { (stary, novy) ->
+            if (!stary.isDirectory || stary.canonicalPath == novy.canonicalPath) return@forEach
+            stary.listFiles()?.forEach { f ->
+                val ciel = File(novy, f.name)
+                if (ciel.exists()) return@forEach
+                runCatching { java.nio.file.Files.move(f.toPath(), ciel.toPath()) }
+                    .onFailure { runCatching { f.copyRecursively(ciel, overwrite = false); f.deleteRecursively() } }
+            }
+            if (stary.listFiles()?.isEmpty() == true) stary.delete()
+        }
+    }
+
+    /** cesta k súboru, ktorý sa medzičasom presunul do Dokumenty/Alexia AI */
+    fun cesta(p: String?): String? {
+        if (p == null || File(p).exists()) return p
+        presuny.forEach { (stary, novy) ->
+            val sp = stary.path
+            if (p.startsWith(sp + File.separator)) return File(novy, p.substring(sp.length + 1)).path
+        }
+        return p
+    }
+
     /** otvorí odkaz v prehliadači */
     fun otvorOdkaz(url: String) {
         runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }

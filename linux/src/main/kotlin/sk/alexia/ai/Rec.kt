@@ -117,7 +117,7 @@ object Rec {
                 st.release()
                 t
             }.onFailure { e ->
-                runCatching { File(Platforma.priecinok, "hlas/whisper-chyba.log").writeText(e.stackTraceToString()) }
+                runCatching { File(Platforma.logy, "whisper-chyba.log").writeText(e.stackTraceToString()) }
                 Platforma.oznam(T("rec_chyba", e.message ?: e.toString()))
             }.getOrDefault("")
             Platforma.naHlavnom { spracuva = false; if (text.isNotBlank()) hotovo(text) }

@@ -32,7 +32,7 @@ object VzdialeneVidea {
                 ulohy += Uloha(o.getString("id"), o.getString("popis"), o.optInt("sekundy", 5), o.optBoolean("cezObrazok"),
                     o.optString("predloha").ifBlank { null },
                     // úloha, ktorá bežala pri vypnutí appky, sa spustí znova
-                    o.optString("stav").let { if (it == "bezi") "caka" else it }, o.optString("chyba"), o.optString("subor").ifBlank { null }, o.optLong("cas"))
+                    o.optString("stav").let { if (it == "bezi") "caka" else it }, o.optString("chyba"), Platforma.cesta(o.optString("subor").ifBlank { null }), o.optLong("cas"))
             }
         }
     }

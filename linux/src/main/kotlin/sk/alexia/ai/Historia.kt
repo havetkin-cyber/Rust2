@@ -21,7 +21,7 @@ object Historia {
     var aktualne by mutableStateOf(novId())
         private set
 
-    private fun dir() = File(Platforma.priecinok, "historia").apply { mkdirs() }
+    private fun dir() = Platforma.rozhovory
     private fun subor(id: String) = File(dir(), "$id.enc")
     private fun suborZoznamu() = File(dir(), "zoznam.enc")
     fun novId() = "c" + System.currentTimeMillis().toString(36) + (100..999).random()

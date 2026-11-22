@@ -265,7 +265,7 @@ object Hlas {
                 val pcm = spolu.toByteArray()
                 // farba (hrúbka) sa dosiahne inou vzorkovacou frekvenciou – zapíše sa priamo do súboru
                 val frek = (sr * u.f).toInt()
-                val dir = File(System.getProperty("user.home"), "Music/Alexia AI").apply { mkdirs() }
+                val dir = Platforma.hlasy
                 val meno = "alexia_" + meno(id).lowercase() + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(java.util.Date())
                 val wav = File(if (mp3) File(priecinok(), "tmp").apply { mkdirs() } else dir, "$meno.wav")
                 zapisWav(wav, pcm, frek)
@@ -309,7 +309,7 @@ object Hlas {
             "--espeak_data", File(program().parentFile, "espeak-ng-data").path)
             .directory(program().parentFile)
         if (!Platforma.jeWindows) pb.environment()["LD_LIBRARY_PATH"] = program().parentFile.path
-        pb.redirectError(File(priecinok(), "piper-chyba.log"))
+        pb.redirectError(File(Platforma.logy, "piper-chyba.log"))
         val p = pb.start(); proces = p
         Thread { runCatching { p.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(kus); it.newLine() } } }.start()
         val b = p.inputStream.use { it.readBytes() }
@@ -333,7 +333,7 @@ object Hlas {
                 }
             } catch (e: Throwable) {
                 stChyba = true
-                runCatching { File(priecinok(), "sherpa-chyba.log").writeText(e.stackTraceToString()) }
+                runCatching { File(Platforma.logy, "sherpa-chyba.log").writeText(e.stackTraceToString()) }
                 if (hovori == povodny) Platforma.oznam(T("hlas_chyba", e.message ?: e.toString()))
             } finally { rad.offer(KONIEC) }
         }

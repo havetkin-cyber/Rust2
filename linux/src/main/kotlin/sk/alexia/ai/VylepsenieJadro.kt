@@ -122,7 +122,7 @@ object VylepsenieJadro {
                 if (jas) img = autoJasKontrast(img)
                 if (far) img = sytost(img, 1.15f)
                 if (ostr) img = doostri(img)
-                val ciel = File(File(Platforma.priecinok, "obrazky").apply { mkdirs() }, "alexia_vylepsene_${System.currentTimeMillis()}.png")
+                val ciel = File(Platforma.obrazky, "alexia_vylepsene_${System.currentTimeMillis()}.png")
                 ImageIO.write(img, "png", ciel)
                 val rr = img.width to img.height
                 Platforma.naHlavnom { rozmerVysledku = rr }

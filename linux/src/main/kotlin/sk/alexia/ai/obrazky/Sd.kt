@@ -8,8 +8,8 @@ object Sd {
         Platforma.nacitajKniznicu("alexiasd")
         // celý log tvorby obrázkov a videí → sd.log v priečinku appky (predchádzajúci ako sd-predtym.log)
         runCatching {
-            val f = java.io.File(Platforma.priecinok, "sd.log")
-            if (f.exists()) f.copyTo(java.io.File(Platforma.priecinok, "sd-predtym.log"), overwrite = true)
+            val f = java.io.File(Platforma.logy, "sd.log")
+            if (f.exists()) f.copyTo(java.io.File(Platforma.logy, "sd-predtym.log"), overwrite = true)
             nastavLog(f.path)
         }
     }

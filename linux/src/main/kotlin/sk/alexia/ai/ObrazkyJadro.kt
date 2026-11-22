@@ -39,7 +39,7 @@ object ObrazkyJadro {
     }
 
     fun priecinokModelov() = File(Platforma.priecinok, "obrazkove-modely").apply { mkdirs() }
-    private fun priecinokObrazkov() = File(Platforma.priecinok, "obrazky").apply { mkdirs() }
+    private fun priecinokObrazkov() = Platforma.obrazky
     fun modely(): List<File> = priecinokModelov().listFiles { f -> f.isFile && f.name.endsWith(".gguf", true) || f.name.endsWith(".safetensors", true) }
         ?.filter { it.isFile }?.sortedBy { it.name.lowercase() } ?: emptyList()
 

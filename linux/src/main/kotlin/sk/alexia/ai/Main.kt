@@ -62,7 +62,24 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 
+/** všetko, čo appka vypíše (aj chyby), ide aj do súboru alexia.log v priečinku appky; starý sa premenuje na alexia-predtym.log */
+private fun spustiLog() = runCatching {
+    val f = File(Platforma.priecinok, "alexia.log")
+    if (f.exists()) f.copyTo(File(Platforma.priecinok, "alexia-predtym.log"), overwrite = true)
+    val subor = java.io.FileOutputStream(f, false)
+    class Oba(val a: java.io.OutputStream) : java.io.OutputStream() {
+        override fun write(b: Int) { runCatching { a.write(b) }; synchronized(subor) { subor.write(b) } }
+        override fun write(b: ByteArray, off: Int, len: Int) { runCatching { a.write(b, off, len) }; synchronized(subor) { subor.write(b, off, len); subor.flush() } }
+        override fun flush() { runCatching { a.flush() } }
+    }
+    System.setOut(java.io.PrintStream(Oba(System.out), true, "UTF-8"))
+    System.setErr(java.io.PrintStream(Oba(System.err), true, "UTF-8"))
+    println("Alexia AI ${Aktualizacie.mojaVerzia} – ${java.time.LocalDateTime.now()} – ${System.getProperty("os.name")}")
+    Thread.setDefaultUncaughtExceptionHandler { t, e -> System.err.println("Chyba vo vlákne ${t.name}:"); e.printStackTrace() }
+}
+
 fun main() {
+    spustiLog()
     ChatJadro.init()
     ObrazkyJadro.init()
     Aktualizacie.skontrolujPripravenu()
@@ -1033,6 +1050,10 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
             Karta {
                 Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+                TextButton(onClick = {
+                    val f = File(Platforma.priecinok, "alexia.log")
+                    runCatching { java.awt.Desktop.getDesktop().open(if (f.exists()) f else Platforma.priecinok) }.onFailure { runCatching { java.awt.Desktop.getDesktop().open(Platforma.priecinok) } }
+                }) { Icon(Icons.Default.Description, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(T("log_otvorit"), color = Farby.ruzova) }
                 if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(rucne = true) }
                 Row(Modifier.fillMaxWidth().clickable { n.autoAktualizacie = !n.autoAktualizacie; n.uloz() }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {

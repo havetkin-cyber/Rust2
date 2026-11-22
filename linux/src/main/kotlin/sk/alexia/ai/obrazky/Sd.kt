@@ -4,7 +4,18 @@ import sk.alexia.ai.Platforma
 
 /** Most do stable-diffusion.cpp (libalexiasd.so, Vulkan). Volania musia ísť z jedného vlákna. */
 object Sd {
-    init { Platforma.nacitajKniznicu("alexiasd") }
+    init {
+        Platforma.nacitajKniznicu("alexiasd")
+        // celý log tvorby obrázkov a videí → sd.log v priečinku appky (predchádzajúci ako sd-predtym.log)
+        runCatching {
+            val f = java.io.File(Platforma.priecinok, "sd.log")
+            if (f.exists()) f.copyTo(java.io.File(Platforma.priecinok, "sd-predtym.log"), overwrite = true)
+            nastavLog(f.path)
+        }
+    }
+
+    /** log stable-diffusion.cpp do súboru */
+    external fun nastavLog(cesta: String)
 
     external fun nacitaj(cesta: String, vlakna: Int): Long
     external fun chyba(): String

@@ -11,6 +11,7 @@
 #define __android_log_print(l, tag, ...) (fprintf(stderr, "[%s] ", tag), fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n"))
 #endif
 #include <atomic>
+#include <cstring>
 #include <string>
 #include <vector>
 #include "stable-diffusion.h"
@@ -18,7 +19,16 @@
 static std::string g_chyba;
 static std::atomic<int> g_krok{0}, g_krokov{0};
 
+// posledná chyba z logu – pripojí sa k hláške, aby nebolo len „see log for details“
+static std::string g_posledna;
+#ifndef __ANDROID__
+static FILE* g_log = nullptr;   // PC: celý log do súboru sd.log (nastavLog)
+#endif
 static void logovanie(enum sd_log_level_t l, const char* t, void*) {
+    if (l >= SD_LOG_ERROR && t) { g_posledna = t; while (!g_posledna.empty() && (g_posledna.back() == '\n' || g_posledna.back() == ' ')) g_posledna.pop_back(); }
+#ifndef __ANDROID__
+    if (g_log && t && l >= SD_LOG_INFO) { fputs(t, g_log); if (!*t || t[strlen(t) - 1] != '\n') fputc('\n', g_log); fflush(g_log); }
+#endif
     if (l >= SD_LOG_WARN) __android_log_print(ANDROID_LOG_WARN, "AlexiaSD", "%s", t);
 }
 static void priebeh(int step, int steps, float, void*) { g_krok = step; g_krokov = steps; }
@@ -41,6 +51,8 @@ static bool ok(sd_status_t s) {
     if (s == SD_STATUS_OK) return true;
     const char* e = sd_get_last_error();
     g_chyba = (e && *e) ? e : ("chyba " + std::to_string((int)s));
+    if (!g_posledna.empty() && g_chyba.find(g_posledna) == std::string::npos) g_chyba += " – " + g_posledna;
+    g_posledna.clear();
     return false;
 }
 

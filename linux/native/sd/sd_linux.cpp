@@ -1,6 +1,15 @@
 // Alexia AI pre Linux: všetko z mobilnej verzie (sd_jni.cpp) + vylepšenie fotky, ktoré je len na Linuxe.
 #include "../../../obrazky/src/main/cpp/sd_jni.cpp"
 
+// log stable-diffusion.cpp do súboru (napr. %LOCALAPPDATA%\\AlexiaAI\\sd.log)
+F(void, nastavLog)(JNIEnv* env, jobject, jstring cesta) {
+    std::string c = jstr(env, cesta);
+    if (g_log) { fclose(g_log); g_log = nullptr; }
+    g_log = fopen(c.c_str(), "w");
+    static bool init = false;
+    if (!init) { sd_set_log_callback(logovanie, nullptr); sd_set_progress_callback(priebeh, nullptr); init = true; }
+}
+
 // nekonečná textúra (obrázok na seba nadväzuje zo všetkých strán) – platí pre ďalšie generovanie
 static bool g_kruh = false;
 F(void, nastavTexturu)(JNIEnv*, jobject, jboolean x) { g_kruh = x; }

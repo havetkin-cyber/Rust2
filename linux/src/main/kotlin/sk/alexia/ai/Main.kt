@@ -1292,12 +1292,28 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                     Text(T("obr_tvar"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val ns = ChatJadro.nastavenia
-                        listOf("stvorec", "vyska", "sirka").forEach { t ->
-                            val (w, h) = o.rozmerPomeru(rozmer, t)
-                            FilterChip(selected = ns.obrPomer == t, onClick = { ns.obrPomer = t; ns.uloz() }, label = { Text(T("obr_tvar_$t") + "  ${w}×$h") },
-                                leadingIcon = { Icon(when (t) { "vyska" -> Icons.Default.CropPortrait; "sirka" -> Icons.Default.CropLandscape; else -> Icons.Default.CropSquare }, null, modifier = Modifier.size(18.dp)) },
+                        listOf("stvorec", "vyska", "sirka", "nahodne", "vlastne").forEach { t ->
+                            val popis = when (t) {
+                                "nahodne", "vlastne" -> T("obr_tvar_$t")
+                                else -> o.rozmerPomeru(rozmer, t).let { (w, h) -> T("obr_tvar_$t") + "  ${w}×$h" }
+                            }
+                            FilterChip(selected = ns.obrPomer == t, onClick = { ns.obrPomer = t; ns.uloz() }, label = { Text(popis) },
+                                leadingIcon = { Icon(when (t) { "vyska" -> Icons.Default.CropPortrait; "sirka" -> Icons.Default.CropLandscape; "nahodne" -> Icons.Default.Shuffle; "vlastne" -> Icons.Default.Edit; else -> Icons.Default.CropSquare }, null, modifier = Modifier.size(18.dp)) },
                                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text, selectedLeadingIconColor = Color.White, iconColor = Farby.text))
                         }
+                    }
+                    val ns = ChatJadro.nastavenia
+                    if (ns.obrPomer == "vlastne") Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        var sTxt by remember { mutableStateOf(ns.obrSirka.toString()) }
+                        var vTxt by remember { mutableStateOf(ns.obrVyska.toString()) }
+                        val farbyPola = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text)
+                        OutlinedTextField(value = sTxt, onValueChange = { t -> sTxt = t.filter { it.isDigit() }.take(4); sTxt.toIntOrNull()?.let { ns.obrSirka = it; ns.uloz() } },
+                            singleLine = true, label = { Text(T("obr_sirka")) }, modifier = Modifier.width(120.dp).nadKlavesnicou(), shape = RoundedCornerShape(12.dp), colors = farbyPola)
+                        Text("×", color = Farby.text)
+                        OutlinedTextField(value = vTxt, onValueChange = { t -> vTxt = t.filter { it.isDigit() }.take(4); vTxt.toIntOrNull()?.let { ns.obrVyska = it; ns.uloz() } },
+                            singleLine = true, label = { Text(T("obr_vyska")) }, modifier = Modifier.width(120.dp).nadKlavesnicou(), shape = RoundedCornerShape(12.dp), colors = farbyPola)
+                        val (w, h) = o.rozmerPomeru(rozmer, "vlastne")
+                        Text(T("obr_vlastne_info", w, h), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.weight(1f))
                     }
                     Text(T("poz_nadpis"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

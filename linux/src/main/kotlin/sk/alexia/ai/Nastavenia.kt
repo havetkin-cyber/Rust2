@@ -36,6 +36,9 @@ class Nastavenia {
     var setritVram by mutableStateOf(p.getProperty("setritVram") == "true")
     /** tvar obrázka: stvorec / vyska (na výšku) / sirka (na šírku) */
     var obrPomer by mutableStateOf(p.getProperty("obrPomer") ?: "stvorec")
+    /** vlastný rozmer obrázka (pri tvare „vlastne“) */
+    var obrSirka by mutableIntStateOf(p.getProperty("obrSirka")?.toIntOrNull() ?: 768)
+    var obrVyska by mutableIntStateOf(p.getProperty("obrVyska")?.toIntOrNull() ?: 1024)
     /** video: najprv presný obrázok (FLUX…), potom ho Wan 2.2 rozhýbe */
     var videoCezObrazok by mutableStateOf(p.getProperty("videoCezObrazok") == "true")
     /** skladanie videa: vae / tae / lighttae */
@@ -85,6 +88,8 @@ class Nastavenia {
         p.setProperty("hlas", hlas)
         p.setProperty("dlzkaVidea", dlzkaVidea.toString())
         p.setProperty("obrPomer", obrPomer)
+        p.setProperty("obrSirka", obrSirka.toString())
+        p.setProperty("obrVyska", obrVyska.toString())
         p.setProperty("setritVram", setritVram.toString())
         p.setProperty("videoCezObrazok", videoCezObrazok.toString())
         p.setProperty("skladanie", skladanie)

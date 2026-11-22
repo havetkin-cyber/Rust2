@@ -212,6 +212,9 @@ object ObrazkyJadro {
         return when (pomer) {
             "vyska" -> r64(rozmer * 0.75) to r64(rozmer / 0.75)
             "sirka" -> r64(rozmer / 0.75) to r64(rozmer * 0.75)
+            "vlastne" -> ChatJadro.nastavenia.let { n -> r64(n.obrSirka.coerceIn(256, 1536).toDouble()) to r64(n.obrVyska.coerceIn(256, 1536).toDouble()) }
+            // náhodne: každý obrázok dostane iný tvar
+            "nahodne" -> rozmerPomeru(rozmer, listOf("stvorec", "vyska", "sirka").random())
             else -> rozmer to rozmer
         }
     }

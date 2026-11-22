@@ -3,9 +3,13 @@
 
 // log stable-diffusion.cpp do súboru (napr. %LOCALAPPDATA%\\AlexiaAI\\sd.log)
 F(void, nastavLog)(JNIEnv* env, jobject, jstring cesta) {
+#ifndef __ANDROID__
     std::string c = jstr(env, cesta);
     if (g_log) { fclose(g_log); g_log = nullptr; }
     g_log = fopen(c.c_str(), "w");
+#else
+    (void)env; (void)cesta;
+#endif
     static bool init = false;
     if (!init) { sd_set_log_callback(logovanie, nullptr); sd_set_progress_callback(priebeh, nullptr); init = true; }
 }

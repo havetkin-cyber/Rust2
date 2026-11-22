@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <map>
 #include <string>
 #include <vector>
 #include "llama.h"
@@ -27,6 +28,8 @@ struct Stav {
     std::vector<llama_token> cache;      // tokeny, ktoré už sú v KV cache (zdieľaný začiatok sa nespracúva znova)
     std::string tmpl;                    // chat šablóna z modelu
     std::atomic<bool> stop{false};
+    std::map<std::string, llama_adapter_lora*> lory;   // načítané LoRA adaptéry (uvoľnia sa s modelom)
+    std::string aktivneLory;                            // aby sa pamäť mazala len pri zmene
 };
 
 static std::string g_chyba;
@@ -206,6 +209,32 @@ F(jint, generuj)(JNIEnv* env, jobject, jlong h, jobjectArray roly, jobjectArray 
     }
     env->DeleteLocalRef(cls);
     return vysledok;
+}
+
+// LoRA adaptéry pre chatový model (GGUF); prázdne pole = bez adaptérov. Vráti "" alebo text chyby.
+F(jstring, nastavLory)(JNIEnv* env, jobject, jlong h, jobjectArray cesty, jfloatArray sily) {
+    auto* s = (Stav*)h; if (!s) return env->NewStringUTF("Model nie je načítaný");
+    jsize n = cesty ? env->GetArrayLength(cesty) : 0;
+    std::vector<llama_adapter_lora*> a; std::vector<float> k; std::string kluc, chyba;
+    jfloat* sl = n > 0 ? env->GetFloatArrayElements(sily, nullptr) : nullptr;
+    for (jsize i = 0; i < n; i++) {
+        auto j = (jstring)env->GetObjectArrayElement(cesty, i);
+        std::string c = jstr(env, j); env->DeleteLocalRef(j);
+        auto it = s->lory.find(c);
+        llama_adapter_lora* l = it != s->lory.end() ? it->second : nullptr;
+        if (!l) { l = llama_adapter_lora_init(s->model, c.c_str()); if (l) s->lory[c] = l; }
+        if (!l) { chyba += "LoRA sa nedá načítať (nehodí sa k tomuto modelu alebo nie je GGUF): " + c + "\n"; continue; }
+        a.push_back(l); k.push_back(sl ? sl[i] : 1.0f);
+        kluc += c + "=" + std::to_string(k.back()) + ";";
+    }
+    if (sl) env->ReleaseFloatArrayElements(sily, sl, JNI_ABORT);
+    if (kluc != s->aktivneLory) {
+        if (llama_set_adapters_lora(s->ctx, a.empty() ? nullptr : a.data(), a.size(), k.empty() ? nullptr : k.data()) != 0) chyba += "LoRA sa nepodarilo použiť\n";
+        // iné adaptéry = iné výsledky, uložená pamäť rozhovoru už neplatí
+        llama_memory_clear(llama_get_memory(s->ctx), true); s->cache.clear();
+        s->aktivneLory = kluc;
+    }
+    return env->NewStringUTF(chyba.c_str());
 }
 
 F(void, zastav)(JNIEnv*, jobject, jlong h) { if (h) ((Stav*)h)->stop = true; }

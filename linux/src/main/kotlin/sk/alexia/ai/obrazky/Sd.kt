@@ -14,6 +14,9 @@ object Sd {
         }
     }
 
+    /** LoRA adaptéry pre ďalšie obrázky a videá (prázdne = bez) */
+    external fun nastavLory(cesty: Array<String>, sily: FloatArray)
+
     /** log stable-diffusion.cpp do súboru */
     external fun nastavLog(cesta: String)
 

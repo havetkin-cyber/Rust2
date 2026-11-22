@@ -411,6 +411,8 @@ object ObrazkyJadro {
             else {
                 val r = IntArray(2)
                 val metoda = aktivnaSada()?.metoda ?: "euler_a"
+                // LoRA adaptéry pre obrázky (kategória „obrazky“)
+                Lory.pole("obrazky").let { (c, s) -> runCatching { Sd.nastavLory(c, s) } }
                 val px = if (predloha != null) Sd.generujZPredlohy(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, predloha, sila, r)
                          else Sd.generujEx(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, r)
                 if (px != null) {
@@ -644,6 +646,7 @@ object ObrazkyJadro {
                     for (kus in 0 until kusov) {
                         if (kus > 0) Platforma.naHlavnom { kusText = T("vai_kus", kus + 1, kusov) }
                         val r = IntArray(4)
+                        Lory.pole("videa").let { (c, sl) -> runCatching { Sd.nastavLory(c, sl) } }
                         val data = Sd.generujVideo(h, popis.trim(), neg, v.sirka, v.vyska, snimokKusa, sada.kroky, sada.cfg, v.posun, seed + kus, sada.metoda, px, r)
                             ?: throw IllegalStateException(Sd.chyba().ifBlank { "Video sa nepodarilo" })
                         val (w, vy, t) = r.toList()

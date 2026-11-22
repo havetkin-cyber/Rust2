@@ -14,6 +14,27 @@ F(void, nastavLog)(JNIEnv* env, jobject, jstring cesta) {
     if (!init) { sd_set_log_callback(logovanie, nullptr); sd_set_progress_callback(priebeh, nullptr); init = true; }
 }
 
+// ---------------------------------------------------------------- LoRA adaptéry (platia pre ďalšie obrázky aj videá)
+static std::vector<std::string> g_lora_cesty;
+static std::vector<float> g_lora_sily;
+F(void, nastavLory)(JNIEnv* env, jobject, jobjectArray cesty, jfloatArray sily) {
+    g_lora_cesty.clear(); g_lora_sily.clear();
+    jsize n = cesty ? env->GetArrayLength(cesty) : 0;
+    jfloat* s = n > 0 ? env->GetFloatArrayElements(sily, nullptr) : nullptr;
+    for (jsize i = 0; i < n; i++) {
+        auto j = (jstring)env->GetObjectArrayElement(cesty, i);
+        g_lora_cesty.push_back(jstr(env, j)); env->DeleteLocalRef(j);
+        g_lora_sily.push_back(s ? s[i] : 1.0f);
+    }
+    if (s) env->ReleaseFloatArrayElements(sily, s, JNI_ABORT);
+}
+static bool lory(sd_opt_t* o) {
+    if (g_lora_cesty.empty()) return true;
+    std::vector<sd_lora_t> l(g_lora_cesty.size());
+    for (size_t i = 0; i < l.size(); i++) { l[i].is_high_noise = false; l[i].multiplier = g_lora_sily[i]; l[i].path = g_lora_cesty[i].c_str(); }
+    return ok(sd_opt_set_loras(o, "loras", l.data(), l.size()));
+}
+
 // nekonečná textúra (obrázok na seba nadväzuje zo všetkých strán) – platí pre ďalšie generovanie
 static bool g_kruh = false;
 F(void, nastavTexturu)(JNIEnv*, jobject, jboolean x) { g_kruh = x; }
@@ -117,7 +138,7 @@ F(jintArray, generujEx)(JNIEnv* env, jobject, jlong h, jstring prompt, jstring n
                   && ok(sd_opt_set_int(o, "width", w)) && ok(sd_opt_set_int(o, "height", v))
                   && ok(sd_opt_set_int(o, "seed", seed))
                   && ok(sd_opt_set_int(o, "sample.steps", kroky))
-                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg)) && kruhove(o)
+                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg)) && kruhove(o) && lory(o)
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
                   && ok(sd_generate_image(ctx, o, &res));
     sd_opt_free(o);
@@ -162,7 +183,7 @@ F(jintArray, generujZPredlohy)(JNIEnv* env, jobject, jlong h, jstring prompt, js
                   && ok(sd_opt_set_int(o, "width", w)) && ok(sd_opt_set_int(o, "height", v))
                   && ok(sd_opt_set_int(o, "seed", seed))
                   && ok(sd_opt_set_int(o, "sample.steps", kroky))
-                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg)) && kruhove(o)
+                  && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg)) && kruhove(o) && lory(o)
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
                   && ok(sd_opt_set_tensor(o, "init_image", t))
                   && ok(sd_opt_set_float(o, "strength", sila))
@@ -220,6 +241,7 @@ F(jbyteArray, generujVideo)(JNIEnv* env, jobject, jlong h, jstring prompt, jstri
                   && ok(sd_opt_set_int(o, "sample.steps", kroky))
                   && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg))
                   && ok(sd_opt_set_float(o, "sample.flow_shift", posun))
+                  && lory(o)
                   // VAE po kúskoch: skladanie videa sa zmestí aj do 6 GB grafiky (inak by padlo alebo muselo ísť na CPU)
                   && ok(sd_opt_set_bool(o, "vae_tiling.enabled", true))
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))

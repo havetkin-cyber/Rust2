@@ -188,6 +188,7 @@ object ChatJadro {
         val sys = nastavenia.systemSJazykom()
         return vlakno.submit<String?> {
             if (h == 0L) return@submit T("siet_server_bez_modelu")
+            nastavLoryChatu(h)
             val historia = spravy.toMutableList()
             var v: Int
             while (true) {
@@ -342,6 +343,7 @@ object ChatJadro {
             return
         }
         vlakno.execute {
+            nastavLoryChatu(h)
             val zaciatok = System.nanoTime(); var tokenov = 0
             var vysledok: Int
             while (true) {
@@ -406,6 +408,15 @@ object ChatJadro {
 
     // --- chat sa ukladá do súboru appky, aby prežil zatvorenie ---
     /** história: zašifrovaný rozhovor (pozri Historia) */
+    /** LoRA adaptéry pre chatový model (kategória „chat“); chyba sa ukáže raz */
+    private var poslednaChybaLory = ""
+    private fun nastavLoryChatu(h: Long) {
+        val (c, s) = Lory.pole("chat")
+        val e = runCatching { Llama.nastavLory(h, c, s) }.getOrElse { it.message ?: "" }
+        if (e.isNotBlank() && e != poslednaChybaLory) Platforma.naHlavnom { Platforma.oznam("⚠ " + e.trim()) }
+        poslednaChybaLory = e
+    }
+
     private fun ulozChat() {
         val a = JSONArray(); spravy.forEach { a.put(JSONObject().put("r", it.rola).put("t", it.text).put("k", it.jeObrazkova).apply { it.obrazok?.let { o -> put("o", o) }; it.video?.let { v -> put("v", v) } }) }
         Historia.uloz(Historia.aktualne, a)

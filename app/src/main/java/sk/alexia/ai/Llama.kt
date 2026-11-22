@@ -13,6 +13,8 @@ object Llama {
     external fun vzorkovanie(h: Long, teplota: Float, topP: Float, topK: Int, minP: Float, opakovanie: Float)
     /** 0 hotovo, 1 zastavené, 2 limit tokenov, -1 chyba, -2 rozhovor je dlhší ako kontext */
     external fun generuj(h: Long, roly: Array<String>, obsahy: Array<String>, maxTokenov: Int, cb: Odpoved): Int
+    /** LoRA adaptéry (GGUF) pre chatový model; vráti "" alebo text chyby */
+    external fun nastavLory(h: Long, cesty: Array<String>, sily: FloatArray): String
     external fun zastav(h: Long)
     external fun zabudni(h: Long)
     external fun uvolni(h: Long)

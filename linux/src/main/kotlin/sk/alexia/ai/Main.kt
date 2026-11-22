@@ -116,7 +116,7 @@ private var naspat: (() -> Unit)? = null
 private var prepni: ((Int) -> Unit)? = null
 private var chodNa: ((Int) -> Unit)? = null
 
-private enum class Obrazovka { CHAT, OBRAZKY, VIDEA, VYLEPSIT, MODELY, NASTAVENIA }
+private enum class Obrazovka { CHAT, OBRAZKY, VIDEA, VYLEPSIT, LORA, MODELY, NASTAVENIA }
 
 @Composable
 private fun Appka() {
@@ -187,6 +187,7 @@ private fun Appka() {
             Obrazovka.OBRAZKY -> key("obrazky") { ObrazkyObrazovka(videa = false) { obrazovka = Obrazovka.CHAT } }
             Obrazovka.VIDEA -> key("videa") { ObrazkyObrazovka(videa = true) { obrazovka = Obrazovka.CHAT } }
             Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
+            Obrazovka.LORA -> LoraObrazovka { obrazovka = Obrazovka.CHAT }
         }
         }
         }
@@ -246,6 +247,7 @@ private fun Zalozky(aktivna: Obrazovka, zvol: (Obrazovka) -> Unit) {
         Triple(Obrazovka.OBRAZKY, Icons.Default.Image, "obrazky"),
         Triple(Obrazovka.VIDEA, Icons.Default.Movie, "videa"),
         Triple(Obrazovka.VYLEPSIT, Icons.Default.AutoFixHigh, "vylepsit_kratko"),
+        Triple(Obrazovka.LORA, Icons.Default.Extension, "lora_zalozka"),
         Triple(Obrazovka.MODELY, Icons.Default.Memory, "modely"),
         Triple(Obrazovka.NASTAVENIA, Icons.Default.Tune, "nastavenia"),
     )
@@ -2229,6 +2231,105 @@ private fun RozhybatRiadok(f: File) {
             vysledok?.let { v ->
                 AssistChip(onClick = { runCatching { java.awt.Desktop.getDesktop().open(v) }.onFailure { Platforma.otvorOdkaz(v.toURI().toString()) } },
                     label = { Text(T("video_prehrat"), fontSize = 12.sp) }, colors = AssistChipDefaults.assistChipColors(labelColor = Farby.zelena))
+            }
+        }
+    }
+}
+
+
+// ---------------------------------------------------------------- LoRA adaptéry (obrázky, videá, chat)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LoraObrazovka(spat: () -> Unit) {
+    var kat by remember { mutableStateOf("obrazky") }
+    var odkaz by remember { mutableStateOf("") }
+    var priebeh by remember { mutableStateOf<Float?>(null) }
+    var chyba by remember { mutableStateOf("") }
+    val ver = Lory.verzia
+    val subory = remember(kat, ver, priebeh) { Lory.subory(kat) }
+    val nadpisVyberu = T("lora_vybrat")
+    fun hotovo(f: File?, e: Throwable?) {
+        priebeh = null
+        if (f != null) { Lory.pridany(); Lory.prepni(kat, f.name, true); chyba = "" } else chyba = e?.message ?: T("lora_chyba")
+    }
+    Column(Modifier.fillMaxSize()) {
+        Hlavicka(T("lora_nadpis"), T("lora_podnadpis"), spat = spat)
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Lory.KATEGORIE.forEach { k ->
+                    val n = remember(ver) { Lory.pocetZapnutych(k) }
+                    FilterChip(selected = kat == k, onClick = { kat = k; chyba = "" }, label = { Text(T("lora_kat_$k") + if (n > 0) "  ($n)" else "") },
+                        leadingIcon = { Icon(when (k) { "obrazky" -> Icons.Default.Image; "videa" -> Icons.Default.Movie; else -> Icons.Default.Forum }, null, modifier = Modifier.size(16.dp)) },
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White, labelColor = Farby.text, iconColor = Farby.text))
+                }
+            }
+            Karta {
+                Text(T("lora_info_$kat"), color = Farby.tlmene, fontSize = 13.sp)
+            }
+            // zoznam LoRA v kategórii
+            Karta {
+                Text(T("lora_moje"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                if (subory.isEmpty()) Text(T("lora_prazdne"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                subory.forEach { f ->
+                    val zap = remember(ver, f) { Lory.zapnuta(kat, f.name) }
+                    var sila by remember(ver, f) { mutableStateOf(Lory.sila(kat, f.name)) }
+                    Column(Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = zap, onCheckedChange = { Lory.prepni(kat, f.name, it) }, colors = CheckboxDefaults.colors(checkedColor = Farby.fialova, uncheckedColor = Farby.tlmene))
+                            Column(Modifier.weight(1f)) {
+                                Text(f.nameWithoutExtension, color = Farby.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(Modely.velkost(f), color = Farby.tlmene, fontSize = 11.sp)
+                            }
+                            IconButton(onClick = { Lory.zmaz(kat, f) }) { Icon(Icons.Default.DeleteOutline, T("zmazat"), tint = Farby.tlmene) }
+                        }
+                        if (zap) Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(T("lora_sila", "%.2f".format(sila)), color = Farby.text, fontSize = 12.sp, modifier = Modifier.width(90.dp))
+                            Slider(value = sila, onValueChange = { sila = (it * 20).roundToInt() / 20f }, onValueChangeFinished = { Lory.nastavSilu(kat, f.name, sila) },
+                                valueRange = -1f..2f, modifier = Modifier.weight(1f),
+                                colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha))
+                        }
+                    }
+                }
+            }
+            // pridanie
+            Karta {
+                Text(T("lora_pridat"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().nadKlavesnicou(),
+                    placeholder = { Text(T("lora_odkaz_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+                val p = priebeh
+                if (p != null) LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                else Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GradientTlacidlo(T("stiahnut"), Icons.Default.Download, enabled = odkaz.trim().startsWith("http")) {
+                        val url = odkaz.trim(); val k = kat; priebeh = 0f
+                        thread {
+                            val r = runCatching { Modely.stiahni(url, { x -> Platforma.naHlavnom { priebeh = x } }, { false }, Lory.priecinok(k), true) }
+                            Platforma.naHlavnom { hotovo(r.getOrNull(), r.exceptionOrNull()); if (r.isSuccess) odkaz = "" }
+                        }
+                    }
+                    OutlinedButton(onClick = {
+                        val k = kat
+                        Platforma.vyberSubor(nadpisVyberu, Lory.pripony(k)) { f ->
+                            priebeh = 0f
+                            thread {
+                                val r = runCatching {
+                                    val ciel = File(Lory.priecinok(k), f.name)
+                                    f.inputStream().use { i -> ciel.outputStream().use { o -> i.copyTo(o, 1 shl 20) } }; ciel
+                                }
+                                Platforma.naHlavnom { hotovo(r.getOrNull(), r.exceptionOrNull()) }
+                            }
+                        }
+                    }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.FolderOpen, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(T("zo_suboru_kratko"), color = Farby.text)
+                    }
+                    OutlinedButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(Lory.priecinok(kat)) } }, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                        Icon(Icons.Default.Folder, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(T("lora_priecinok"), color = Farby.text)
+                    }
+                    TextButton(onClick = { Lory.pridany() }) { Text(T("lora_obnovit"), color = Farby.ruzova) }
+                }
+                if (chyba.isNotBlank()) Text(chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                Text(T("lora_kam", Lory.priecinok(kat).path), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
     }

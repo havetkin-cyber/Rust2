@@ -866,7 +866,8 @@ private fun ModelyObrazovka(spat: () -> Unit) {
                 }
             }
 
-            item { Text(T("modely_moje"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            item { SekciaHlavicka(T("mod_sek_moje", subory.size), Icons.Default.Memory, kluc = "mod_moje") }
+            if (jeOtvorena("mod_moje")) {
             if (subory.isEmpty()) item { Text(T("modely_ziadne"), color = Farby.tlmene) }
             items(subory, key = { it.path }) { f ->
                 val aktivny = j.jeAktivny(f)
@@ -896,8 +897,9 @@ private fun ModelyObrazovka(spat: () -> Unit) {
                 }
             }
 
-            item { Spacer(Modifier.height(6.dp)); Text(T("modely_odporucane"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-            items(Modely.odporucane) { m ->
+            }
+            item { SekciaHlavicka(T("modely_odporucane"), Icons.Default.Download, kluc = "mod_odpor") }
+            if (jeOtvorena("mod_odpor")) items(Modely.odporucane) { m ->
                 val uz = subory.any { it.name.equals(Modely.posledny(m.url), ignoreCase = true) }
                 Karta {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -913,9 +915,7 @@ private fun ModelyObrazovka(spat: () -> Unit) {
             }
 
             item {
-                Karta {
-                    Text(T("modely_vlastny"), color = Farby.text, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(8.dp))
+                Sekcia(T("modely_vlastny"), ikona = Icons.Default.Link) {
                     OutlinedTextField(
                         value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.fillMaxWidth().nadKlavesnicou(),
                         placeholder = { Text("https://huggingface.co/…/model.gguf", color = Farby.tlmene, fontSize = 13.sp) },
@@ -1296,7 +1296,7 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                     }
                 }
 
-                Karta {
+                Sekcia(T(if (videa) "vid_sek_vytvorit" else "obr_sek_vytvorit"), ikona = if (videa) Icons.Default.Movie else Icons.Default.AutoAwesome) {
                     OutlinedTextField(
                         value = prompt, onValueChange = { prompt = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp).nadKlavesnicou(),
                         placeholder = { Text(T("obr_prompt_hint"), color = Farby.tlmene, fontSize = 13.sp) },
@@ -1548,8 +1548,7 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                 if (!videa) PrenosStyluKarta()
 
                 // galéria
-                if (!videa && o.galeria.isNotEmpty()) {
-                    Text(T("obr_galeria"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                if (!videa && o.galeria.isNotEmpty()) Sekcia(T("obr_sek_galeria", o.galeria.size), ikona = Icons.Default.PhotoLibrary) {
                     o.galeria.chunked(3).forEach { riadok ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             riadok.forEach { f ->
@@ -1565,7 +1564,7 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
             }
 
             // modely na obrázky
-            Text(T(if (videa) "vid_modely" else "obr_modely"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+            Sekcia(T(if (videa) "vid_modely" else "obr_modely"), ikona = Icons.Default.Memory) {
             sady.forEach { sd ->
                 val aktivny = o.jeAktivna(sd)
                 Row(
@@ -1630,7 +1629,8 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                     }
                 }
             }
-            if (!videa) Text(T("obr_info"), color = Farby.tlmene, fontSize = 12.sp)
+            if (!videa) Text(T("obr_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
         }
     }
 
@@ -1900,7 +1900,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
         }
         if (rezimVideaVyl) { VideoVylepsenie(); return@Column }
         PosuvnyStlpec {
-            Karta {
+            Sekcia(T("vyl_sek_fotka"), ikona = Icons.Default.AddPhotoAlternate) {
                 if (obrVstup == null) {
                     if (vstup != null) { Text(T("vyl_neotvori", vstup.name), color = Farby.cervena, fontSize = 13.sp); Spacer(Modifier.height(6.dp)) }
                     Text(T("vyl_prazdne"), color = Farby.tlmene)
@@ -1935,8 +1935,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                 }
             }
 
-            Karta {
-                Text(T("vyl_zvacsenie"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("vyl_zvacsenie"), ikona = Icons.Default.AutoFixHigh) {
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(1 to T("vyl_bez"), 2 to "2×", 4 to "4×", VylepsenieJadro.K4 to "4K", VylepsenieJadro.K8 to "8K").forEach { (n, nazov) ->
@@ -2276,7 +2275,7 @@ private fun LoraObrazovka(spat: () -> Unit) {
                 Text(T("lora_info_$kat"), color = Farby.tlmene, fontSize = 13.sp)
             }
             // zoznam LoRA v kategórii
-            Sekcia(T("lora_moje"), otvorena = true) {
+            Sekcia(T("lora_moje")) {
                 if (subory.isEmpty()) Text(T("lora_prazdne"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 subory.forEach { f ->
                     val zap = remember(ver, f) { Lory.zapnuta(kat, f.name) }
@@ -2417,6 +2416,20 @@ private fun Sekcia(nadpis: String, modifier: Modifier = Modifier, otvorena: Bool
             Icon(if (otv) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
         }
         androidx.compose.animation.AnimatedVisibility(visible = otv) { Column(Modifier.padding(top = 4.dp)) { obsah() } }
+    }
+}
+
+private fun jeOtvorena(kluc: String, predvolene: Boolean = false) = otvoreneSekcie[kluc] ?: predvolene
+
+/** hlavička rozbaľovacej sekcie pre zoznamy (LazyColumn), obsah sa zobrazí cez [jeOtvorena] */
+@Composable
+private fun SekciaHlavicka(nadpis: String, ikona: androidx.compose.ui.graphics.vector.ImageVector? = null, kluc: String = nadpis) {
+    val otv = jeOtvorena(kluc)
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Farby.plocha).border(1.dp, Farby.okraj, RoundedCornerShape(20.dp))
+        .clickable { otvoreneSekcie[kluc] = !otv }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (ikona != null) { Icon(ikona, null, tint = Farby.ruzova, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }
+        Text(nadpis, color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Icon(if (otv) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
     }
 }
 

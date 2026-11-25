@@ -592,7 +592,8 @@ private fun ModelyObrazovka(spat: () -> Unit) {
                 }
             }
 
-            item { Text(stringResource(R.string.modely_moje), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            item { SekciaHlavicka(T("mod_sek_moje", subory.size), Icons.Default.Memory, kluc = "mod_moje") }
+            if (jeOtvorena("mod_moje")) {
             if (subory.isEmpty()) item { Text(stringResource(R.string.modely_ziadne), color = Farby.tlmene) }
             items(subory, key = { it.path }) { f ->
                 val aktivny = j.jeAktivny(f)
@@ -622,8 +623,9 @@ private fun ModelyObrazovka(spat: () -> Unit) {
                 }
             }
 
-            item { Spacer(Modifier.height(6.dp)); Text(stringResource(R.string.modely_odporucane), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-            items(Modely.odporucane) { m ->
+            }
+            item { SekciaHlavicka(stringResource(R.string.modely_odporucane), Icons.Default.Download, kluc = "mod_odpor") }
+            if (jeOtvorena("mod_odpor")) items(Modely.odporucane) { m ->
                 val uz = subory.any { it.name.equals(Uri.parse(m.url).lastPathSegment, ignoreCase = true) }
                 Karta {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -638,9 +640,7 @@ private fun ModelyObrazovka(spat: () -> Unit) {
             }
 
             item {
-                Karta {
-                    Text(stringResource(R.string.modely_vlastny), color = Farby.text, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(8.dp))
+                Sekcia(stringResource(R.string.modely_vlastny), ikona = Icons.Default.Link) {
                     OutlinedTextField(
                         value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("https://huggingface.co/…/model.gguf", color = Farby.tlmene, fontSize = 13.sp) },
@@ -931,7 +931,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
             } else {
                 // výsledok
                 o.posledny?.let { f ->
-                    Karta {
+                    Sekcia(T("obr_sek_vytvorit"), ikona = Icons.Default.AutoAwesome) {
                         val bmp = remember(f) { android.graphics.BitmapFactory.decodeFile(f.path) }
                         if (bmp != null) Image(bmp.asImageBitmap(), null, Modifier.fillMaxWidth().aspectRatio(bmp.width.toFloat() / bmp.height).clip(RoundedCornerShape(14.dp)).clickable { detail = f }, contentScale = ContentScale.Fit)
                         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1044,8 +1044,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                 PrenosStyluPcKarta()
 
                 // galéria
-                if (o.galeria.isNotEmpty()) {
-                    Text(stringResource(R.string.obr_galeria), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                if (o.galeria.isNotEmpty()) Sekcia(T("obr_sek_galeria", o.galeria.size), ikona = Icons.Default.PhotoLibrary) {
                     o.galeria.chunked(3).forEach { riadok ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             riadok.forEach { f ->
@@ -1061,7 +1060,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
             }
 
             // modely na obrázky
-            Text(stringResource(R.string.obr_modely), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+            Sekcia(T("obr_sek_modely"), ikona = Icons.Default.Memory) {
             modely.forEach { f ->
                 val aktivny = o.jeAktivny(f)
                 Row(
@@ -1108,7 +1107,8 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     }
                 }
             }
-            Text(stringResource(R.string.obr_info), color = Farby.tlmene, fontSize = 12.sp)
+            Text(stringResource(R.string.obr_info), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
         }
     }
 
@@ -1270,7 +1270,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("vylepsit"), spat = spat)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Karta {
+            Sekcia(T("vyl_sek_fotka"), ikona = Icons.Default.AddPhotoAlternate) {
                 if (obrVstup == null) {
                     if (vstup != null) { Text(T("vyl_neotvori", ""), color = Farby.cervena, fontSize = 13.sp); Spacer(Modifier.height(6.dp)) }
                     Text(T("vyl_prazdne"), color = Farby.tlmene)
@@ -1300,8 +1300,7 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                     }
                 }
             }
-            Karta {
-                Text(T("vyl_zvacsenie"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("vyl_zvacsenie"), ikona = Icons.Default.AutoFixHigh) {
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(1 to T("vyl_bez"), 2 to "2×", 4 to "4×", VylepsenieJadro.K4 to "4K").forEach { (n, nazov) ->
@@ -1497,7 +1496,7 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
             val info = pc.info!!
             var dlzka by remember { mutableIntStateOf(5) }
             // ---- nové video z textu
-            Sekcia(T("pc_nove_video"), otvorena = true) {
+            Sekcia(T("pc_nove_video")) {
                 if (!info.video) Text(T("pc_bez_video_modelu"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 var popis by remember { mutableStateOf("") }
                 var cezObrazok by remember { mutableStateOf(true) }
@@ -1564,7 +1563,7 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                 if (galeria) GaleriaPcDialog(lenAppka = false, zavri = { galeria = false }) { pc.ulozObrazok(it) }
             }
             // ---- rad videí na PC
-            Sekcia(T("pc_rad"), otvorena = true) {
+            Sekcia(T("pc_rad")) {
                 val st = pc.stav
                 val ulohy = st?.optJSONArray("ulohy")
                 if (st?.optBoolean("pcZaneprazdnene") == true) Text(T("pc_zaneprazdnene"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
@@ -1662,6 +1661,20 @@ private fun Sekcia(nadpis: String, modifier: Modifier = Modifier, otvorena: Bool
             Icon(if (otv) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
         }
         androidx.compose.animation.AnimatedVisibility(visible = otv) { Column(Modifier.padding(top = 4.dp)) { obsah() } }
+    }
+}
+
+private fun jeOtvorena(kluc: String, predvolene: Boolean = false) = otvoreneSekcie[kluc] ?: predvolene
+
+/** hlavička rozbaľovacej sekcie pre zoznamy (LazyColumn), obsah sa zobrazí cez [jeOtvorena] */
+@Composable
+private fun SekciaHlavicka(nadpis: String, ikona: androidx.compose.ui.graphics.vector.ImageVector? = null, kluc: String = nadpis) {
+    val otv = jeOtvorena(kluc)
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Farby.plocha).border(1.dp, Farby.okraj, RoundedCornerShape(20.dp))
+        .clickable { otvoreneSekcie[kluc] = !otv }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (ikona != null) { Icon(ikona, null, tint = Farby.ruzova, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }
+        Text(nadpis, color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Icon(if (otv) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
     }
 }
 

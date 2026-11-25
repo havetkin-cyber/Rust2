@@ -87,9 +87,22 @@ object ObrazkyJadro {
         if (stav != StavModelu.CHYBA) stav = StavModelu.ZIADNY
     }
 
+    /** šírka × výška pre tvar obrázka – približne rovnaký počet pixelov ako štvorec, násobky 64 */
+    fun rozmerPomeru(rozmer: Int, pomer: String): Pair<Int, Int> {
+        fun r64(x: Double) = (Math.round(x / 64.0) * 64).toInt().coerceAtLeast(64)
+        return when (pomer) {
+            "vyska" -> r64(rozmer * 0.75) to r64(rozmer / 0.75)
+            "sirka" -> r64(rozmer / 0.75) to r64(rozmer * 0.75)
+            "vlastne" -> ChatJadro.nastavenia.let { n -> r64(n.obrSirka.coerceIn(256, 1536).toDouble()) to r64(n.obrVyska.coerceIn(256, 1536).toDouble()) }
+            "nahodne" -> rozmerPomeru(rozmer, listOf("stvorec", "vyska", "sirka").random())
+            else -> rozmer to rozmer
+        }
+    }
+
     fun generuj(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float) {
         if (generuje || stav != StavModelu.PRIPRAVENY || prompt.isBlank()) return
-        spust(prompt, negativny, rozmer, kroky, cfg) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
+        val (w, v) = rozmerPomeru(rozmer, ChatJadro.nastavenia.obrPomer)
+        spust(prompt, negativny, w, v, kroky, cfg) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
     }
 
     /**
@@ -103,7 +116,7 @@ object ObrazkyJadro {
         val uvolnit = ChatJadro.velkostNacitaneho() + File(cesta).length() > Platforma.ramBajtov() * 45 / 100
         if (uvolnit) ChatJadro.uvolniPamat()
         nacitaj(cesta, uvolnitChat = false)
-        spust(popis, "blurry, low quality, deformed", 384, 20, 7f) { f, e ->
+        spust(popis, "blurry, low quality, deformed", 384, 384, 20, 7f) { f, e ->
             hotovo(f, e)
             if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
         }
@@ -119,15 +132,16 @@ object ObrazkyJadro {
         if (generuje || prompt.isBlank()) return
         chyba = ""
         val n = ChatJadro.nastavenia
-        nakresliNaDialku(n.vzdialenaAdresa, n.vzdialenyPin, prompt, negativny, pomer) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
+        nakresliNaDialku(n.vzdialenaAdresa, n.vzdialenyPin, prompt, negativny, pomer, n.obrSirka, n.obrVyska) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
     }
 
-    fun nakresliNaDialku(adresa: String, pin: String, popis: String, negativny: String = "", pomer: String = "stvorec", hotovo: (File?, String) -> Unit) {
+    fun nakresliNaDialku(adresa: String, pin: String, popis: String, negativny: String = "", pomer: String = "stvorec",
+                         sirka: Int = 0, vyska: Int = 0, hotovo: (File?, String) -> Unit) {
         if (generuje) return
         generuje = true; priebeh = 0f; naPc = true
         Thread {
             val f = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
-            val r = runCatching { Klient.obrazok(adresa, pin, popis, f, negativny, pomer) }
+            val r = runCatching { Klient.obrazok(adresa, pin, popis, f, negativny, pomer, sirka, vyska) }
             hlavne.post {
                 generuje = false; naPc = false
                 r.onSuccess { galeria.add(0, f); hotovo(f, "") }
@@ -136,7 +150,33 @@ object ObrazkyJadro {
         }.start()
     }
 
-    private fun spust(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, hotovo: (File?, String) -> Unit) {
+    /** prenos štýlu na PC: obsah = obrázok z galérie PC (meno), štýl = obrázok z mobilu; výsledok príde do mobilu */
+    fun prenosStyluNaPc(obsahMeno: String, styl: android.net.Uri, doplnok: String, hotovo: (File?, String) -> Unit) {
+        if (generuje) return
+        generuje = true; priebeh = 0f; naPc = true; chyba = ""
+        val n = ChatJadro.nastavenia
+        Thread {
+            val f = File(priecinokObrazkov(), "alexia_styl_${System.currentTimeMillis()}.png")
+            val r = runCatching {
+                // štýl do JPG (max 1024 px) – menej dát cez sieť, PC ho aj tak zmenší
+                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                app.contentResolver.openInputStream(styl)!!.use { android.graphics.BitmapFactory.decodeStream(it, null, o) }
+                var vz = 1; while (maxOf(o.outWidth, o.outHeight) / vz > 2048) vz *= 2
+                val bmp = app.contentResolver.openInputStream(styl)!!.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = vz }) }
+                    ?: throw IllegalStateException(T("styl_nie_obrazok"))
+                val jpg = java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }.toByteArray()
+                bmp.recycle()
+                Klient.prenosStylu(n.vzdialenaAdresa, n.vzdialenyPin, obsahMeno, jpg, doplnok, f)
+            }
+            hlavne.post {
+                generuje = false; naPc = false
+                r.onSuccess { galeria.add(0, f); posledny = f; hotovo(f, "") }
+                r.onFailure { f.delete(); hotovo(null, it.message ?: T("styl_nepodarilo")) }
+            }
+        }.start()
+    }
+
+    private fun spust(prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
         val seed = (Math.random() * Int.MAX_VALUE).toLong()
         val sledovac = object : Runnable {
@@ -148,7 +188,7 @@ object ObrazkyJadro {
             if (h == 0L) e = Sd.chyba().ifBlank { "Obrázkový model sa nenačítal" }
             else {
                 val r = IntArray(2)
-                val px = Sd.generuj(h, prompt.trim(), negativny.trim(), rozmer, rozmer, kroky, cfg, seed, r)
+                val px = Sd.generuj(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, r)
                 if (px != null) {
                     runCatching {
                         val bmp = Bitmap.createBitmap(px, r[0], r[1], Bitmap.Config.ARGB_8888)

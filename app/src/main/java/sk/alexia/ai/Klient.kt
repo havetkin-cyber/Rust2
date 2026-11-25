@@ -19,7 +19,7 @@ object Klient {
     const val PORT = 8765
     const val PORT_HLADANIA = 8766
 
-    class Info(val meno: String, val model: String, val pripraveny: Boolean, val obrazky: Boolean, val video: Boolean = false, val rozhybat: Boolean = false, val vylepsit: Boolean = false)
+    class Info(val meno: String, val model: String, val pripraveny: Boolean, val obrazky: Boolean, val video: Boolean = false, val rozhybat: Boolean = false, val vylepsit: Boolean = false, val styl: Boolean = false)
 
     private fun url(adresa: String, cesta: String): URL {
         val a = adresa.trim().removePrefix("http://").removeSuffix("/")
@@ -74,7 +74,7 @@ object Klient {
 
     fun info(adresa: String, pin: String): Info {
         val j = JSONObject(spoj(adresa, pin, "/api/info").inputStream.bufferedReader(Charsets.UTF_8).readText())
-        return Info(j.optString("meno"), j.optString("model"), j.optBoolean("pripraveny"), j.optBoolean("obrazky"), j.optBoolean("video"), j.optBoolean("rozhybat"), j.optBoolean("vylepsit"))
+        return Info(j.optString("meno"), j.optString("model"), j.optBoolean("pripraveny"), j.optBoolean("obrazky"), j.optBoolean("video"), j.optBoolean("rozhybat"), j.optBoolean("vylepsit"), j.optBoolean("styl"))
     }
 
     /** pošle rozhovor; [kus] dostáva text po kúskoch, false = zastaviť. Vráti null (v poriadku) alebo text chyby. */
@@ -105,8 +105,16 @@ object Klient {
     }
 
     /** nechá obrázok nakresliť na druhom zariadení a uloží ho do [ciel] */
-    fun obrazok(adresa: String, pin: String, popis: String, ciel: File, negativny: String = "", pomer: String = "stvorec") {
-        val k = spoj(adresa, pin, "/api/obrazok", JSONObject().put("popis", popis).put("negativny", negativny).put("pomer", pomer), citanie = 30 * 60_000)
+    fun obrazok(adresa: String, pin: String, popis: String, ciel: File, negativny: String = "", pomer: String = "stvorec", sirka: Int = 0, vyska: Int = 0) {
+        val k = spoj(adresa, pin, "/api/obrazok", JSONObject().put("popis", popis).put("negativny", negativny).put("pomer", pomer)
+            .put("sirka", sirka).put("vyska", vyska), citanie = 30 * 60_000)
+        k.inputStream.use { i -> ciel.outputStream().use { i.copyTo(it) } }
+    }
+
+    /** prenos štýlu na PC (FLUX.3 Klein): obsah = meno obrázka z galérie PC, telo = štýlový obrázok (JPG) */
+    fun prenosStylu(adresa: String, pin: String, obsahMeno: String, styl: ByteArray, doplnok: String, ciel: File) {
+        val cesta = "/api/styl?obsah=" + java.net.URLEncoder.encode(obsahMeno, "UTF-8") + "&doplnok=" + java.net.URLEncoder.encode(doplnok, "UTF-8")
+        val k = spojTelo(adresa, pin, cesta, styl, "image/jpeg", citanie = 30 * 60_000)
         k.inputStream.use { i -> ciel.outputStream().use { i.copyTo(it) } }
     }
 

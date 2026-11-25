@@ -66,6 +66,7 @@ object Server {
             s.createContext("/api/galeria/nahlad") { x -> obsluz(x) { nahlad(x) } }
             s.createContext("/api/galeria/subor") { x -> obsluz(x) { obrazokSubor(x) } }
             s.createContext("/api/vylepsi") { x -> obsluz(x) { vylepsi(x) } }
+            s.createContext("/api/styl") { x -> obsluz(x) { prenosStylu(x) } }
             s.start(); http = s
             spustiHladanie()
             bezi = true
@@ -134,6 +135,7 @@ object Server {
             .put("video", ObrazkyJadro.videoSada() != null)
             .put("rozhybat", ObrazkyJadro.i2vSada() != null)
             .put("vylepsit", VylepsenieJadro.mamModel())
+            .put("styl", ObrazkyJadro.kleinSada() != null)
         odpovedz(x, 200, j.toString())
     }
 
@@ -156,13 +158,15 @@ object Server {
         val j = telo(x)
         val popis = j.optString("popis").trim()
         val neg = j.optString("negativny").trim()
-        val pomer = j.optString("pomer", "stvorec").let { if (it in setOf("stvorec", "vyska", "sirka", "nahodne")) it else "stvorec" }
+        val pomer = j.optString("pomer", "stvorec").let { if (it in setOf("stvorec", "vyska", "sirka", "nahodne", "vlastne")) it else "stvorec" }
+        // vlastný rozmer z mobilu (nie z nastavení PC)
+        val vlastny = if (pomer == "vlastne") j.optInt("sirka", 0).coerceIn(256, 1536) to j.optInt("vyska", 0).coerceIn(256, 1536) else null
         if (popis.isEmpty()) { odpovedz(x, 400, "Chýba popis"); return }
         val hotovo = CountDownLatch(1)
         var subor: File? = null; var chyba = ""
         Platforma.naHlavnom {
             if (ObrazkyJadro.generuje) { chyba = "Na počítači sa práve kreslí iný obrázok"; hotovo.countDown() }
-            else ObrazkyJadro.nakresliDoChatu(popis, negativny = neg, pomer = pomer) { f, e -> subor = f; chyba = e; hotovo.countDown() }
+            else ObrazkyJadro.nakresliDoChatu(popis, negativny = neg, pomer = pomer, vlastny = vlastny) { f, e -> subor = f; chyba = e; hotovo.countDown() }
         }
         if (!hotovo.await(30, TimeUnit.MINUTES)) { odpovedz(x, 504, "Obrázok trval príliš dlho"); return }
         val f = subor
@@ -246,5 +250,29 @@ object Server {
         vstup.delete()
         r.onSuccess { posliSubor(x, it, "image/png") }
             .onFailure { odpovedz(x, 500, (it.cause ?: it).message ?: "Vylepšenie zlyhalo") }
+    }
+
+    /** prenos štýlu pre mobil: obsah = obrázok z galérie PC, telo = štýlový obrázok; odpoveď = PNG */
+    private fun prenosStylu(x: HttpExchange) {
+        val obsah = parameter(x, "obsah")?.let { ObrazkyJadro.obrazokZGalerie(it) } ?: run { odpovedz(x, 404, T("styl_len_appka")); return }
+        val doplnok = parameter(x, "doplnok").orEmpty()
+        val b = x.requestBody.use { i ->
+            val o = java.io.ByteArrayOutputStream(); val buf = ByteArray(1 shl 16); var n = 0L
+            while (true) { val r = i.read(buf); if (r < 0) break; n += r; if (n > 30_000_000) throw IllegalStateException("Obrázok je príliš veľký"); o.write(buf, 0, r) }
+            o.toByteArray()
+        }
+        if (b.isEmpty()) { odpovedz(x, 400, "Chýba štýlový obrázok"); return }
+        val styl = File.createTempFile("styl_", ".jpg").apply { writeBytes(b); deleteOnExit() }
+        val hotovo = CountDownLatch(1)
+        var subor: File? = null; var chyba = ""
+        Platforma.naHlavnom {
+            if (ObrazkyJadro.generuje) { chyba = T("video_zaneprazdnene"); hotovo.countDown() }
+            else ObrazkyJadro.prenosStylu(obsah, styl, doplnok) { f, e -> subor = f; chyba = e; hotovo.countDown() }
+        }
+        val dokoncene = hotovo.await(30, TimeUnit.MINUTES)
+        styl.delete()
+        if (!dokoncene) { odpovedz(x, 504, "Trvalo to príliš dlho"); return }
+        val f = subor ?: run { odpovedz(x, 500, chyba.ifBlank { T("styl_nepodarilo") }); return }
+        posliSubor(x, f, "image/png")
     }
 }

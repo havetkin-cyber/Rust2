@@ -977,6 +977,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         }
                     }
                     Text(T("prompt_ai_info"), color = Farby.tlmene, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    TvarObrazka(rozmer)
                     Text(T("poz_nadpis"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         POZADIA.forEach { (id, _) ->
@@ -1045,6 +1046,8 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     }
                     if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 }
+
+                PrenosStyluPcKarta()
 
                 // galéria
                 if (o.galeria.isNotEmpty()) {
@@ -1649,6 +1652,104 @@ private fun GaleriaPcDialog(lenAppka: Boolean, zavri: () -> Unit, zvol: (String)
                 }
             }
             TextButton(onClick = zavri, modifier = Modifier.align(Alignment.End)) { Text(T("zavriet"), color = Farby.ruzova) }
+        }
+    }
+}
+
+
+/** tvar obrázka – platí pre V mobile aj Na PC */
+@Composable
+private fun TvarObrazka(rozmer: Int) {
+    val n = ChatJadro.nastavenia
+    Text(T("obr_tvar"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf("stvorec", "vyska", "sirka", "nahodne", "vlastne").forEach { t ->
+            val popis = if (t == "nahodne" || t == "vlastne") T("obr_tvar_$t") else ObrazkyJadro.rozmerPomeru(rozmer, t).let { (w, v) -> T("obr_tvar_$t") + " ${w}×$v" }
+            FilterChip(selected = n.obrPomer == t, onClick = { n.obrPomer = t; n.uloz() }, label = { Text(popis, fontSize = 12.sp) },
+                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+        }
+    }
+    if (n.obrPomer == "vlastne") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        var sTxt by remember { mutableStateOf(n.obrSirka.toString()) }
+        var vTxt by remember { mutableStateOf(n.obrVyska.toString()) }
+        val farby = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text)
+        OutlinedTextField(value = sTxt, onValueChange = { t -> sTxt = t.filter { it.isDigit() }.take(4); sTxt.toIntOrNull()?.let { n.obrSirka = it; n.uloz() } },
+            singleLine = true, label = { Text(T("obr_sirka")) }, modifier = Modifier.width(100.dp), shape = RoundedCornerShape(12.dp), colors = farby,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+        Text("×", color = Farby.text)
+        OutlinedTextField(value = vTxt, onValueChange = { t -> vTxt = t.filter { it.isDigit() }.take(4); vTxt.toIntOrNull()?.let { n.obrVyska = it; n.uloz() } },
+            singleLine = true, label = { Text(T("obr_vyska")) }, modifier = Modifier.width(100.dp), shape = RoundedCornerShape(12.dp), colors = farby,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+        val (w, v) = ObrazkyJadro.rozmerPomeru(rozmer, "vlastne")
+        Text(T("obr_vlastne_info", w, v), color = Farby.tlmene, fontSize = 11.sp, modifier = Modifier.weight(1f))
+    }
+}
+
+/** prenos štýlu cez PC (FLUX.3 Klein): obrázok z galérie PC v štýle obrázka z mobilu */
+@Composable
+private fun PrenosStyluPcKarta() {
+    val o = ObrazkyJadro
+    var obsah by remember { mutableStateOf<String?>(null) }
+    var styl by remember { mutableStateOf<Uri?>(null) }
+    var doplnok by remember { mutableStateOf("") }
+    var vyber by remember { mutableStateOf(false) }
+    var vysledok by remember { mutableStateOf<File?>(null) }
+    var chyba by remember { mutableStateOf("") }
+    var bezi by remember { mutableStateOf(false) }
+    val vyberStyl = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u: Uri? -> if (u != null) { styl = u; chyba = "" } }
+    val pcOk = PcSpojenie.pripojene && PcSpojenie.info?.styl == true
+    Karta {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (PcSpojenie.pripojene) Icons.Default.Palette else Icons.Default.Lock, null, tint = Farby.ruzova); Spacer(Modifier.width(8.dp))
+            Text(T("styl_nadpis_pc"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+        }
+        Text(when {
+            !PcSpojenie.pripojene -> T("obr_pc_zamknute")
+            PcSpojenie.info?.styl != true -> T("styl_treba_klein_pc")
+            else -> T("styl_info_pc")
+        }, color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+        if (pcOk) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // obsah: náhľad z PC
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(T("styl_obsah_pc"), color = Farby.text, fontSize = 12.sp)
+                    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, obsah) {
+                        value = obsah?.let { m -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { PcSpojenie.nahlad(m)?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } } }
+                    }
+                    Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(130.dp).clip(RoundedCornerShape(12.dp)).background(Farby.plocha2).clickable { vyber = true }, contentAlignment = Alignment.Center) {
+                        val b = bmp
+                        if (b != null) Image(b, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                        else Text(T("styl_tukni"), color = Farby.tlmene, fontSize = 11.sp)
+                    }
+                }
+                // štýl: obrázok z mobilu
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(T("styl_styl"), color = Farby.text, fontSize = 12.sp)
+                    val c = LocalContext.current
+                    val bmp = remember(styl) { styl?.let { u -> runCatching { c.contentResolver.openInputStream(u)!!.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 }) }?.asImageBitmap() }.getOrNull() } }
+                    Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(130.dp).clip(RoundedCornerShape(12.dp)).background(Farby.plocha2).clickable { vyberStyl.launch("image/*") }, contentAlignment = Alignment.Center) {
+                        if (bmp != null) Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                        else Text(T("styl_tukni"), color = Farby.tlmene, fontSize = 11.sp)
+                    }
+                }
+            }
+            OutlinedTextField(value = doplnok, onValueChange = { doplnok = it }, singleLine = true, modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
+                placeholder = { Text(T("styl_doplnok_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+            if (bezi) {
+                Text(T("styl_pracuje_pc"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                LinearProgressIndicator(Modifier.padding(top = 4.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+            } else GradientTlacidlo(T("styl_spustit"), Icons.Default.Palette, Modifier.padding(top = 8.dp).fillMaxWidth(), enabled = obsah != null && styl != null && !o.generuje) {
+                bezi = true; chyba = ""; vysledok = null
+                o.prenosStyluNaPc(obsah!!, styl!!, doplnok) { f, e -> bezi = false; if (f != null) vysledok = f else chyba = e }
+            }
+            if (chyba.isNotBlank()) Text(chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            vysledok?.let { f ->
+                val b = remember(f) { android.graphics.BitmapFactory.decodeFile(f.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 })?.asImageBitmap() }
+                if (b != null) Image(b, null, Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(max = 380.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Fit)
+                Text(T("styl_v_galerii"), color = Farby.zelena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+            if (vyber) GaleriaPcDialog(lenAppka = true, zavri = { vyber = false }) { obsah = it; vyber = false }
         }
     }
 }

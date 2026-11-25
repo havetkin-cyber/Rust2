@@ -28,6 +28,10 @@ class Nastavenia(c: Context) {
     var mixA by mutableIntStateOf(p.getInt("mixA", 0))
     var mixB by mutableIntStateOf(p.getInt("mixB", 4))
     var mixPomer by mutableFloatStateOf(p.getFloat("mixPomer", 0.5f))
+    /** tvar obrázka: stvorec / vyska / sirka / nahodne / vlastne (+ vlastný rozmer) */
+    var obrPomer by mutableStateOf(p.getString("obrPomer", "stvorec") ?: "stvorec")
+    var obrSirka by mutableIntStateOf(p.getInt("obrSirka", 768))
+    var obrVyska by mutableIntStateOf(p.getInt("obrVyska", 1024))
     var jazykOdpovedi by mutableStateOf(p.getString("jazykOdpovedi", null) ?: if (java.util.Locale.getDefault().language in setOf("sk", "cs")) "sk" else "auto")
     // pozadie chatu (kópia obrázka v priečinku appky)
     var pozadieChatu by mutableStateOf(p.getString("pozadieChatu", null))
@@ -54,6 +58,7 @@ class Nastavenia(c: Context) {
             .putFloat("hlasHrubka", hlasHrubka)
             .putFloat("hlasPlnost", hlasPlnost)
             .putInt("mixA", mixA).putInt("mixB", mixB).putFloat("mixPomer", mixPomer)
+            .putString("obrPomer", obrPomer).putInt("obrSirka", obrSirka).putInt("obrVyska", obrVyska)
             .putString("aktualnyChat", aktualnyChat)
             .putBoolean("autoAktualizacie", autoAktualizacie)
             .putString("pozadieChatu", pozadieChatu)

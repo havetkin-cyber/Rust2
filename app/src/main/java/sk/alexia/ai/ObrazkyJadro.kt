@@ -110,14 +110,26 @@ object ObrazkyJadro {
     }
 
     /** obrázok nakreslí iné zariadenie (prepojenie v sieti) */
-    fun nakresliNaDialku(adresa: String, pin: String, popis: String, hotovo: (File?, String) -> Unit) {
+    /** kreslí práve PC (mobil nevie priebeh – ukáže sa len „kreslí PC…“) */
+    var naPc by mutableStateOf(false)
+        private set
+
+    /** obrázok zo záložky Obrázky, nakreslí ho PC */
+    fun generujNaPc(prompt: String, negativny: String, pomer: String) {
+        if (generuje || prompt.isBlank()) return
+        chyba = ""
+        val n = ChatJadro.nastavenia
+        nakresliNaDialku(n.vzdialenaAdresa, n.vzdialenyPin, prompt, negativny, pomer) { f, e -> f?.let { posledny = it }; if (f == null) chyba = e }
+    }
+
+    fun nakresliNaDialku(adresa: String, pin: String, popis: String, negativny: String = "", pomer: String = "stvorec", hotovo: (File?, String) -> Unit) {
         if (generuje) return
-        generuje = true; priebeh = 0f
+        generuje = true; priebeh = 0f; naPc = true
         Thread {
             val f = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
-            val r = runCatching { Klient.obrazok(adresa, pin, popis, f) }
+            val r = runCatching { Klient.obrazok(adresa, pin, popis, f, negativny, pomer) }
             hlavne.post {
-                generuje = false
+                generuje = false; naPc = false
                 r.onSuccess { galeria.add(0, f); hotovo(f, "") }
                 r.onFailure { f.delete(); hotovo(null, it.message ?: "Spojenie zlyhalo") }
             }

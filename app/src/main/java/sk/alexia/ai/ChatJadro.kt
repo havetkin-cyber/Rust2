@@ -70,8 +70,13 @@ object ChatJadro {
         (nacitanyKontext != nastavenia.kontext || nacitaneVlakna != nastavenia.vlakna)
 
     fun nacitajModel(cesta: String) {
-        if (nastavenia.vzdialene) { nastavenia.vzdialene = false; vzdialenyModel = "" }   // vlastný model namiesto vzdialeného
+        if (nastavenia.vzdialene) { nastavenia.vzdialene = false; vzdialenyModel = ""; pcBezModelu = false }   // vlastný model namiesto vzdialeného
         nastavenia.aktivnyModel = cesta; nastavenia.uloz()
+        nacitajLokalne(cesta)
+    }
+
+    /** načíta model v mobile bez vypnutia prepojenia s PC (keď PC nemá chatový model) */
+    private fun nacitajLokalne(cesta: String) {
         stav = StavModelu.NACITAVA; chyba = ""
         val ctx = nastavenia.kontext; val vl = nastavenia.vlakna
         vlakno.execute {
@@ -97,7 +102,7 @@ object ChatJadro {
 
     fun aktualizujVzorkovanie() { vlakno.execute { if (h != 0L) nastavVzorkovanie(h) } }
 
-    fun nazovModelu(): String = if (nastavenia.vzdialene) vzdialenyModel else nacitany?.let { File(it).nameWithoutExtension } ?: ""
+    fun nazovModelu(): String = if (chatNaPc) vzdialenyModel else nacitany?.let { File(it).nameWithoutExtension } ?: ""
 
     /** veľkosť práve načítaného jazykového modelu (0 = žiadny) */
     fun velkostNacitaneho(): Long = nacitany?.let { File(it).length() } ?: 0L
@@ -108,6 +113,21 @@ object ChatJadro {
     var vzdialeneMeno by mutableStateOf("")
         private set
     @Volatile private var zastavitVzdialene = false
+    /** PC je pripojené (obrázky, videá…), ale nemá spustený chatový model (alebo neodpovedá) → chat beží v mobile */
+    var pcBezModelu by mutableStateOf(false)
+        private set
+    /** chat naozaj beží na PC */
+    val chatNaPc get() = nastavenia.vzdialene && !pcBezModelu
+
+    /** PC chat nemá – použije sa model v mobile, ak nejaký je */
+    private fun chatVMobile(sprava: String) {
+        pcBezModelu = true
+        val m = nastavenia.aktivnyModel
+        if (m != null && File(m).exists()) {
+            if (nacitany == m && h != 0L) { stav = StavModelu.PRIPRAVENY; chyba = "" } else nacitajLokalne(m)
+            Platforma.oznam(sprava)
+        } else { stav = StavModelu.CHYBA; chyba = sprava + " " + T("siet_ani_mobil") }
+    }
 
     fun pripoj() {
         val n = nastavenia
@@ -119,10 +139,14 @@ object ChatJadro {
                 if (!n.vzdialene) return@post
                 r.onSuccess { i ->
                     vzdialenyModel = i.model; vzdialeneMeno = i.meno
-                    if (i.pripraveny) { stav = StavModelu.PRIPRAVENY; popisModelu = "${i.meno} · ${i.model}" }
-                    else { stav = StavModelu.CHYBA; chyba = T("siet_bez_modelu", i.meno) }
+                    if (i.pripraveny) {
+                        pcBezModelu = false
+                        // chat ide cez PC – model v mobile netreba držať v pamäti
+                        vlakno.execute { if (h != 0L) { Llama.uvolni(h); h = 0L } }; nacitany = null
+                        stav = StavModelu.PRIPRAVENY; popisModelu = "${i.meno} · ${i.model}"
+                    } else chatVMobile(T("siet_chat_v_mobile", i.meno))
                 }
-                r.onFailure { stav = StavModelu.CHYBA; chyba = T("siet_nepripojene", it.message ?: "") }
+                r.onFailure { chatVMobile(T("siet_nepripojene", it.message ?: "")) }
             }
         }.start()
     }
@@ -134,7 +158,7 @@ object ChatJadro {
             vlakno.execute { if (h != 0L) { Llama.uvolni(h); h = 0L } }
             nacitany = null; pripoj()
         } else {
-            vzdialenyModel = ""; stav = StavModelu.ZIADNY; popisModelu = ""
+            vzdialenyModel = ""; stav = StavModelu.ZIADNY; popisModelu = ""; pcBezModelu = false
             nastavenia.aktivnyModel?.let { if (File(it).exists()) nacitajModel(it) }
         }
     }
@@ -154,7 +178,7 @@ object ChatJadro {
         spravy += Sprava("user", text, jeObrazkova = true)
         val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
         val hotovo = { f: File?, e: String -> if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"; ulozChat() }
-        if (nastavenia.vzdialene) ObrazkyJadro.nakresliNaDialku(nastavenia.vzdialenaAdresa, nastavenia.vzdialenyPin, popis, hotovo)
+        if (nastavenia.vzdialene && PcSpojenie.info?.obrazky == true) ObrazkyJadro.nakresliNaDialku(nastavenia.vzdialenaAdresa, nastavenia.vzdialenyPin, popis, hotovo)
         else ObrazkyJadro.nakresliDoChatu(popis, hotovo)
     }
 
@@ -175,7 +199,7 @@ object ChatJadro {
         val odpoved = Sprava("assistant", ""); spravy += odpoved
         generuje = true; tokenovZaSekundu = 0f
         val maxTok = nastavenia.maxTokenov
-        if (nastavenia.vzdialene) {
+        if (chatNaPc) {
             zastavitVzdialene = false
             val adr = nastavenia.vzdialenaAdresa; val pin = nastavenia.vzdialenyPin
             val zoznam = (if (sys.isNotEmpty()) listOf("system" to sys) else emptyList()) + historia
@@ -231,7 +255,7 @@ object ChatJadro {
 
     /** uvoľní jazykový model z pamäte (napr. pri tvorbe obrázkov); znova sa načíta pri návrate do chatu */
     fun uvolniPamat() {
-        if (nastavenia.vzdialene) return
+        if (chatNaPc) return
         if (generuje) zastav()
         vlakno.execute { if (h != 0L) { Llama.uvolni(h); h = 0L } }
         nacitany = null; popisModelu = ""
@@ -240,7 +264,11 @@ object ChatJadro {
 
     /** po návrate do chatu znova načíta posledný model */
     fun obnov() {
-        if (nastavenia.vzdialene) { if (stav != StavModelu.PRIPRAVENY && stav != StavModelu.NACITAVA) pripoj(); return }
+        if (nastavenia.vzdialene) {
+            // PC bez chatového modelu: znova sa opýtame (mohol sa medzitým spustiť), inak beží mobil
+            if (stav != StavModelu.NACITAVA && (stav != StavModelu.PRIPRAVENY || pcBezModelu)) pripoj()
+            return
+        }
         val m = nastavenia.aktivnyModel ?: return
         if (nacitany == null && stav != StavModelu.NACITAVA && File(m).exists()) nacitajModel(m)
     }

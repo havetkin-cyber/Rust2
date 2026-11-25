@@ -1004,15 +1004,31 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.height(6.dp))
-                    if (o.generuje) {
+                    if (o.generuje && o.naPc) {
+                        Text(T("obr_kresli_pc"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    } else if (o.generuje) {
                         Text(stringResource(R.string.obr_tvorim, (o.priebeh * 100).roundToInt()), color = Farby.text, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                         TextButton(onClick = { o.zrus() }) { Text(stringResource(R.string.zrusit), color = Farby.tlmene) }
                     } else {
-                        GradientTlacidlo(stringResource(R.string.obr_vytvorit), Icons.Default.AutoAwesome, Modifier.fillMaxWidth(),
-                            enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generuj(popisSPozadim(), negativny, rozmer, kroky, cfg) }
-                        Text(stringResource(R.string.obr_cas), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                        // dve tlačidlá: v mobile, alebo na PC (zamknuté, kým nie je mobil pripojený k PC)
+                        LaunchedEffect(Unit) { PcSpojenie.skontroluj() }
+                        val pcOk = PcSpojenie.pripojene && PcSpojenie.info?.obrazky == true
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GradientTlacidlo(T("obr_v_mobile"), Icons.Default.AutoAwesome, Modifier.weight(1f),
+                                enabled = o.stav == StavModelu.PRIPRAVENY && prompt.isNotBlank()) { o.generuj(popisSPozadim(), negativny, rozmer, kroky, cfg) }
+                            GradientTlacidlo(T("obr_na_pc"), if (pcOk) Icons.Default.Computer else Icons.Default.Lock, Modifier.weight(1f),
+                                enabled = pcOk && prompt.isNotBlank()) { o.generujNaPc(popisSPozadim(), negativny, "stvorec") }
+                        }
+                        Text(when {
+                            !PcSpojenie.pripojene -> T("obr_pc_zamknute")
+                            PcSpojenie.info?.obrazky != true -> T("obr_pc_bez_modelu")
+                            else -> T("obr_pc_info", PcSpojenie.info?.meno ?: "PC")
+                        }, color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                        Text(stringResource(R.string.obr_cas), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                     }
                     if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 }
@@ -1303,9 +1319,20 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 } else {
-                    GradientTlacidlo(T("vyl_spustit"), Icons.Default.AutoFixHigh, Modifier.fillMaxWidth(),
-                        enabled = v.vstup != null && (v.nasobok == 1 || v.mamModel()) && v.priebehStahovania == null) { poVylepseni = true; v.vylepsi() }
-                    if (v.nasobok >= 4) Text(T("vyl_cas_mobil"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    LaunchedEffect(Unit) { PcSpojenie.skontroluj() }
+                    val pcOk = PcSpojenie.pripojene && PcSpojenie.info?.vylepsit == true
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GradientTlacidlo(T("vyl_v_mobile"), Icons.Default.AutoFixHigh, Modifier.weight(1f),
+                            enabled = v.vstup != null && (v.nasobok == 1 || v.mamModel()) && v.priebehStahovania == null) { poVylepseni = true; v.vylepsi() }
+                        GradientTlacidlo(T("vyl_na_pc"), if (pcOk) Icons.Default.Computer else Icons.Default.Lock, Modifier.weight(1f),
+                            enabled = pcOk && v.vstup != null) { poVylepseni = true; v.vylepsiNaPc() }
+                    }
+                    Text(when {
+                        !PcSpojenie.pripojene -> T("obr_pc_zamknute")
+                        PcSpojenie.info?.vylepsit != true -> T("vyl_pc_bez_modelu")
+                        else -> T("vyl_pc_info")
+                    }, color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    if (v.nasobok >= 4) Text(T("vyl_cas_mobil"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                 }
                 if (v.chyba.isNotBlank()) Text(v.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
             }

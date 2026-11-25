@@ -327,7 +327,7 @@ object ObrazkyJadro {
      * Obrázok pre chat. Ak sa jazykový aj obrázkový model zmestia spolu do pamäte, ostanú načítané oba (rýchle).
      * Inak sa chat na chvíľu uvoľní a po obrázku sa znova načíta.
      */
-    fun nakresliDoChatu(popis: String, seed: Long? = null, hotovo: (File?, String) -> Unit) {
+    fun nakresliDoChatu(popis: String, seed: Long? = null, negativny: String = "", pomer: String = "stvorec", hotovo: (File?, String) -> Unit) {
         if (jeVideoModel) { hotovo(null, T("vai_je_video")); return }
         val cesta = aktivnyModel
         val mam = cesta != null && (aktivnaSada()?.let { mamSadu(it) } ?: File(cesta).exists())
@@ -338,7 +338,8 @@ object ObrazkyJadro {
         if (uvolnit) ChatJadro.uvolniPamat()
         nacitaj(cesta, uvolnitChat = false)
         val s = aktivnaSada()
-        spust(popis, "", s?.rozmer ?: 512, s?.rozmer ?: 512, s?.kroky ?: 20, s?.cfg ?: 7f, pevnySeed = seed) { f, e ->
+        val (w, vy) = rozmerPomeru(s?.rozmer ?: 512, pomer)
+        spust(popis, negativny, w, vy, s?.kroky ?: 20, s?.cfg ?: 7f, pevnySeed = seed) { f, e ->
             hotovo(f, e)
             if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
         }

@@ -19,7 +19,7 @@ object Klient {
     const val PORT = 8765
     const val PORT_HLADANIA = 8766
 
-    class Info(val meno: String, val model: String, val pripraveny: Boolean, val obrazky: Boolean, val video: Boolean = false, val rozhybat: Boolean = false)
+    class Info(val meno: String, val model: String, val pripraveny: Boolean, val obrazky: Boolean, val video: Boolean = false, val rozhybat: Boolean = false, val vylepsit: Boolean = false)
 
     private fun url(adresa: String, cesta: String): URL {
         val a = adresa.trim().removePrefix("http://").removeSuffix("/")
@@ -44,9 +44,27 @@ object Klient {
         return k
     }
 
+    /** POST s binárnym telom (napr. fotka) */
+    private fun spojTelo(adresa: String, pin: String, cesta: String, telo: ByteArray, typ: String, citanie: Int): HttpURLConnection {
+        val k = url(adresa, cesta).openConnection() as HttpURLConnection
+        k.connectTimeout = 5_000; k.readTimeout = citanie
+        k.setRequestProperty("X-Alexia-PIN", pin.trim())
+        k.requestMethod = "POST"; k.doOutput = true
+        k.setRequestProperty("Content-Type", typ)
+        k.setFixedLengthStreamingMode(telo.size)
+        k.outputStream.use { it.write(telo) }
+        val kod = k.responseCode
+        if (kod == 403) throw IllegalStateException("Zlý PIN")
+        if (kod != 200) {
+            val chyba = runCatching { k.errorStream?.bufferedReader()?.readText() }.getOrNull()
+            throw IllegalStateException(chyba?.takeIf { it.isNotBlank() } ?: "Server vrátil $kod")
+        }
+        return k
+    }
+
     fun info(adresa: String, pin: String): Info {
         val j = JSONObject(spoj(adresa, pin, "/api/info").inputStream.bufferedReader(Charsets.UTF_8).readText())
-        return Info(j.optString("meno"), j.optString("model"), j.optBoolean("pripraveny"), j.optBoolean("obrazky"), j.optBoolean("video"), j.optBoolean("rozhybat"))
+        return Info(j.optString("meno"), j.optString("model"), j.optBoolean("pripraveny"), j.optBoolean("obrazky"), j.optBoolean("video"), j.optBoolean("rozhybat"), j.optBoolean("vylepsit"))
     }
 
     /** pošle rozhovor; [kus] dostáva text po kúskoch, false = zastaviť. Vráti null (v poriadku) alebo text chyby. */
@@ -77,8 +95,15 @@ object Klient {
     }
 
     /** nechá obrázok nakresliť na druhom zariadení a uloží ho do [ciel] */
-    fun obrazok(adresa: String, pin: String, popis: String, ciel: File) {
-        val k = spoj(adresa, pin, "/api/obrazok", JSONObject().put("popis", popis), citanie = 30 * 60_000)
+    fun obrazok(adresa: String, pin: String, popis: String, ciel: File, negativny: String = "", pomer: String = "stvorec") {
+        val k = spoj(adresa, pin, "/api/obrazok", JSONObject().put("popis", popis).put("negativny", negativny).put("pomer", pomer), citanie = 30 * 60_000)
+        k.inputStream.use { i -> ciel.outputStream().use { i.copyTo(it) } }
+    }
+
+    /** vylepší fotku na PC (Real-ESRGAN); [nasobok] 1/2/4/40=4K/80=8K */
+    fun vylepsi(adresa: String, pin: String, fotka: ByteArray, nasobok: Int, jas: Boolean, farby: Boolean, ostrit: Boolean, ciel: File) {
+        val cesta = "/api/vylepsi?nasobok=$nasobok&jas=${if (jas) 1 else 0}&farby=${if (farby) 1 else 0}&ostrit=${if (ostrit) 1 else 0}"
+        val k = spojTelo(adresa, pin, cesta, fotka, "image/jpeg", citanie = 30 * 60_000)
         k.inputStream.use { i -> ciel.outputStream().use { i.copyTo(it) } }
     }
 

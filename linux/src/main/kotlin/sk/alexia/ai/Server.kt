@@ -65,6 +65,7 @@ object Server {
             s.createContext("/api/galeria/zoznam") { x -> obsluz(x) { galeria(x) } }
             s.createContext("/api/galeria/nahlad") { x -> obsluz(x) { nahlad(x) } }
             s.createContext("/api/galeria/subor") { x -> obsluz(x) { obrazokSubor(x) } }
+            s.createContext("/api/vylepsi") { x -> obsluz(x) { vylepsi(x) } }
             s.start(); http = s
             spustiHladanie()
             bezi = true
@@ -132,6 +133,7 @@ object Server {
             .put("obrazky", ObrazkyJadro.aktivnyModel != null)
             .put("video", ObrazkyJadro.videoSada() != null)
             .put("rozhybat", ObrazkyJadro.i2vSada() != null)
+            .put("vylepsit", VylepsenieJadro.mamModel())
         odpovedz(x, 200, j.toString())
     }
 
@@ -151,13 +153,16 @@ object Server {
     }
 
     private fun obrazok(x: HttpExchange) {
-        val popis = telo(x).optString("popis").trim()
+        val j = telo(x)
+        val popis = j.optString("popis").trim()
+        val neg = j.optString("negativny").trim()
+        val pomer = j.optString("pomer", "stvorec").let { if (it in setOf("stvorec", "vyska", "sirka", "nahodne")) it else "stvorec" }
         if (popis.isEmpty()) { odpovedz(x, 400, "Chýba popis"); return }
         val hotovo = CountDownLatch(1)
         var subor: File? = null; var chyba = ""
         Platforma.naHlavnom {
             if (ObrazkyJadro.generuje) { chyba = "Na počítači sa práve kreslí iný obrázok"; hotovo.countDown() }
-            else ObrazkyJadro.nakresliDoChatu(popis) { f, e -> subor = f; chyba = e; hotovo.countDown() }
+            else ObrazkyJadro.nakresliDoChatu(popis, negativny = neg, pomer = pomer) { f, e -> subor = f; chyba = e; hotovo.countDown() }
         }
         if (!hotovo.await(30, TimeUnit.MINUTES)) { odpovedz(x, 504, "Obrázok trval príliš dlho"); return }
         val f = subor
@@ -225,5 +230,21 @@ object Server {
     private fun obrazokSubor(x: HttpExchange) {
         val f = parameter(x, "meno")?.let { ObrazkyJadro.obrazokZGalerie(it) } ?: run { odpovedz(x, 404, "Nenašiel sa"); return }
         posliSubor(x, f, "image/png")
+    }
+
+    /** vylepšenie fotky z mobilu: telo = obrázok (JPG/PNG), parametre v adrese; odpoveď = PNG */
+    private fun vylepsi(x: HttpExchange) {
+        val nas = parameter(x, "nasobok")?.toIntOrNull()?.takeIf { it in setOf(1, 2, 4, VylepsenieJadro.K4, VylepsenieJadro.K8) } ?: 2
+        val b = x.requestBody.use { i ->
+            val o = java.io.ByteArrayOutputStream(); val buf = ByteArray(1 shl 16); var n = 0L
+            while (true) { val r = i.read(buf); if (r < 0) break; n += r; if (n > 40_000_000) throw IllegalStateException("Fotka je príliš veľká"); o.write(buf, 0, r) }
+            o.toByteArray()
+        }
+        if (b.isEmpty()) { odpovedz(x, 400, "Chýba fotka"); return }
+        val vstup = File.createTempFile("mobil_", ".img").apply { writeBytes(b); deleteOnExit() }
+        val r = runCatching { VylepsenieJadro.preMobil(vstup, nas, parameter(x, "jas") != "0", parameter(x, "farby") != "0", parameter(x, "ostrit") == "1") }
+        vstup.delete()
+        r.onSuccess { posliSubor(x, it, "image/png") }
+            .onFailure { odpovedz(x, 500, (it.cause ?: it).message ?: "Vylepšenie zlyhalo") }
     }
 }

@@ -177,6 +177,39 @@ object VylepsenieJadro {
         }
     }
 
+    /** vylepšenie na PC (Real-ESRGAN na grafike PC; aj 8K). Fotka sa pošle ako JPG, výsledok príde ako PNG. */
+    fun vylepsiNaPc() {
+        val f = vstup ?: return
+        if (pracuje) return
+        pracuje = true; chyba = ""; vysledok = null; cinnost = T("vyl_pc_pracuje")
+        val nas = nasobok; val jas = autoJas; val far = farby; val ostr = doostrit
+        val n = ChatJadro.nastavenia
+        Thread {
+            val r = runCatching {
+                // do JPG (PC nemusí poznať HEIC/WEBP z mobilu); veľké fotky zmenšíme na max 4000 px
+                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(f.path, o)
+                var vz = 1; while (max(o.outWidth, o.outHeight) / vz > 4000) vz *= 2
+                val bmp = android.graphics.BitmapFactory.decodeFile(f.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = vz })
+                    ?: throw IllegalStateException(T("vyl_nie_obrazok"))
+                val jpg = java.io.ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 95, it) }.toByteArray()
+                bmp.recycle()
+                val ciel = File(ObrazkyJadro.priecinokObrazkov(), "alexia_vylepsene_pc_${System.currentTimeMillis()}.png")
+                try { Klient.vylepsi(n.vzdialenaAdresa, n.vzdialenyPin, jpg, nas, jas, far, ostr, ciel) } catch (e: Exception) { ciel.delete(); throw e }
+                val ob = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(ciel.path, ob)
+                val rr = ob.outWidth to ob.outHeight
+                Platforma.naHlavnom { rozmerVysledku = rr }
+                ciel
+            }
+            Platforma.naHlavnom {
+                pracuje = false; cinnost = ""
+                r.onSuccess { vysledok = it; ObrazkyJadro.galeria.add(0, it) }
+                r.onFailure { chyba = it.message ?: T("vyl_zlyhalo") }
+            }
+        }.start()
+    }
+
     fun uvolniPamat() {
         if (pracuje) return
         vlakno.execute { if (h != 0L) { Sd.upscalerUvolni(h); h = 0L } }

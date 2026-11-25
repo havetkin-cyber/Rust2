@@ -92,48 +92,60 @@ object VylepsenieJadro {
         ChatJadro.uvolniPamat(); ObrazkyJadro.uvolniPamat()
         val nas = nasobok; val jas = autoJas; val far = farby; val ostr = doostrit
         vlakno.execute {
-            val r = runCatching {
-                var img = ImageIO.read(f) ?: throw IllegalStateException(T("vyl_nie_obrazok"))
-                img = naRgb(img)
-                if (nas == 2 || nas == 4) {
-                    // veľké fotky najprv zmenšíme, aby výsledok mal rozumnú veľkosť (max ~6000 px)
-                    val limit = if (nas == 4) 1500 else 1500 * 2
-                    val dlhsia = max(img.width, img.height)
-                    if (dlhsia > limit) img = zmen(img, limit.toDouble() / dlhsia)
-                    // pre 2× najprv zmenšíme na polovicu → AI 4× → výsledok je 2× pôvodnej
-                    val pred = if (nas == 2) zmen(img, 0.5) else img
-                    val v = aiX4(pred, "")
-                    img = if (nas == 2) zmen(v, img.width * 2.0 / v.width) else v
-                } else if (nas == K4 || nas == K8) {
-                    // cieľ: dlhšia strana 3840 (4K) alebo 7680 (8K); AI 4× aj dvakrát po sebe
-                    val ciel = if (nas == K4) 3840 else 7680
-                    var priechod = 1
-                    while (max(img.width, img.height) < ciel && priechod <= 2) {
-                        val d = max(img.width, img.height)
-                        // aby sme neprestrelili cieľ (zbytočne obrovský medzivýsledok), vstup zmenšíme na cieľ/4
-                        val vstupAi = if (d * 4 > ciel) zmen(img, ciel / 4.0 / d) else img
-                        img = aiX4(vstupAi, if (nas == K8) " ($priechod/2)" else "")
-                        priechod++
-                    }
-                    val d = max(img.width, img.height)
-                    if (d != ciel) img = zmen(img, ciel.toDouble() / d)
-                }
-                Platforma.naHlavnom { cinnost = T("vyl_upravujem") }
-                if (jas) img = autoJasKontrast(img)
-                if (far) img = sytost(img, 1.15f)
-                if (ostr) img = doostri(img)
-                val ciel = File(Platforma.obrazky, "alexia_vylepsene_${System.currentTimeMillis()}.png")
-                ImageIO.write(img, "png", ciel)
-                val rr = img.width to img.height
-                Platforma.naHlavnom { rozmerVysledku = rr }
-                ciel
-            }
+            val r = runCatching { spracuj(f, nas, jas, far, ostr) }
             Platforma.naHlavnom {
                 pracuje = false; cinnost = ""
                 r.onSuccess { vysledok = it; ObrazkyJadro.galeria.add(0, it) }
                 r.onFailure { chyba = it.message ?: T("vyl_zlyhalo") }
             }
         }
+    }
+
+    /** samotné vylepšenie (beží na vlákne vylepšovania) → uložený PNG */
+    private fun spracuj(f: File, nas: Int, jas: Boolean, far: Boolean, ostr: Boolean): File {
+            var img = ImageIO.read(f) ?: throw IllegalStateException(T("vyl_nie_obrazok"))
+            img = naRgb(img)
+            if (nas == 2 || nas == 4) {
+                // veľké fotky najprv zmenšíme, aby výsledok mal rozumnú veľkosť (max ~6000 px)
+                val limit = if (nas == 4) 1500 else 1500 * 2
+                val dlhsia = max(img.width, img.height)
+                if (dlhsia > limit) img = zmen(img, limit.toDouble() / dlhsia)
+                // pre 2× najprv zmenšíme na polovicu → AI 4× → výsledok je 2× pôvodnej
+                val pred = if (nas == 2) zmen(img, 0.5) else img
+                val v = aiX4(pred, "")
+                img = if (nas == 2) zmen(v, img.width * 2.0 / v.width) else v
+            } else if (nas == K4 || nas == K8) {
+                // cieľ: dlhšia strana 3840 (4K) alebo 7680 (8K); AI 4× aj dvakrát po sebe
+                val ciel = if (nas == K4) 3840 else 7680
+                var priechod = 1
+                while (max(img.width, img.height) < ciel && priechod <= 2) {
+                    val d = max(img.width, img.height)
+                    // aby sme neprestrelili cieľ (zbytočne obrovský medzivýsledok), vstup zmenšíme na cieľ/4
+                    val vstupAi = if (d * 4 > ciel) zmen(img, ciel / 4.0 / d) else img
+                    img = aiX4(vstupAi, if (nas == K8) " ($priechod/2)" else "")
+                    priechod++
+                }
+                val d = max(img.width, img.height)
+                if (d != ciel) img = zmen(img, ciel.toDouble() / d)
+            }
+            Platforma.naHlavnom { cinnost = T("vyl_upravujem") }
+            if (jas) img = autoJasKontrast(img)
+            if (far) img = sytost(img, 1.15f)
+            if (ostr) img = doostri(img)
+            val ciel = File(Platforma.obrazky, "alexia_vylepsene_${System.currentTimeMillis()}.png")
+            ImageIO.write(img, "png", ciel)
+            val rr = img.width to img.height
+            Platforma.naHlavnom { rozmerVysledku = rr }
+            return ciel
+    }
+
+    /** vylepšenie fotky poslanej z mobilu (čaká na výsledok; volá sa z vlákna servera) */
+    fun preMobil(f: File, nas: Int, jas: Boolean, far: Boolean, ostr: Boolean): File {
+        if (nas > 1 && !mamModel()) throw IllegalStateException(T("vyl_treba_model"))
+        Platforma.naHlavnom { ChatJadro.uvolniPamat(); ObrazkyJadro.uvolniPamat() }
+        val v = vlakno.submit<File> { spracuj(f, nas, jas, far, ostr) }.get()
+        Platforma.naHlavnom { ObrazkyJadro.galeria.add(0, v) }
+        return v
     }
 
     /** jeden priechod Real-ESRGAN (4×) */

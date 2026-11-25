@@ -26,9 +26,19 @@ object Klient {
         return URL("http://" + (if (a.contains(':')) a else "$a:$PORT") + cesta)
     }
 
-    private fun spoj(adresa: String, pin: String, cesta: String, telo: JSONObject? = null, citanie: Int = 15_000): HttpURLConnection {
+    /** pripojenie s jedným novým pokusom (Tailscale/VPN niekedy prvé spojenie nestihne) */
+    private fun spoj(adresa: String, pin: String, cesta: String, telo: JSONObject? = null, citanie: Int = 15_000): HttpURLConnection =
+        try {
+            try { spoj1(adresa, pin, cesta, telo, citanie) }
+            catch (e: java.net.SocketTimeoutException) { if (e.message?.contains("connect", true) == true) spoj1(adresa, pin, cesta, telo, citanie) else throw e }
+            catch (e: java.net.ConnectException) { Thread.sleep(1500); spoj1(adresa, pin, cesta, telo, citanie) }
+        } catch (e: java.net.ConnectException) { throw IllegalStateException(T("pc_neodpoveda", adresa)) }
+        catch (e: java.net.NoRouteToHostException) { throw IllegalStateException(T("pc_neodpoveda", adresa)) }
+        catch (e: java.net.SocketTimeoutException) { if (e.message?.contains("connect", true) == true) throw IllegalStateException(T("pc_neodpoveda", adresa)) else throw e }
+
+    private fun spoj1(adresa: String, pin: String, cesta: String, telo: JSONObject?, citanie: Int): HttpURLConnection {
         val k = url(adresa, cesta).openConnection() as HttpURLConnection
-        k.connectTimeout = 5_000; k.readTimeout = citanie
+        k.connectTimeout = 25_000; k.readTimeout = citanie
         k.setRequestProperty("X-Alexia-PIN", pin.trim())
         if (telo != null) {
             k.requestMethod = "POST"; k.doOutput = true
@@ -47,7 +57,7 @@ object Klient {
     /** POST s binárnym telom (napr. fotka) */
     private fun spojTelo(adresa: String, pin: String, cesta: String, telo: ByteArray, typ: String, citanie: Int): HttpURLConnection {
         val k = url(adresa, cesta).openConnection() as HttpURLConnection
-        k.connectTimeout = 5_000; k.readTimeout = citanie
+        k.connectTimeout = 25_000; k.readTimeout = citanie
         k.setRequestProperty("X-Alexia-PIN", pin.trim())
         k.requestMethod = "POST"; k.doOutput = true
         k.setRequestProperty("Content-Type", typ)

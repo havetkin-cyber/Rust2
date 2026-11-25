@@ -19,7 +19,7 @@ object Podpis {
         return SecretKeySpec(odvodeny, "HmacSHA256")
     }
 
-    private fun hash(f: File): String = MessageDigest.getInstance("SHA-256").let { md ->
+    fun hash(f: File): String = MessageDigest.getInstance("SHA-256").let { md ->
         f.inputStream().use { i -> val b = ByteArray(1 shl 16); var n: Int; while (i.read(b).also { n = it } > 0) md.update(b, 0, n) }
         md.digest().joinToString("") { "%02x".format(it) }
     }

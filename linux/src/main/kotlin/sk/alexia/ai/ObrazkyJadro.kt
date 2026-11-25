@@ -452,6 +452,18 @@ object ObrazkyJadro {
         if (Podpis.over(f, j)) j.getLong("seed") else null
     }.getOrNull()
 
+    /**
+     * Obrázok z appky aj vtedy, keď si vybral jeho kópiu (napr. z Obrázkov po „Uložiť do Obrázkov“):
+     * kópia nemá záznam, ale má rovnaký obsah – nájde sa originál v galérii s platným podpisom.
+     */
+    fun originalZAppky(f: File): File? {
+        if (seedObrazka(f) != null) return f
+        val h = runCatching { Podpis.hash(f) }.getOrNull() ?: return null
+        return priecinokObrazkov().listFiles { x -> x.extension == "png" }?.firstOrNull { o ->
+            runCatching { JSONObject(File(o.path + ".json").readText()).optString("hash") == h }.getOrDefault(false) && seedObrazka(o) != null
+        }
+    }
+
     /** najnovší obrázok z appky s týmto seedom */
     fun najdiPodlaSeedu(seed: Long): File? = priecinokObrazkov().listFiles { f -> f.extension == "png" }
         ?.filter { seedObrazka(it) == seed }?.maxByOrNull { it.lastModified() }
@@ -576,7 +588,7 @@ object ObrazkyJadro {
      */
     fun prenosStylu(obsah: File, styl: File, doplnok: String, hotovo: (File?, String) -> Unit) {
         if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
-        if (seedObrazka(obsah) == null) { hotovo(null, T("styl_len_appka")); return }
+        val obsah = originalZAppky(obsah) ?: run { hotovo(null, T("styl_len_appka")); return }
         if (Podpis.zakazane(doplnok)) { hotovo(null, T("upr_zakazane")); return }
         val k = kleinSada() ?: run { hotovo(null, T("styl_treba_klein")); return }
         val refs = runCatching { listOf(naReferenciu(obsah, 1024), naReferenciu(styl, 1024)) }.getOrElse { hotovo(null, it.message ?: T("styl_nie_obrazok")); return }

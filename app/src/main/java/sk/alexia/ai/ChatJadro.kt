@@ -178,7 +178,7 @@ object ChatJadro {
         spravy += Sprava("user", text, jeObrazkova = true)
         val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
         val hotovo = { f: File?, e: String -> if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"; ulozChat() }
-        if (nastavenia.vzdialene && PcSpojenie.info?.obrazky == true) ObrazkyJadro.nakresliNaDialku(nastavenia.vzdialenaAdresa, nastavenia.vzdialenyPin, popis, hotovo)
+        if (nastavenia.vzdialene && PcSpojenie.info?.obrazky == true) ObrazkyJadro.nakresliNaDialku(nastavenia.vzdialenaAdresa, nastavenia.vzdialenyPin, popis, hotovo = hotovo)
         else ObrazkyJadro.nakresliDoChatu(popis, hotovo)
     }
 

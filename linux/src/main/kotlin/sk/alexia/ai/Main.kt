@@ -2365,6 +2365,15 @@ private fun PrenosStyluKarta() {
     var bezi by remember { mutableStateOf(false) }
     val nadpisObsah = T("styl_vyber_obsah"); val nadpisStyl = T("styl_vyber_styl")
     val klein = remember(o.stav) { o.kleinSada() }
+    // 0 = vyberá sa obsah, 1 = štýl (okno s náhľadmi galérie)
+    var vyberPre by remember { mutableStateOf<Int?>(null) }
+    vyberPre?.let { i ->
+        GaleriaVyberDialog(
+            nadpis = if (i == 0) nadpisObsah else nadpisStyl,
+            zoSuboru = if (i == 1) ({ Platforma.vyberSubor(nadpisStyl, setOf("png", "jpg", "jpeg", "bmp")) { v -> chyba = ""; styl = v }; vyberPre = null }) else null,
+            zavri = { vyberPre = null },
+        ) { f -> chyba = ""; if (i == 0) obsah = f else styl = f; vyberPre = null }
+    }
     Karta {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Palette, null, tint = Farby.ruzova); Spacer(Modifier.width(8.dp))
@@ -2378,10 +2387,7 @@ private fun PrenosStyluKarta() {
                     Text(T(kluc), color = Farby.text, fontSize = 13.sp)
                     val nb = remember(f) { f?.let { Platforma.nacitajObrazok(it) } }
                     Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(150.dp).clip(RoundedCornerShape(12.dp)).background(Farby.plocha2)
-                        .clickable {
-                            if (i == 0) Platforma.vyberSubor(nadpis, setOf("png")) { v -> chyba = ""; obsah = v }
-                            else Platforma.vyberSubor(nadpis, setOf("png", "jpg", "jpeg", "bmp")) { v -> chyba = ""; styl = v }
-                        }, contentAlignment = Alignment.Center) {
+                        .clickable { vyberPre = i }, contentAlignment = Alignment.Center) {
                         if (nb != null) Image(nb, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                         else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.AddPhotoAlternate, null, tint = Farby.tlmene)
@@ -2407,6 +2413,35 @@ private fun PrenosStyluKarta() {
             val nb = remember(f) { Platforma.nacitajObrazok(f) }
             if (nb != null) Image(nb, null, Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(max = 420.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Fit)
             Text(T("styl_ulozene"), color = Farby.zelena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+
+/** výber obrázka z galérie appky s náhľadmi (pri štýle aj tlačidlo „Zo súboru…“) */
+@Composable
+private fun GaleriaVyberDialog(nadpis: String, zoSuboru: (() -> Unit)?, zavri: () -> Unit, zvol: (File) -> Unit) {
+    val g = ObrazkyJadro.galeria.toList()
+    androidx.compose.ui.window.Dialog(onDismissRequest = zavri, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.widthIn(max = 900.dp).fillMaxWidth(0.9f).heightIn(max = 760.dp).clip(RoundedCornerShape(20.dp)).background(Farby.plocha).padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(nadpis, color = Farby.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                if (zoSuboru != null) OutlinedButton(onClick = zoSuboru, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) {
+                    Icon(Icons.Default.FolderOpen, null, tint = Farby.text); Spacer(Modifier.width(6.dp)); Text(T("zo_suboru_kratko"), color = Farby.text)
+                }
+                IconButton(onClick = zavri) { Icon(Icons.Default.Close, null, tint = Farby.tlmene) }
+            }
+            if (g.isEmpty()) Text(T("pc_galeria_prazdna_pc"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+            else androidx.compose.foundation.lazy.grid.LazyVerticalGrid(androidx.compose.foundation.lazy.grid.GridCells.Adaptive(150.dp),
+                modifier = Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(g.size) { idx ->
+                    val f = g[idx]
+                    val nahlad = remember(f) { Platforma.nacitajObrazok(f, 4) }
+                    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(Farby.plocha2).clickable { zvol(f) }) {
+                        if (nahlad != null) Image(nahlad, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    }
+                }
+            }
         }
     }
 }

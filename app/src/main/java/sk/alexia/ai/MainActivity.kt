@@ -964,6 +964,19 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                     )
                     Text(stringResource(R.string.obr_anglicky), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    // AI napíše presný anglický prompt z krátkeho nápadu (aj po slovensky)
+                    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (ChatJadro.pisePrompt) {
+                            CircularProgressIndicator(Modifier.size(18.dp), color = Farby.ruzova, strokeWidth = 2.dp); Spacer(Modifier.width(8.dp))
+                            Text(T("prompt_pise"), color = Farby.text, fontSize = 13.sp)
+                        } else OutlinedButton(onClick = {
+                            ChatJadro.napisPrompt(prompt, false) { p, e -> if (p != null) prompt = p else Platforma.oznam("⚠ $e") }
+                        }, enabled = prompt.isNotBlank(), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.fialova)) {
+                            Icon(Icons.Default.AutoAwesome, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                            Text(T("prompt_ai"), color = Farby.text)
+                        }
+                    }
+                    Text(T("prompt_ai_info"), color = Farby.tlmene, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                     Text(T("poz_nadpis"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         POZADIA.forEach { (id, _) ->
@@ -1143,14 +1156,21 @@ private fun Aktualizacia() {
         return
     }
     val v = Aktualizacie.novaVerzia ?: return
+    val p = Aktualizacie.priebeh
     AlertDialog(
-        onDismissRequest = { Aktualizacie.novaVerzia = null },
+        onDismissRequest = { if (p == null) Aktualizacie.novaVerzia = null },
         containerColor = Farby.plocha,
         icon = { Icon(Icons.Default.SystemUpdate, null, tint = Farby.ruzova) },
         title = { Text(stringResource(R.string.akt_nadpis, v), color = Farby.text) },
-        text = { Text(stringResource(R.string.akt_text), color = Farby.tlmene) },
-        confirmButton = { TextButton(onClick = { Aktualizacie.stiahni(c) }) { Text(stringResource(R.string.akt_stiahnut), color = Farby.ruzova) } },
-        dismissButton = { TextButton(onClick = { Aktualizacie.preskoc(c) }) { Text(stringResource(R.string.akt_neskor), color = Farby.tlmene) } },
+        text = {
+            Column {
+                Text(T("akt_android_priamo"), color = Farby.tlmene)
+                if (p != null) LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 10.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                if (Aktualizacie.chyba.isNotBlank()) Text(Aktualizacie.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        },
+        confirmButton = { TextButton(onClick = { Aktualizacie.stiahni(c) }, enabled = p == null) { Text(T("akt_aktualizovat_teraz"), color = Farby.ruzova) } },
+        dismissButton = { if (p == null) TextButton(onClick = { Aktualizacie.preskoc(c) }) { Text(stringResource(R.string.akt_neskor), color = Farby.tlmene) } },
     )
 }
 

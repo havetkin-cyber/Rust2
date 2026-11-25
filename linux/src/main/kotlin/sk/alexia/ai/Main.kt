@@ -92,6 +92,8 @@ fun main() {
         Window(onCloseRequest = {
             // zatvorenie = koniec celej appky: vlákna modelov by inak držali proces (a RAM) aj po zatvorení okna
             runCatching { ObrazkyJadro.zrus(); ChatJadro.zastav(); Hlas.zastav() }
+            // stiahnutá aktualizácia sa nainštaluje pri zatvorení – pri ďalšom spustení je appka nová
+            runCatching { Aktualizacie.instalujPriZatvoreni() }
             Runtime.getRuntime().halt(0)
         }, title = "Alexia AI", state = stav, onPreviewKeyEvent = {
             // Esc = späť
@@ -1310,6 +1312,19 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text),
                     )
                     Text(T(if (videa) "vid_anglicky" else "obr_anglicky"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    // AI napíše presný anglický prompt z krátkeho nápadu (aj po slovensky)
+                    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (ChatJadro.pisePrompt) {
+                            CircularProgressIndicator(Modifier.size(18.dp), color = Farby.ruzova, strokeWidth = 2.dp); Spacer(Modifier.width(8.dp))
+                            Text(T("prompt_pise"), color = Farby.text, fontSize = 13.sp)
+                        } else OutlinedButton(onClick = {
+                            ChatJadro.napisPrompt(prompt, videa) { p, e -> if (p != null) prompt = p else Platforma.oznam("⚠ $e") }
+                        }, enabled = prompt.isNotBlank(), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.fialova)) {
+                            Icon(Icons.Default.AutoAwesome, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                            Text(T("prompt_ai"), color = Farby.text)
+                        }
+                    }
+                    Text(T("prompt_ai_info"), color = Farby.tlmene, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                     if (!videa) {
                     // tvar obrázka (na výšku = celá postava, na šírku = ležiaca postava, krajina)
                     Text(T("obr_tvar"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
@@ -2003,7 +2018,7 @@ private fun Aktualizacia() {
         title = { Text(T("akt_nadpis", v), color = Farby.text) },
         text = {
             Column {
-                Text(T(if (Aktualizacie.samaSaVymeni) "akt_text_appimage" else "akt_text_zip"), color = Farby.tlmene)
+                Text(T(if (Aktualizacie.samaSaVymeni || Aktualizacie.moze()) "akt_text_sama" else "akt_text_zip"), color = Farby.tlmene)
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                 if (p != null) {
                     Spacer(Modifier.height(10.dp))

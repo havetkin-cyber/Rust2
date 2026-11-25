@@ -251,6 +251,67 @@ object ChatJadro {
         }
     }
 
+
+    // ---------------------------------------------------------------- AI napíše presný anglický prompt (obrázok / video)
+
+    private fun systemPrePrompt(video: Boolean) = if (!video)
+        "You are an expert prompt writer for AI image generators (FLUX). The user gives a short idea, often in Slovak. " +
+        "Reply with ONLY one detailed English image prompt: one paragraph, 70-130 words, no quotes, no title, no explanations, no lists. " +
+        "Start with the shot type and medium, e.g. 'Cinematic portrait photograph of...'. Describe precisely and concretely: the subject " +
+        "(an adult, face shape, skin, eyes, makeup, expression, hair color, length and style), clothing and accessories with materials, colors and details, " +
+        "pose, background and setting, lighting, camera or lens, and realism (realistic skin and fabric textures, sharp focus). " +
+        "Keep every detail the user asked for and invent fitting details for the rest. " +
+        "Never write sexual content, nudity or anything explicit; people are adults, fully clothed and shown in a non-sexual way."
+    else
+        "You are an expert prompt writer for the Wan 2.2 AI video model. The user gives a short idea, often in Slovak. " +
+        "Reply with ONLY one English video prompt: one paragraph, 40-90 words, no quotes, no explanations. " +
+        "Briefly describe the scene and subject, then the motion clearly: one or two simple actions with words like slowly and gently, " +
+        "natural details (hair moving, breathing, blinking), the camera (static camera or the camera slowly pushes in), and end with " +
+        "'smooth natural motion, realistic'. Never write sexual content, nudity or anything explicit."
+
+    /** odpoveď malého modelu očistí na jeden odsek bez úvodzoviek a nadpisov */
+    private fun ocistiPrompt(t: String): String {
+        var s = t.replace(Regex("<think>[\\s\\S]*?</think>"), "").trim()
+        s = s.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            .filterNot { it.endsWith(":") && it.length < 40 }
+            .joinToString(" ")
+        s = s.replace(Regex("^(\\*\\*)?(prompt|image prompt|video prompt)(\\*\\*)?\\s*:\\s*", RegexOption.IGNORE_CASE), "")
+        return s.trim().trim('"', '“', '”', '\'', '`').trim()
+    }
+
+    var pisePrompt by mutableStateOf(false)
+        private set
+
+    /** z krátkeho nápadu (aj po slovensky) napíše presný anglický prompt – modelom v mobile alebo na PC */
+    fun napisPrompt(napad: String, video: Boolean, hotovo: (String?, String) -> Unit) {
+        if (pisePrompt || napad.isBlank()) return
+        if (generuje) { hotovo(null, T("prompt_chat_pise")); return }
+        val zoznam = listOf("system" to systemPrePrompt(video), "user" to napad.trim())
+        val sb = StringBuilder()
+        if (chatNaPc) {
+            pisePrompt = true
+            val adr = nastavenia.vzdialenaAdresa; val pin = nastavenia.vzdialenyPin
+            Thread {
+                val e = runCatching { Klient.chat(adr, pin, zoznam, 400) { t -> sb.append(t); true } }.getOrElse { it.message }
+                val v = ocistiPrompt(sb.toString())
+                hlavne.post { pisePrompt = false; if (v.isNotBlank()) hotovo(v, "") else hotovo(null, e ?: T("prompt_nepodarilo")) }
+            }.start()
+            return
+        }
+        val m = nastavenia.aktivnyModel
+        if (nacitany == null && (m == null || !File(m).exists())) { hotovo(null, T("prompt_bez_modelu")); return }
+        pisePrompt = true
+        if (nacitany == null && m != null) nacitajLokalne(m)   // načítanie beží na rovnakom vlákne – generovanie počká
+        vlakno.execute {
+            val e = if (h == 0L) T("prompt_bez_modelu") else {
+                val v = Llama.generuj(h, zoznam.map { it.first }.toTypedArray(), zoznam.map { it.second }.toTypedArray(), 400) { b -> sb.append(String(b, Charsets.UTF_8)); true }
+                if (v == -1) Llama.chyba() else null
+            }
+            val vysledok = ocistiPrompt(sb.toString())
+            hlavne.post { pisePrompt = false; if (vysledok.isNotBlank()) hotovo(vysledok, "") else hotovo(null, e ?: T("prompt_nepodarilo")) }
+        }
+    }
+
     fun zastav() { zastavitVzdialene = true; if (h != 0L) Llama.zastav(h) }
 
     /** uvoľní jazykový model z pamäte (napr. pri tvorbe obrázkov); znova sa načíta pri návrate do chatu */

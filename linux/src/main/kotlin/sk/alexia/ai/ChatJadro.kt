@@ -229,6 +229,8 @@ object ChatJadro {
             val vysledok = ocistiPrompt(sb.toString())
             Platforma.naHlavnom {
                 pisePrompt = false
+                // grafika patrí obrázkovému modelu – chatový model ide preč (inak Klein/FLUX nemá miesto na textový kodér)
+                uvolniPamat()
                 if (vysledok.isNotBlank()) hotovo(vysledok, "") else hotovo(null, e ?: T("prompt_nepodarilo"))
             }
         }.start()
@@ -425,10 +427,12 @@ object ChatJadro {
     fun zastav() { zastavitVzdialene = true; if (h != 0L) Llama.zastav(h) }
 
     /** uvoľní jazykový model z pamäte (napr. pri tvorbe obrázkov); znova sa načíta pri návrate do chatu */
-    fun uvolniPamat() {
+    /** [pockat] = počká, kým je grafika naozaj voľná (pred kreslením obrázka) */
+    fun uvolniPamat(pockat: Boolean = false) {
         if (nastavenia.vzdialene) return   // model je na inom zariadení – tu nič nezaberá
         if (generuje) zastav()
-        vlakno.execute { if (h != 0L) { Llama.uvolni(h); h = 0L } }
+        val f = vlakno.submit { if (h != 0L) { Llama.uvolni(h); h = 0L } }
+        if (pockat) runCatching { f.get(20, java.util.concurrent.TimeUnit.SECONDS) }
         nacitany = null; popisModelu = ""
         if (stav != StavModelu.CHYBA) stav = StavModelu.ZIADNY
     }

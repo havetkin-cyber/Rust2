@@ -221,6 +221,8 @@ object ObrazkyJadro {
 
     fun generujHerne(prompt: String, negativny: String, rozmer: Int, kroky: Int, cfg: Float, typ: String, pocet: Int, pomer: String = "stvorec") {
         if (generuje || stav != StavModelu.PRIPRAVENY || prompt.isBlank()) return
+        // chatový model (napr. po „AI napíše prompt“) uvoľní grafiku
+        ChatJadro.uvolniPamat(pockat = true)
         val p = when (typ) {
             "textura" -> "${prompt.trim()}, seamless tileable texture, flat even lighting, no shadows, top-down view, high detail"
             "sprite" -> "${prompt.trim()}, single object, centered, full view, isolated on a plain solid bright green background, no shadow, game asset"

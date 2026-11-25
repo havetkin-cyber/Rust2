@@ -392,7 +392,8 @@ object ObrazkyJadro {
 
     /** spustí tvorbu na vlákne sd (po prípadnom načítaní modelu, ktoré je v rade pred ňou) */
     private fun spust(prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, doGalerie: Boolean = true,
-                      pevnySeed: Long? = null, predloha: IntArray? = null, sila: Float = 0.6f, sprite: Boolean = false, hotovo: (File?, String) -> Unit) {
+                      pevnySeed: Long? = null, predloha: IntArray? = null, sila: Float = 0.6f, sprite: Boolean = false,
+                      referencie: List<BufferedImage>? = null, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
         // krátky seed (5 číslic), aby sa dal ľahko napísať: „uprav seed 12345 …“
         val seed = pevnySeed ?: (10000L..99999L).random()
@@ -414,8 +415,13 @@ object ObrazkyJadro {
                 val metoda = aktivnaSada()?.metoda ?: "euler_a"
                 // LoRA adaptéry pre obrázky (kategória „obrazky“)
                 Lory.pole("obrazky").let { (c, s) -> runCatching { Sd.nastavLory(c, s) } }
-                val px = if (predloha != null) Sd.generujZPredlohy(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, predloha, sila, r)
-                         else Sd.generujEx(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, r)
+                val px = when {
+                    referencie != null -> Sd.generujSReferenciami(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda,
+                        referencie.map { it.getRGB(0, 0, it.width, it.height, null, 0, it.width) }.toTypedArray(),
+                        referencie.map { it.width }.toIntArray(), referencie.map { it.height }.toIntArray(), r)
+                    predloha != null -> Sd.generujZPredlohy(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, predloha, sila, r)
+                    else -> Sd.generujEx(h, prompt.trim(), negativny.trim(), sirka, vyska, kroky, cfg, seed, metoda, r)
+                }
                 if (px != null) {
                     runCatching {
                         var img = BufferedImage(r[0], r[1], BufferedImage.TYPE_INT_RGB)
@@ -545,6 +551,51 @@ object ObrazkyJadro {
     /** [sekundy] dĺžka videa; null = podľa Nastavení */
     /** plynulosť výsledku: Wan 2.2 (24 fps) → 60 fps, Wan 2.1 (16 fps) → 48 fps (dopočítané snímky medzi skutočnými) */
     private fun cielFps(fps: Int) = if (fps >= 24) 60 else fps * 3
+
+    // ---------------------------------------------------------------- prenos štýlu (FLUX.3 Klein, referenčné obrázky)
+
+    /** Klein vie pracovať s referenčnými obrázkami */
+    fun kleinSada(): ObrazkovaSada? = Katalog.obrazky.find { it.id == "flux3-klein" }?.takeIf { mamSadu(it) }
+
+    /** zmenší obrázok tak, aby dlhšia strana mala najviac [max] px (VLM a VAE netreba obrovské vstupy) */
+    private fun naReferenciu(f: File, max: Int): BufferedImage {
+        val i = ImageIO.read(f) ?: throw IllegalStateException(T("styl_nie_obrazok"))
+        val k = minOf(1.0, max.toDouble() / maxOf(i.width, i.height))
+        val w = maxOf(16, (i.width * k).toInt()); val v = maxOf(16, (i.height * k).toInt())
+        val o = BufferedImage(w, v, BufferedImage.TYPE_INT_RGB)
+        o.createGraphics().apply {
+            setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            drawImage(i, 0, 0, w, v, null); dispose()
+        }
+        return o
+    }
+
+    /**
+     * Prenos štýlu: [obsah] (obrázok vytvorený v appke) prekreslí v štýle obrázka [styl] (môže byť hocijaký).
+     * Fotky zvonka sa ako obsah nedajú – rovnaké pravidlo ako pri úpravách.
+     */
+    fun prenosStylu(obsah: File, styl: File, doplnok: String, hotovo: (File?, String) -> Unit) {
+        if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
+        if (seedObrazka(obsah) == null) { hotovo(null, T("styl_len_appka")); return }
+        if (Podpis.zakazane(doplnok)) { hotovo(null, T("upr_zakazane")); return }
+        val k = kleinSada() ?: run { hotovo(null, T("styl_treba_klein")); return }
+        val refs = runCatching { listOf(naReferenciu(obsah, 1024), naReferenciu(styl, 1024)) }.getOrElse { hotovo(null, it.message ?: T("styl_nie_obrazok")); return }
+        val predtym = aktivnyModel
+        ChatJadro.uvolniPamat()
+        nacitaj("sada:" + k.id, uvolnitChat = false)
+        // výsledok má pomer strán obsahu, plocha ako predvolený rozmer Kleinu (rovnaká rýchlosť)
+        val a = refs[0].width.toDouble() / refs[0].height
+        val plocha = k.rozmer.toDouble() * k.rozmer
+        fun r64(x: Double) = (Math.round(x / 64.0) * 64).toInt().coerceIn(256, 1536)
+        val w = r64(Math.sqrt(plocha * a)); val v = r64(Math.sqrt(plocha / a))
+        val prompt = "Redraw image 1 in the artistic style of image 2. Keep the exact composition, subject, pose, face, clothing and layout of image 1. " +
+            "Take only the style from image 2: colors, color grading, lighting, texture, brushwork and mood. Do not copy objects or people from image 2." +
+            doplnok.trim().let { if (it.isBlank()) "" else " $it" }
+        spust(prompt, "", w, v, k.kroky, k.cfg, referencie = refs) { f, e ->
+            if (predtym != null && predtym != aktivnyModel) { uvolniPamat(); aktivnyModel = predtym }
+            hotovo(f, e)
+        }
+    }
 
     /** obrázkový model na prvý snímok videa: najpresnejší stiahnutý */
     fun obrazkovaPreVideo(): ObrazkovaSada? = listOf("flux3-klein", "zimage", "flux-schnell", "sd15")

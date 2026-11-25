@@ -1537,6 +1537,9 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                     if (o.chyba.isNotBlank()) Text(o.chyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 }
 
+                // prenos štýlu (FLUX.3 Klein): obrázok z appky prekreslí v štýle iného obrázka
+                if (!videa) PrenosStyluKarta()
+
                 // galéria
                 if (!videa && o.galeria.isNotEmpty()) {
                     Text(T("obr_galeria"), color = Farby.tlmene, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -2331,6 +2334,64 @@ private fun LoraObrazovka(spat: () -> Unit) {
                 if (chyba.isNotBlank()) Text(chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                 Text(T("lora_kam", Lory.priecinok(kat).path), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
+        }
+    }
+}
+
+
+@Composable
+private fun PrenosStyluKarta() {
+    val o = ObrazkyJadro
+    var obsah by remember { mutableStateOf<File?>(null) }
+    var styl by remember { mutableStateOf<File?>(null) }
+    var doplnok by remember { mutableStateOf("") }
+    var chyba by remember { mutableStateOf("") }
+    var vysledok by remember { mutableStateOf<File?>(null) }
+    var bezi by remember { mutableStateOf(false) }
+    val nadpisObsah = T("styl_vyber_obsah"); val nadpisStyl = T("styl_vyber_styl")
+    val klein = remember(o.stav) { o.kleinSada() }
+    Karta {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Palette, null, tint = Farby.ruzova); Spacer(Modifier.width(8.dp))
+            Text(T("styl_nadpis"), color = Farby.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        }
+        Text(T("styl_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+        if (klein == null) Text(T("styl_treba_klein"), color = Farby.cervena, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+            listOf(Triple(obsah, "styl_obsah", nadpisObsah), Triple(styl, "styl_styl", nadpisStyl)).forEachIndexed { i, (f, kluc, nadpis) ->
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(T(kluc), color = Farby.text, fontSize = 13.sp)
+                    val nb = remember(f) { f?.let { Platforma.nacitajObrazok(it) } }
+                    Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(150.dp).clip(RoundedCornerShape(12.dp)).background(Farby.plocha2)
+                        .clickable {
+                            if (i == 0) Platforma.vyberSubor(nadpis, setOf("png")) { v -> chyba = ""; obsah = v }
+                            else Platforma.vyberSubor(nadpis, setOf("png", "jpg", "jpeg", "bmp")) { v -> chyba = ""; styl = v }
+                        }, contentAlignment = Alignment.Center) {
+                        if (nb != null) Image(nb, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                        else Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.AddPhotoAlternate, null, tint = Farby.tlmene)
+                            Text(T(if (i == 0) "styl_obsah_hint" else "styl_styl_hint"), color = Farby.tlmene, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 8.dp))
+                        }
+                    }
+                }
+            }
+        }
+        OutlinedTextField(value = doplnok, onValueChange = { doplnok = it }, singleLine = true, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().nadKlavesnicou(),
+            placeholder = { Text(T("styl_doplnok_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+        if (bezi) {
+            Text(T("styl_pracuje", (o.priebeh * 100).roundToInt()), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+            LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+        } else GradientTlacidlo(T("styl_spustit"), Icons.Default.Palette, Modifier.padding(top = 8.dp).fillMaxWidth(),
+            enabled = obsah != null && styl != null && klein != null && !o.generuje) {
+            bezi = true; chyba = ""; vysledok = null
+            o.prenosStylu(obsah!!, styl!!, doplnok) { f, e -> bezi = false; if (f != null) { vysledok = f; Platforma.oznam(T("styl_hotovo")) } else chyba = e }
+        }
+        if (chyba.isNotBlank()) Text(chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+        vysledok?.let { f ->
+            val nb = remember(f) { Platforma.nacitajObrazok(f) }
+            if (nb != null) Image(nb, null, Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(max = 420.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Fit)
+            Text(T("styl_ulozene"), color = Farby.zelena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

@@ -50,6 +50,11 @@ jobs:
       - name: Balík pre Windows
         shell: bash
         run: cd linux && ./gradlew createDistributable --no-daemon --stacktrace -Pverzia=1.2.${{ env.VERZIA_N }}
+      - name: Počkať na mobilnú verziu (rovnaká verzia všade)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/skripty/cakaj.sh apk.yml "*" 90
       - name: ZIP a vydanie
         shell: pwsh
         env:
@@ -61,7 +66,7 @@ jobs:
           Compress-Archive -Path AlexiaAI-Windows -DestinationPath AlexiaAI-Windows.zip
           Get-Item AlexiaAI-Windows.zip
           "1.2.${{ env.VERZIA_N }}" | Set-Content -NoNewline windows-verzia.txt
-          $tag = gh release view --json tagName -q .tagName
+          $tag = "v1.2.${{ env.VERZIA_N }}"
           gh release upload $tag AlexiaAI-Windows.zip windows-verzia.txt --clobber
           Write-Host "Pridane k vydaniu $tag"
           # stály kanál aktualizácií – appka sa pozerá sem (nezávisí od toho, ktoré vydanie je práve „najnovšie“)

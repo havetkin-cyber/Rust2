@@ -14,6 +14,10 @@ object Sd {
         }
     }
 
+    /** obrázok s referenčnými obrázkami (FLUX.3 Klein) – prenos štýlu a pod. */
+    external fun generujSReferenciami(h: Long, prompt: String, negativny: String, w: Int, v: Int, kroky: Int, cfg: Float, seed: Long, metoda: String,
+                                      refPx: Array<IntArray>, refW: IntArray, refV: IntArray, rozmer: IntArray): IntArray?
+
     /** LoRA adaptéry pre ďalšie obrázky a videá (prázdne = bez) */
     external fun nastavLory(cesty: Array<String>, sily: FloatArray)
 

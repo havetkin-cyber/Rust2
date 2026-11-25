@@ -29,6 +29,12 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace -PversionCode=${{ env.VERZIA_N }}
+      - name: Počkať na PC verzie (rovnaká verzia všade)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash .github/skripty/cakaj.sh linux.yml "Kontrola Kotlinu (rýchla)" 60
+          bash .github/skripty/cakaj.sh windows.yml "Kontrola Kotlinu (rýchla)" 60
       - name: Vydať
         env:
           GH_TOKEN: ${{ github.token }}

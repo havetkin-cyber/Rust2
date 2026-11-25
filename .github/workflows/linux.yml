@@ -50,6 +50,11 @@ jobs:
           cd linux
           chmod +x ./gradlew
           ./gradlew packageAppImage --no-daemon --stacktrace -Pverzia=1.2.${{ env.VERZIA_N }}
+      - name: Počkať na mobilnú verziu (rovnaká verzia všade)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/skripty/cakaj.sh apk.yml "*" 90
       - name: ZIP a vydanie
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,7 +77,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool --no-appstream AlexiaAI.AppDir AlexiaAI-x86_64.AppImage
           ls -la AlexiaAI-x86_64.AppImage
           # pridá ZIP k najnovšiemu vydaniu (tam, kde je aj APK)
-          TAG=$(gh release view --json tagName -q .tagName)
+          TAG="v1.2.${{ env.VERZIA_N }}"
           echo "1.2.${{ env.VERZIA_N }}" > linux-verzia.txt
           gh release upload "$TAG" AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage linux-verzia.txt --clobber
           echo "Pridané k vydaniu $TAG"

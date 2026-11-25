@@ -952,10 +952,9 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Hlavicka(T("nastavenia"), spat = spat)
         PosuvnyStlpec {
-            Karta { HesloKarta() }
-            Karta { PrepojenieKarta() }
-            Karta {
-                Text(T("hlas_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("hist_karta")) { HesloKarta() }
+            Sekcia(T("siet_karta")) { PrepojenieKarta() }
+            Sekcia(T("hlas_karta")) {
                 Text(T("hlas_jazyk"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("auto", "sk", "en").forEach { k ->
@@ -1025,8 +1024,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 }
                 TextButton(onClick = { n.hlasRychlost = 1f; n.hlasVyska = 1f; n.hlasHrubka = 1f; n.hlasPlnost = 0f; n.uloz() }) { Text(T("hlas_predvolene"), color = Farby.ruzova) }
             }
-            Karta {
-                Text(T("nahovor_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("nahovor_karta")) {
                 Text(T("nahovor_info", Hlas.meno(n.hlas)), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                 var nText by remember { mutableStateOf("") }
                 var nVysledok by remember { mutableStateOf<File?>(null) }
@@ -1052,8 +1050,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 }
                 if (nChyba.isNotBlank()) Text(nChyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
             }
-            Karta {
-                Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("akt_karta")) {
                 Text(T("akt_teraz", Aktualizacie.mojaVerzia), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
                 TextButton(onClick = {
                     runCatching { java.awt.Desktop.getDesktop().open(Platforma.logy) }.onFailure { Platforma.otvorOdkaz(Platforma.logy.toURI().toString()) }
@@ -1065,8 +1062,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                     Switch(checked = n.autoAktualizacie, onCheckedChange = { n.autoAktualizacie = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                 }
             }
-            Karta {
-                Text(T("poz_chat_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("poz_chat_karta")) {
                 val bmp = remember(n.pozadieChatu, n.pozadieVerzia) { n.pozadieChatu?.let { Platforma.nacitajObrazok(File(it), 4) } }
                 if (bmp == null) Text(T("poz_chat_ziadne"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 else {
@@ -1083,8 +1079,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                     }
                 }
             }
-            Karta {
-                Text(T("kl_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("kl_karta")) {
                 Row(Modifier.fillMaxWidth().clickable { n.posunKlavesnica = !n.posunKlavesnica; n.uloz() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(T("kl_posun"), color = Farby.text, modifier = Modifier.weight(1f))
                     Switch(checked = n.posunKlavesnica, onCheckedChange = { n.posunKlavesnica = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
@@ -1100,8 +1095,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 }
                 Text(T("kl_info"), color = Farby.tlmene, fontSize = 12.sp)
             }
-            Karta {
-                Text(T("nast_system"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("nast_system")) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = n.systemovyPrompt, onValueChange = { n.systemovyPrompt = it; n.uloz() },
@@ -1122,8 +1116,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 Slider(value = n.maxTokenov.toFloat(), onValueChange = { n.maxTokenov = ((it / 128).roundToInt() * 128).coerceAtLeast(128) }, onValueChangeFinished = { uloz() }, valueRange = 128f..4096f,
                     colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
             }
-            Karta {
-                Text(T("nast_kontext"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("nast_kontext")) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(2048, 4096, 8192, 16384).forEach { k ->
@@ -1141,8 +1134,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                     GradientTlacidlo(T("nast_znova"), Icons.Default.Refresh) { n.aktivnyModel?.let { j.nacitajModel(it) } }
                 }
             }
-            Karta {
-                Text(T("jazyk"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("jazyk")) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(false to "Slovenčina", true to "English").forEach { (en, nazov) ->
@@ -1714,7 +1706,6 @@ private fun PrepojenieKarta() {
     var najdene by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
     var hlada by remember { mutableStateOf(false) }
     val farbyPola = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text)
-    Text(T("siet_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
 
     // A) toto zariadenie ako server
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2163,7 +2154,6 @@ private fun HesloKarta() {
     var znova by remember { mutableStateOf("") }
     var ma by remember { mutableStateOf(Sifra.maHeslo()) }
     val farbyPola = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text)
-    Text(T("hist_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
     Text(T(if (ma) "hist_heslo_ma" else "hist_heslo_nema"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
     OutlinedTextField(value = nove, onValueChange = { nove = it }, singleLine = true, label = { Text(T("hist_nove_heslo")) },
         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
@@ -2286,8 +2276,7 @@ private fun LoraObrazovka(spat: () -> Unit) {
                 Text(T("lora_info_$kat"), color = Farby.tlmene, fontSize = 13.sp)
             }
             // zoznam LoRA v kategórii
-            Karta {
-                Text(T("lora_moje"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("lora_moje"), otvorena = true) {
                 if (subory.isEmpty()) Text(T("lora_prazdne"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 subory.forEach { f ->
                     val zap = remember(ver, f) { Lory.zapnuta(kat, f.name) }
@@ -2311,8 +2300,7 @@ private fun LoraObrazovka(spat: () -> Unit) {
                 }
             }
             // pridanie
-            Karta {
-                Text(T("lora_pridat"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("lora_pridat")) {
                 OutlinedTextField(value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().nadKlavesnicou(),
                     placeholder = { Text(T("lora_odkaz_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
@@ -2374,11 +2362,7 @@ private fun PrenosStyluKarta() {
             zavri = { vyberPre = null },
         ) { f -> chyba = ""; if (i == 0) obsah = f else styl = f; vyberPre = null }
     }
-    Karta {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Palette, null, tint = Farby.ruzova); Spacer(Modifier.width(8.dp))
-            Text(T("styl_nadpis"), color = Farby.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-        }
+    Sekcia(T("styl_nadpis"), ikona = Icons.Default.Palette) {
         Text(T("styl_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
         if (klein == null) Text(T("styl_treba_klein"), color = Farby.cervena, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
@@ -2417,6 +2401,24 @@ private fun PrenosStyluKarta() {
     }
 }
 
+
+/** rozbaľovacia sekcia: vidno len nadpis, po kliknutí sa ukáže obsah (stav sa pamätá, kým appka beží) */
+private val otvoreneSekcie = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+@Composable
+private fun Sekcia(nadpis: String, modifier: Modifier = Modifier, otvorena: Boolean = false, ikona: androidx.compose.ui.graphics.vector.ImageVector? = null,
+                   obsah: @Composable ColumnScope.() -> Unit) {
+    val otv = otvoreneSekcie[nadpis] ?: otvorena
+    Karta(modifier) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { otvoreneSekcie[nadpis] = !otv }.padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (ikona != null) { Icon(ikona, null, tint = Farby.ruzova, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }
+            Text(nadpis, color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Icon(if (otv) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
+        }
+        androidx.compose.animation.AnimatedVisibility(visible = otv) { Column(Modifier.padding(top = 4.dp)) { obsah() } }
+    }
+}
 
 /** výber obrázka z galérie appky s náhľadmi (pri štýle aj tlačidlo „Zo súboru…“) */
 @Composable

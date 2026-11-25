@@ -677,9 +677,8 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Hlavicka(stringResource(R.string.nastavenia), spat = spat)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Karta { PrepojenieKarta() }
-            Karta {
-                Text(T("hlas_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("siet_karta_m")) { PrepojenieKarta() }
+            Sekcia(T("hlas_karta")) {
                 Text(T("hlas_jazyk"), color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("auto", "sk", "en").forEach { k ->
@@ -752,8 +751,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 }
                 TextButton(onClick = { n.hlasRychlost = 1f; n.hlasVyska = 1f; n.hlasHrubka = 1f; n.hlasPlnost = 0f; n.uloz() }) { Text(T("hlas_predvolene"), color = Farby.ruzova) }
             }
-            Karta {
-                Text(T("nahovor_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("nahovor_karta")) {
                 Text(T("nahovor_info_m", Hlas.meno(n.hlas)), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                 var nText by remember { mutableStateOf("") }
                 var nVysledok by remember { mutableStateOf("") }
@@ -771,9 +769,8 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 if (nVysledok.isNotBlank()) Text(T("nahovor_hotovo_m", nVysledok), color = Farby.zelena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 if (nChyba.isNotBlank()) Text(nChyba, color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
             }
-            Karta {
+            Sekcia(T("akt_karta")) {
                 val c = LocalContext.current
-                Text(T("akt_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 if (Aktualizacie.kontroluje) LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 else GradientTlacidlo(T("akt_skontrolovat"), Icons.Default.SystemUpdate, Modifier.fillMaxWidth()) { Aktualizacie.skontroluj(c, rucne = true) }
@@ -782,8 +779,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                     Switch(checked = n.autoAktualizacie, onCheckedChange = { n.autoAktualizacie = it; n.uloz() }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                 }
             }
-            Karta {
-                Text(T("poz_chat_karta"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("poz_chat_karta")) {
                 val bmp = remember(n.pozadieChatu, n.pozadieVerzia) { n.pozadieChatu?.let { android.graphics.BitmapFactory.decodeFile(it, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 })?.asImageBitmap() } }
                 if (bmp == null) Text(T("poz_chat_ziadne"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 else {
@@ -800,8 +796,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                     }
                 }
             }
-            Karta {
-                Text(stringResource(R.string.nast_system), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(stringResource(R.string.nast_system)) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = n.systemovyPrompt, onValueChange = { n.systemovyPrompt = it; n.uloz() },
@@ -822,8 +817,7 @@ private fun NastaveniaObrazovka(spat: () -> Unit) {
                 Slider(value = n.maxTokenov.toFloat(), onValueChange = { n.maxTokenov = ((it / 128).roundToInt() * 128).coerceAtLeast(128) }, onValueChangeFinished = { uloz() }, valueRange = 128f..4096f,
                     colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova, inactiveTrackColor = Farby.plocha2))
             }
-            Karta {
-                Text(stringResource(R.string.nast_kontext), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(stringResource(R.string.nast_kontext)) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(2048, 4096, 8192, 16384).forEach { k ->
@@ -1495,8 +1489,7 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                         OutlinedButton(onClick = naNastavenia, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("nastavenia"), color = Farby.text) }
                     }
                 }
-                Karta {
-                    Text(T("pc_co_odomkne"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                Sekcia(T("pc_co_odomkne")) {
                     Text(T("pc_co_odomkne_zoznam"), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 }
                 return@Column
@@ -1504,8 +1497,7 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
             val info = pc.info!!
             var dlzka by remember { mutableIntStateOf(5) }
             // ---- nové video z textu
-            Karta {
-                Text(T("pc_nove_video"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("pc_nove_video"), otvorena = true) {
                 if (!info.video) Text(T("pc_bez_video_modelu"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 var popis by remember { mutableStateOf("") }
                 var cezObrazok by remember { mutableStateOf(true) }
@@ -1533,8 +1525,7 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                 }
             }
             // ---- rozhýbať obrázok z PC
-            Karta {
-                Text(T("pc_rozhybat"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("pc_rozhybat")) {
                 if (!info.rozhybat) Text(T("pc_bez_i2v"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 var vyber by remember { mutableStateOf(false) }
                 var zvoleny by remember { mutableStateOf<String?>(null) }
@@ -1573,8 +1564,7 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                 if (galeria) GaleriaPcDialog(lenAppka = false, zavri = { galeria = false }) { pc.ulozObrazok(it) }
             }
             // ---- rad videí na PC
-            Karta {
-                Text(T("pc_rad"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Sekcia(T("pc_rad"), otvorena = true) {
                 val st = pc.stav
                 val ulohy = st?.optJSONArray("ulohy")
                 if (st?.optBoolean("pcZaneprazdnene") == true) Text(T("pc_zaneprazdnene"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
@@ -1657,6 +1647,24 @@ private fun GaleriaPcDialog(lenAppka: Boolean, zavri: () -> Unit, zvol: (String)
 }
 
 
+/** rozbaľovacia sekcia: vidno len nadpis, po kliknutí sa ukáže obsah (stav sa pamätá, kým appka beží) */
+private val otvoreneSekcie = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+@Composable
+private fun Sekcia(nadpis: String, modifier: Modifier = Modifier, otvorena: Boolean = false, ikona: androidx.compose.ui.graphics.vector.ImageVector? = null,
+                   obsah: @Composable ColumnScope.() -> Unit) {
+    val otv = otvoreneSekcie[nadpis] ?: otvorena
+    Karta(modifier) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { otvoreneSekcie[nadpis] = !otv }.padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (ikona != null) { Icon(ikona, null, tint = Farby.ruzova, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }
+            Text(nadpis, color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Icon(if (otv) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Farby.ruzova)
+        }
+        androidx.compose.animation.AnimatedVisibility(visible = otv) { Column(Modifier.padding(top = 4.dp)) { obsah() } }
+    }
+}
+
 /** tvar obrázka – platí pre V mobile aj Na PC */
 @Composable
 private fun TvarObrazka(rozmer: Int) {
@@ -1698,11 +1706,7 @@ private fun PrenosStyluPcKarta() {
     var bezi by remember { mutableStateOf(false) }
     val vyberStyl = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u: Uri? -> if (u != null) { styl = u; chyba = "" } }
     val pcOk = PcSpojenie.pripojene && PcSpojenie.info?.styl == true
-    Karta {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (PcSpojenie.pripojene) Icons.Default.Palette else Icons.Default.Lock, null, tint = Farby.ruzova); Spacer(Modifier.width(8.dp))
-            Text(T("styl_nadpis_pc"), color = Farby.text, fontWeight = FontWeight.SemiBold)
-        }
+    Sekcia(T("styl_nadpis_pc"), ikona = if (PcSpojenie.pripojene) Icons.Default.Palette else Icons.Default.Lock) {
         Text(when {
             !PcSpojenie.pripojene -> T("obr_pc_zamknute")
             PcSpojenie.info?.styl != true -> T("styl_treba_klein_pc")

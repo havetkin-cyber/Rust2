@@ -2522,6 +2522,7 @@ private fun VideoklipKarta() {
     var skladba by remember { mutableStateOf<java.io.File?>(null) }
     val fotky = remember { mutableStateListOf<java.io.File>() }
     var tempo by remember { mutableIntStateOf(2) }
+    var spev by remember { mutableStateOf(false) }
     var vyber by remember { mutableStateOf(false) }
     var hotove by remember { mutableStateOf<java.io.File?>(null) }
     var chyba by remember { mutableStateOf("") }
@@ -2552,8 +2553,15 @@ private fun VideoklipKarta() {
                 }
             }
         }
-        Text(T("klip_tempo"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().clickable(enabled = !k.pracuje) { spev = !spev }.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(T("spev_prepinac"), color = Farby.text, fontSize = 14.sp)
+                Text(T("spev_info"), color = Farby.tlmene, fontSize = 12.sp)
+            }
+            Switch(checked = spev, onCheckedChange = { spev = it }, enabled = !k.pracuje, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+        }
+        if (!spev) Text(T("klip_tempo"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        if (!spev) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(1 to "klip_pomaly", 2 to "klip_stredne", 3 to "klip_rychlo").forEach { (t, kl) ->
                 FilterChip(selected = tempo == t, onClick = { tempo = t }, label = { Text(T(kl)) }, enabled = !k.pracuje,
                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
@@ -2568,9 +2576,10 @@ private fun VideoklipKarta() {
             TextButton(onClick = { k.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
         } else {
             Casovac(false, 0, k.posledneTrvanie)
-            GradientTlacidlo(T("klip_vytvorit"), Icons.Default.MusicVideo, Modifier.fillMaxWidth(), enabled = skladba != null && fotky.isNotEmpty()) {
+            GradientTlacidlo(T(if (spev) "spev_vytvorit" else "klip_vytvorit"), Icons.Default.MusicVideo, Modifier.fillMaxWidth(), enabled = skladba != null && fotky.isNotEmpty()) {
                 chyba = ""; hotove = null
-                k.vytvor(skladba!!, fotky.toList(), tempo) { f, e -> hotove = f; chyba = e }
+                if (spev) k.spievaj(fotky.first(), skladba!!) { f, e -> hotove = f; chyba = e }
+                else k.vytvor(skladba!!, fotky.toList(), tempo) { f, e -> hotove = f; chyba = e }
             }
         }
         if (chyba.isNotBlank()) Text("⚠ $chyba", color = Farby.ruzova, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))

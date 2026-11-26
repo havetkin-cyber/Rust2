@@ -214,7 +214,7 @@ object Server {
             while (true) { val r = i.read(buf); if (r < 0) break; n += r; if (n > 200_000_000) { o.close(); f.delete(); throw IllegalStateException("Skladba je príliš veľká") }; o.write(buf, 0, r) }
         } }
         if (f.length() == 0L) { f.delete(); odpovedz(x, 400, T("klip_bez_skladby")); return }
-        val id = VzdialeneVidea.pridajKlip(nazov, f, fotky, parameter(x, "tempo")?.toIntOrNull() ?: 2)
+        val id = VzdialeneVidea.pridajKlip(nazov, f, fotky, parameter(x, "tempo")?.toIntOrNull() ?: 2, parameter(x, "spev") == "1")
         odpovedz(x, 200, JSONObject().put("id", id).toString())
     }
 

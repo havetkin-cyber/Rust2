@@ -59,6 +59,9 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
   (v refréne rýchlejšie), každý záber sa jemne približuje / posúva, pod to dá pôvodnú skladbu. Strih *pomaly / stredne / rýchlo*,
   rozmer podľa prvého obrázka (na výšku 1080×1920, na šírku 1920×1080, štvorec). Ide na procesore, grafiku nepotrebuje.
   ✅ V mobile cez **Videá PC**: skladba z mobilu, obrázky z galérie PC, hotový klip si stiahneš do mobilu.
+- 🖥 **Postava spieva** – postava z obrázka spieva skladbu: pery sa hýbu podľa spevu (Wav2Lip GAN), hrá pôvodná nahrávka,
+  kamera sa jemne hýbe. Najlepšie tvár zblízka; len obrázky z Alexia AI. Ide na procesore v samostatnom procese,
+  model (~160 MB) sa stiahne pri prvom použití. Wav2Lip je len na **osobné, nekomerčné** použitie. ✅ Aj z mobilu cez **Videá PC**.
 - 🖥 **Vylepšenie hocijakého videa** – doostrenie, odšumenie, farby, stabilizácia, 60 fps, AI zväčšenie na Full HD / 4K
 
 **🧩 LoRA adaptéry** (🖥)

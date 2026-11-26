@@ -16,6 +16,7 @@ dependencies {
     implementation(compose.material3)
     implementation(compose.materialIconsExtended)
     implementation("org.json:json:20240303")
+    implementation("com.microsoft.onnxruntime:onnxruntime:1.20.0")  // spev postavy (Wav2Lip, detektor tváre) – beží v samostatnom procese
     implementation("org.apache.commons:commons-compress:1.27.1")   // rozbalenie hlasov (.tar.bz2)
     implementation("org.apache.pdfbox:pdfbox:3.0.3")               // text z PDF (knihy v chate)
 }
@@ -72,7 +73,7 @@ compose.desktop {
             vendor = "havetkin-cyber"
             // natívne knižnice (llama.cpp a stable-diffusion.cpp s Vulkanom) – resources/linux-x64
             appResourcesRootDir.set(project.layout.projectDirectory.dir("resources"))
-            modules("java.desktop", "java.prefs", "jdk.httpserver")
+            modules("java.desktop", "java.prefs", "jdk.httpserver", "java.logging")
             linux { iconFile.set(project.file("ikona.png")) }
         }
     }

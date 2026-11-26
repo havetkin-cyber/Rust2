@@ -98,6 +98,102 @@ object Videoklip {
         }.apply { isDaemon = true }.start()
     }
 
+    // ---------- postava spieva (pery podľa spevu) ----------
+
+    private val MODELY_SPEVU = listOf(
+        "wav2lip_gan_96.onnx" to "https://huggingface.co/facefusion/models-3.0.0/resolve/main/wav2lip_gan_96.onnx",
+        "yoloface_8n.onnx" to "https://huggingface.co/facefusion/models-3.0.0/resolve/main/yoloface_8n.onnx",
+    )
+    private fun priecinokSpevu() = File(Platforma.priecinok, "spev-modely").apply { mkdirs() }
+
+    /**
+     * Postava z obrázka spieva skladbu: pery sa hýbu podľa spevu, pod tým pôvodná skladba.
+     * Len obrázky vytvorené v Alexia AI (nie fotky skutočných ľudí). Beží v samostatnom procese na procesore.
+     */
+    fun spievaj(obrazok: File, skladba: File, hotovo: (File?, String) -> Unit) {
+        if (pracuje) { hotovo(null, T("video_zaneprazdnene")); return }
+        if (ObrazkyJadro.seedObrazka(obrazok) == null) { hotovo(null, T("m3d_len_appka")); return }
+        if (!skladba.exists()) { hotovo(null, T("klip_bez_skladby")); return }
+        val ff = VideoJadro.ffmpeg() ?: run { VideoJadro.stiahniFfmpeg { spievaj(obrazok, skladba, hotovo) }; return }
+        pracuje = true; priebeh = 0f; zrusit = false; cinnost = T("spev_modely", 0)
+        val start = System.currentTimeMillis(); zaciatok = start
+        Thread {
+            var vysledok: File? = null; var chyba = ""
+            runCatching {
+                // modely (raz, ~160 MB)
+                val dir = priecinokSpevu()
+                MODELY_SPEVU.forEachIndexed { idx, (meno, url) ->
+                    val f = File(dir, meno)
+                    if (!f.exists() || f.length() < 1_000_000) {
+                        val tmp = File(dir, "$meno.part")
+                        stiahni(url, tmp) { p -> Platforma.naHlavnom { cinnost = T("spev_modely", ((idx + p) / MODELY_SPEVU.size * 100).toInt()) } }
+                        if (zrusit) throw IllegalStateException(T("klip_zrusene"))
+                        tmp.renameTo(f)
+                    }
+                }
+                val out = File(VideoJadro.priecinok().apply { mkdirs() }, "spev_${System.currentTimeMillis()}.mp4")
+                val java = File(System.getProperty("java.home"), "bin/" + if (Platforma.jeWindows) "java.exe" else "java")
+                val cp = System.getProperty("java.class.path").orEmpty().ifBlank {
+                    File(System.getProperty("java.home")).parentFile.resolve("app").listFiles { f -> f.extension == "jar" }
+                        ?.joinToString(File.pathSeparator) { it.path }.orEmpty()
+                }
+                val p = ProcessBuilder(java.path, "-Xmx3g", "-Dfile.encoding=UTF-8", "-cp", cp, "sk.alexia.ai.SpevProces",
+                    dir.path, obrazok.path, skladba.path, ff, out.path).redirectErrorStream(true).start()
+                proces = p
+                var koniec = ""
+                p.inputStream.bufferedReader().forEachLine { l ->
+                    when {
+                        l.startsWith("P ") -> {
+                            val c = l.split(' ')
+                            val pr = c.getOrNull(1)?.toFloatOrNull() ?: 0f
+                            val txt = when (c.getOrNull(2)) {
+                                "spev" -> T("spev_zvuk"); "tvar" -> T("spev_tvar")
+                                "snimky" -> T("spev_snimky", c.getOrNull(3)?.toIntOrNull() ?: 0, c.getOrNull(4)?.toIntOrNull() ?: 0)
+                                else -> T("klip_spajam")
+                            }
+                            Platforma.naHlavnom { priebeh = pr; cinnost = txt }
+                        }
+                        l.startsWith("O ") || l.startsWith("E ") -> koniec = l
+                        else -> println("spev: $l")
+                    }
+                }
+                p.waitFor()
+                if (zrusit) throw IllegalStateException(T("klip_zrusene"))
+                if (!koniec.startsWith("O ") || !out.exists()) throw IllegalStateException(koniec.removePrefix("E ").ifBlank { T("spev_chyba") })
+                File(out.path + ".json").writeText(JSONObject().put("typ", "spev").put("skladba", skladba.name).put("obrazok", obrazok.name)
+                    .put("trvanie", System.currentTimeMillis() - start).toString())
+                vysledok = out
+            }.onFailure { chyba = it.message ?: T("spev_chyba") }
+            val t = System.currentTimeMillis() - start
+            Platforma.naHlavnom {
+                pracuje = false; priebeh = 0f; cinnost = ""; proces = null; posledneTrvanie = t
+                hotovo(vysledok, chyba)
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    private fun stiahni(odkaz: String, ciel: File, p: (Float) -> Unit) {
+        var url = java.net.URL(odkaz); var k: java.net.HttpURLConnection; var skoky = 0
+        while (true) {
+            k = url.openConnection() as java.net.HttpURLConnection
+            k.instanceFollowRedirects = false; k.connectTimeout = 20_000; k.readTimeout = 60_000
+            k.setRequestProperty("User-Agent", "AlexiaAI")
+            val kod = k.responseCode
+            if (kod in 300..399 && skoky++ < 8) { url = java.net.URL(url, k.getHeaderField("Location")); k.disconnect(); continue }
+            if (kod != 200) throw IllegalStateException("Model sa nepodarilo stiahnuť (server vrátil $kod)")
+            break
+        }
+        val spolu = k.contentLengthLong; var h = 0L
+        k.inputStream.use { i -> ciel.outputStream().use { o ->
+            val b = ByteArray(1 shl 16); var n: Int
+            while (i.read(b).also { n = it } > 0) {
+                if (zrusit) break
+                o.write(b, 0, n); h += n; if (spolu > 0) p(h.toFloat() / spolu)
+            }
+        } }
+        if (!zrusit && spolu > 0 && ciel.length() != spolu) throw IllegalStateException("Model sa nestiahol celý")
+    }
+
     // ---------- pohyb kamery v zábere ----------
 
     /** striedavo: priblíženie, vzdialenie, posun doprava, posun doľava (obrázok vyplní celý záber) */

@@ -134,8 +134,8 @@ object Klient {
     }
 
     /** videoklip na PC: skladba z mobilu + obrázky z galérie PC; vráti id úlohy */
-    fun klipPridaj(adresa: String, pin: String, nazov: String, skladba: ByteArray, fotky: List<String>, tempo: Int): String {
-        val q = "/api/klip/pridaj?tempo=$tempo&nazov=" + java.net.URLEncoder.encode(nazov, "UTF-8") +
+    fun klipPridaj(adresa: String, pin: String, nazov: String, skladba: ByteArray, fotky: List<String>, tempo: Int, spev: Boolean = false): String {
+        val q = "/api/klip/pridaj?tempo=$tempo&spev=${if (spev) 1 else 0}&nazov=" + java.net.URLEncoder.encode(nazov, "UTF-8") +
             "&fotky=" + java.net.URLEncoder.encode(fotky.joinToString("|"), "UTF-8")
         val k = spojTelo(adresa, pin, q, skladba, "application/octet-stream", citanie = 120_000)
         return JSONObject(k.inputStream.bufferedReader(Charsets.UTF_8).readText()).getString("id")

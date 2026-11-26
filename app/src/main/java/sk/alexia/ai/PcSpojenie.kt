@@ -70,14 +70,14 @@ object PcSpojenie {
     }
 
     /** videoklip na PC: skladba z mobilu (uri) + obrázky z galérie PC */
-    fun pridajKlip(uri: android.net.Uri, fotky: List<String>, tempo: Int, hotovo: (String?) -> Unit) {
+    fun pridajKlip(uri: android.net.Uri, fotky: List<String>, tempo: Int, spev: Boolean, hotovo: (String?) -> Unit) {
         Thread {
             val r = runCatching {
                 val cr = Platforma.app.contentResolver
                 val meno = runCatching { cr.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } }.getOrNull() ?: "skladba.mp3"
                 val data = cr.openInputStream(uri)!!.use { it.readBytes() }
                 if (data.size > 200_000_000) throw IllegalStateException("Skladba je príliš veľká")
-                Klient.klipPridaj(adr, pin, meno, data, fotky, tempo)
+                Klient.klipPridaj(adr, pin, meno, data, fotky, tempo, spev)
             }
             Platforma.naHlavnom { hotovo(r.exceptionOrNull()?.let { it.message ?: it.toString() }); obnovStav() }
         }.start()

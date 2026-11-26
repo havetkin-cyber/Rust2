@@ -1574,6 +1574,7 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                 var menoSkladby by remember { mutableStateOf("") }
                 val fotky = remember { mutableStateListOf<String>() }
                 var tempo by remember { mutableIntStateOf(2) }
+                var spev by remember { mutableStateOf(false) }
                 var vyber by remember { mutableStateOf(false) }
                 var posiela by remember { mutableStateOf(false) }
                 val vyberSkladbu = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -1604,16 +1605,23 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                         }
                     }
                 }
-                Text(T("klip_tempo"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth().clickable { spev = !spev }.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(T("spev_prepinac"), color = Farby.text, fontSize = 14.sp)
+                        Text(T("spev_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    Switch(checked = spev, onCheckedChange = { spev = it }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+                if (!spev) Text(T("klip_tempo"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                if (!spev) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(1 to "klip_pomaly", 2 to "klip_stredne", 3 to "klip_rychlo").forEach { (t, kl) ->
                         FilterChip(selected = tempo == t, onClick = { tempo = t }, label = { Text(T(kl)) },
                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                     }
                 }
-                GradientTlacidlo(T("klip_odoslat"), Icons.AutoMirrored.Filled.Send, Modifier.padding(top = 8.dp).fillMaxWidth(), enabled = skladba != null && fotky.isNotEmpty() && !posiela) {
+                GradientTlacidlo(T(if (spev) "spev_vytvorit" else "klip_odoslat"), Icons.AutoMirrored.Filled.Send, Modifier.padding(top = 8.dp).fillMaxWidth(), enabled = skladba != null && fotky.isNotEmpty() && !posiela) {
                     posiela = true
-                    pc.pridajKlip(skladba!!, fotky.toList(), tempo) { e -> posiela = false; if (e == null) { fotky.clear(); skladba = null; menoSkladby = ""; Platforma.oznam(T("pc_odoslane")) } else Platforma.oznam("⚠ $e") }
+                    pc.pridajKlip(skladba!!, fotky.toList(), tempo, spev) { e -> posiela = false; if (e == null) { fotky.clear(); skladba = null; menoSkladby = ""; Platforma.oznam(T("pc_odoslane")) } else Platforma.oznam("⚠ $e") }
                 }
                 if (vyber) GaleriaPcDialog(lenAppka = true, zavri = { vyber = false }) { if (it !in fotky) fotky += it; vyber = false }
             }
@@ -1631,7 +1639,7 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                             Text(u.optString("popis").ifBlank { T("pc_bez_popisu") }, color = Farby.text, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             IconButton(onClick = { pc.zrus(id) }, modifier = Modifier.size(32.dp)) { Icon(if (u.optString("stav") == "bezi") Icons.Default.StopCircle else Icons.Default.DeleteOutline, null, tint = Farby.tlmene) }
                         }
-                        val druh = if (u.optBoolean("klip")) T("klip_nadpis") else if (u.optString("predloha").isNotBlank()) T("pc_druh_rozhybat") else if (u.optBoolean("cezObrazok")) T("pc_druh_obrazok") else T("pc_druh_text")
+                        val druh = if (u.optBoolean("spev")) T("spev_prepinac") else if (u.optBoolean("klip")) T("klip_nadpis") else if (u.optString("predloha").isNotBlank()) T("pc_druh_rozhybat") else if (u.optBoolean("cezObrazok")) T("pc_druh_obrazok") else T("pc_druh_text")
                         Text(if (u.optBoolean("klip")) druh else "${dlzkaText(u.optInt("sekundy"))} · $druh", color = Farby.tlmene, fontSize = 12.sp)
                         when (u.optString("stav")) {
                             "caka" -> Text(T("pc_caka"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))

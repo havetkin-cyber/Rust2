@@ -14,13 +14,13 @@ object VzdialeneVidea {
         var stav: String = "caka", var chyba: String = "", var subor: String? = null, val cas: Long = System.currentTimeMillis(),
         var zacal: Long = 0L, var trvanie: Long = 0L,
         // videoklip: skladba (súbor na PC), obrázky z galérie PC oddelené „|“, tempo strihu 1–3
-        val skladba: String? = null, val fotky: String = "", val tempo: Int = 2,
+        val skladba: String? = null, val fotky: String = "", val tempo: Int = 2, val spev: Boolean = false,
     ) {
         fun json() = JSONObject().put("id", id).put("popis", popis).put("sekundy", sekundy).put("cezObrazok", cezObrazok)
             .put("predloha", predloha ?: "").put("stav", stav).put("chyba", chyba).put("subor", subor ?: "").put("cas", cas)
             .put("velkost", subor?.let { File(it).length() } ?: 0L)
             .put("zacal", zacal).put("trvanie", trvanie)
-            .put("skladba", skladba ?: "").put("fotky", fotky).put("tempo", tempo).put("klip", skladba != null)
+            .put("skladba", skladba ?: "").put("fotky", fotky).put("tempo", tempo).put("klip", skladba != null).put("spev", spev)
             // ako dlho už beží (počíta PC – hodiny mobilu môžu ísť inak)
             .put("bezi_ms", if (stav == "bezi" && zacal > 0) System.currentTimeMillis() - zacal else 0L)
     }
@@ -40,7 +40,7 @@ object VzdialeneVidea {
                     o.optString("predloha").ifBlank { null },
                     // úloha, ktorá bežala pri vypnutí appky, sa spustí znova
                     o.optString("stav").let { if (it == "bezi") "caka" else it }, o.optString("chyba"), Platforma.cesta(o.optString("subor").ifBlank { null }), o.optLong("cas"), 0L, o.optLong("trvanie"),
-                    Platforma.cesta(o.optString("skladba").ifBlank { null }), o.optString("fotky"), o.optInt("tempo", 2))
+                    Platforma.cesta(o.optString("skladba").ifBlank { null }), o.optString("fotky"), o.optInt("tempo", 2), o.optBoolean("spev"))
             }
         }
     }
@@ -59,10 +59,10 @@ object VzdialeneVidea {
     }
 
     /** videoklip z mobilu: skladba sa uloží na PC, obrázky sú mená z galérie PC */
-    fun pridajKlip(nazov: String, skladba: File, fotky: List<String>, tempo: Int): String = synchronized(this) {
+    fun pridajKlip(nazov: String, skladba: File, fotky: List<String>, tempo: Int, spev: Boolean = false): String = synchronized(this) {
         nacitaj()
-        val u = Uloha(System.currentTimeMillis().toString(36), "🎵 " + nazov, 0, false, null,
-            skladba = skladba.path, fotky = fotky.joinToString("|"), tempo = tempo.coerceIn(1, 3))
+        val u = Uloha(System.currentTimeMillis().toString(36), (if (spev) "🎤 " else "🎵 ") + nazov, 0, false, null,
+            skladba = skladba.path, fotky = fotky.joinToString("|"), tempo = tempo.coerceIn(1, 3), spev = spev)
         ulohy += u
         uloz()
         Platforma.naHlavnom { dalsia() }
@@ -115,7 +115,8 @@ object VzdialeneVidea {
         when {
             u.skladba != null -> {
                 val f = u.fotky.split('|').filter { it.isNotBlank() }.mapNotNull { ObrazkyJadro.obrazokZGalerie(it) }
-                Videoklip.vytvor(File(u.skladba), f, u.tempo, hotovo)
+                if (u.spev && f.isNotEmpty()) Videoklip.spievaj(f.first(), File(u.skladba), hotovo)
+                else Videoklip.vytvor(File(u.skladba), f, u.tempo, hotovo)
             }
             u.predloha != null && predloha == null -> hotovo(null, "Obrázok sa na PC nenašiel")
             predloha != null -> {

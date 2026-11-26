@@ -14,6 +14,14 @@ object T {
     }
 
     private val sk = mapOf(
+        "spev_prepinac" to "Postava spieva (pery podľa spevu)",
+        "spev_info" to "Postava z prvého obrázka spieva skladbu – pery sa hýbu podľa spevu, hrá pôvodná skladba. Najlepšie tvár zblízka. Len obrázky z Alexia AI. Model Wav2Lip je len na osobné, nekomerčné použitie.",
+        "spev_vytvorit" to "Vytvoriť spev",
+        "spev_modely" to "Sťahujem model na spev… %1\$d %%",
+        "spev_zvuk" to "Pripravujem spev zo skladby…",
+        "spev_tvar" to "Hľadám tvár…",
+        "spev_snimky" to "Pery podľa spevu: snímok %1\$d / %2\$d",
+        "spev_chyba" to "Spev sa nepodarilo vytvoriť",
         "klip_nadpis" to "Videoklip na skladbu",
         "klip_info" to "Vyber skladbu a obrázky vytvorené v Alexia AI. Appka nájde tempo a údery, obrázky strieda presne do rytmu (v refréne rýchlejšie), každý záber sa jemne približuje alebo posúva. Ide to na procesore, grafiku nepotrebuje.",
         "klip_ziadna_skladba" to "Žiadna skladba",
@@ -492,6 +500,14 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "spev_prepinac" to "Character sings (lips follow the vocals)",
+        "spev_info" to "The character from the first image sings the song – lips follow the vocals, the original song plays. Close-up faces work best. Only Alexia AI images. The Wav2Lip model is for personal, non-commercial use only.",
+        "spev_vytvorit" to "Create singing",
+        "spev_modely" to "Downloading the singing model… %1\$d %%",
+        "spev_zvuk" to "Preparing vocals from the song…",
+        "spev_tvar" to "Finding the face…",
+        "spev_snimky" to "Lips to vocals: frame %1\$d / %2\$d",
+        "spev_chyba" to "Could not create the singing video",
         "klip_nadpis" to "Music video for a song",
         "klip_info" to "Pick a song and images made in Alexia AI. The app finds the tempo and beats, switches images exactly on the rhythm (faster in the chorus) and each shot gently zooms or pans. Runs on the CPU, no GPU needed.",
         "klip_ziadna_skladba" to "No song",

@@ -30,6 +30,13 @@ fun upravaObrazka(t: String): Pair<Long, String>? {
     return m.groupValues[4].toLong() to zmena
 }
 
+/** „/spoj seed 8234 a seed 5120: stoja spolu na ulici“ → (seed1, seed2, popis), inak null */
+fun spojenieObrazkov(t: String): Triple<Long, Long, String>? {
+    val m = Regex("^\\s*/?(spoj|spojiť|spojit|zlúč|zluc|zlúčiť|zlucit|combine|merge)\\s+(obr[aá]zky\\s+)?(seed\\s*)?[:#]?\\s*(\\d{3,12})\\s*(,|\\+|&|a|and|s|so|with)\\s*(seed\\s*)?[:#]?\\s*(\\d{3,12})\\s*[:,.-]?\\s*(.*)",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t) ?: return null
+    return Triple(m.groupValues[4].toLong(), m.groupValues[7].toLong(), m.groupValues[8].trim())
+}
+
 /** sila úpravy podľa slov: jemne = drží sa predlohy, výrazne = viac zmien */
 fun silaUpravy(t: String): Float {
     // overené testom so Z-Image: 0.8 = obrázok ostane, zmena je jasne vidieť; 0.9 = výraznejšia zmena
@@ -261,6 +268,7 @@ object ChatJadro {
         rozhybanie(text)?.let { (seed, pohyb) -> rozhybaj(text.trim(), seed, pohyb); return }
         val popisV = if (video) text.trim() else popisVidea(text)
         if (popisV != null) { natoc(text.trim(), popisV); return }
+        spojenieObrazkov(text)?.let { (a, b, popis) -> spoj(text.trim(), a, b, popis); return }
         upravaObrazka(text)?.let { (seed, zmena) -> uprav(text.trim(), seed, zmena); return }
         val popis = if (obrazok) text.trim() else popisObrazka(text)
         if (popis != null) { nakresli(text.trim(), popis); return }
@@ -341,6 +349,24 @@ object ChatJadro {
                 ulozChat()
             }
         }
+    }
+
+    /** spojí dve postavy z obrázkov appky do jedného obrázka (FLUX.3 Klein) */
+    private fun spoj(text: String, s1: Long, s2: Long, popis: String) {
+        if (ObrazkyJadro.generuje) return
+        spravy += Sprava("user", text, jeObrazkova = true)
+        val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
+        if (nastavenia.vzdialene) { odpoved.text = "⚠ " + T("upr_vzdialene"); ulozChat(); return }
+        odpoved.stavText = T("upr_prekladam")
+        val dalej: (String) -> Unit = { en ->
+            odpoved.stavText = T("spoj_kreslim")
+            ObrazkyJadro.spojDoChatu(s1, s2, en) { f, e ->
+                odpoved.stavText = ""
+                if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"
+                ulozChat()
+            }
+        }
+        if (popis.isBlank()) dalej("") else prelozUpravu(popis, dalej)
     }
 
     /**

@@ -44,6 +44,8 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
 - ✅🖥 **Úprava v chate podľa seedu** – napíš `/úprava seed 8234 pridaj čiapku` (aj `uprav 8234 …`, `zmeň seed 8234 …`, `/edit 8234 add a hat`).
   Chatový model preloží pokyn do angličtiny; s FLUX.3 Klein sa zmení len to, čo chceš (zvyšok obrázka ostane), inak sa obrázok
   prekreslí s rovnakým seedom. V mobile to robí pripojené PC (obrázok z galérie PC). Len obrázky vytvorené v Alexia AI.
+- ✅🖥 **Spojenie dvoch postáv v chate** – `/spoj seed 8234 a seed 5120: stoja spolu na ulici v meste` → postavy z dvoch obrázkov appky
+  spolu na jednom obrázku (FLUX.3 Klein; tvár, vlasy a oblečenie ostanú). Windows aj Linux; v mobile cez PC. Len obrázky z Alexia AI.
 - ✅🖥 **Stopky** – pri tvorbe obrázka, videa aj vylepšenia beží čas od 0:00, po dokončení ukáže *Hotovo za m:ss*
 - ✅🖥 **Údaje pod obrázkom** – prompt (tlačidlo *Kopírovať prompt*), seed, čas tvorby, rozmer a model sa uložia k obrázku a ukážu sa v detaile
 - Upravovať (seed, prenos štýlu, rozhýbanie) sa dajú **len obrázky vytvorené v appke**, nie fotky zvonka

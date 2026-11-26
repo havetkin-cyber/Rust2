@@ -14,6 +14,8 @@ object T {
     }
 
     private val sk = mapOf(
+        "spoj_kreslim" to "Spájam postavy do jedného obrázka…",
+        "spoj_treba_klein" to "Na spájanie obrázkov treba model FLUX.3 Klein (Modely → Obrázky).",
         "upr_prekladam" to "Rozumiem úprave…",
         "upr_kreslim" to "Upravujem obrázok…",
         "upr_len_pc" to "Úprava podľa seedu ide cez PC – pripoj mobil k PC (obrázok musí byť v galérii PC).",
@@ -419,6 +421,8 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "spoj_kreslim" to "Combining the characters into one image…",
+        "spoj_treba_klein" to "Combining images needs the FLUX.3 Klein model (Models → Images).",
         "upr_prekladam" to "Understanding the edit…",
         "upr_kreslim" to "Editing the image…",
         "upr_len_pc" to "Editing by seed runs on the PC – connect the phone to the PC (the image must be in the PC gallery).",

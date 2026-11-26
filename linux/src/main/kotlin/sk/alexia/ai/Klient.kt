@@ -106,9 +106,9 @@ object Klient {
 
     /** nechá obrázok nakresliť na druhom zariadení a uloží ho do [ciel] */
     fun obrazok(adresa: String, pin: String, popis: String, ciel: File, negativny: String = "", pomer: String = "stvorec", sirka: Int = 0, vyska: Int = 0,
-                upravaSeed: Long = 0L) {
+                upravaSeed: Long = 0L, spojSeed: Long = 0L) {
         val k = spoj(adresa, pin, "/api/obrazok", JSONObject().put("popis", popis).put("negativny", negativny).put("pomer", pomer)
-            .put("sirka", sirka).put("vyska", vyska).put("uprava_seed", upravaSeed), citanie = 30 * 60_000)
+            .put("sirka", sirka).put("vyska", vyska).put("uprava_seed", upravaSeed).put("spoj_seed", spojSeed), citanie = 30 * 60_000)
         k.inputStream.use { i -> ciel.outputStream().use { i.copyTo(it) } }
     }
 

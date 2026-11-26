@@ -518,6 +518,34 @@ object ObrazkyJadro {
         }
     }
 
+    /**
+     * Spojenie: postava z obrázka [s1] a postava z obrázka [s2] (oba vytvorené a podpísané appkou) spolu na jednom obrázku.
+     * Ide cez FLUX.3 Klein (vidí oba obrázky). [popis] = scéna po anglicky (môže byť prázdny).
+     */
+    fun spojDoChatu(s1: Long, s2: Long, popis: String, hotovo: (File?, String) -> Unit) {
+        if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
+        if (Podpis.zakazane(popis)) { hotovo(null, T("upr_zakazane")); return }
+        val f1 = najdiPodlaSeedu(s1) ?: run { hotovo(null, T("upr_nenajdene", s1)); return }
+        val f2 = najdiPodlaSeedu(s2) ?: run { hotovo(null, T("upr_nenajdene", s2)); return }
+        val k = kleinSada() ?: run { hotovo(null, T("spoj_treba_klein")); return }
+        val refs = runCatching { listOf(naReferenciu(f1, 1024), naReferenciu(f2, 1024)) }.getOrElse { hotovo(null, it.message ?: T("upr_nenajdene", s1)); return }
+        val predtym = aktivnyModel
+        ChatJadro.uvolniPamat()
+        nacitaj("sada:" + k.id, uvolnitChat = false)
+        // dve postavy vedľa seba → na šírku 4:3, plocha ako predvolený rozmer Kleinu
+        val plocha = k.rozmer.toDouble() * k.rozmer
+        fun r64(x: Double) = (Math.round(x / 64.0) * 64).toInt().coerceIn(256, 1536)
+        val w = r64(Math.sqrt(plocha * 4.0 / 3)); val v = r64(Math.sqrt(plocha * 3.0 / 4))
+        val scena = popis.trim().trimEnd('.').ifBlank { "standing next to each other, natural friendly pose" }
+        val prompt = "Create one new photo with two people together: the person from image 1 and the person from image 2. " +
+            "Scene: $scena. Keep each person exactly as in their own image: the same face, hair, skin, body and clothing. " +
+            "Consistent lighting, perspective and scale, both fully visible, realistic, high detail."
+        spust(prompt, "", w, v, k.kroky, k.cfg, referencie = refs) { nf, e ->
+            if (predtym != null && predtym != aktivnyModel) { uvolniPamat(); aktivnyModel = predtym }
+            hotovo(nf, e)
+        }
+    }
+
     // ------------------------------------------------ video AI (Wan 2.1)
 
     fun videoSada(): ObrazkovaSada? = Katalog.obrazky.firstOrNull { it.video != null && mamSadu(it) }

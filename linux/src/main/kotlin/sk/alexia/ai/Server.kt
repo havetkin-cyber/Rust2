@@ -162,11 +162,18 @@ object Server {
         val pomer = j.optString("pomer", "stvorec").let { if (it in setOf("stvorec", "vyska", "sirka", "nahodne", "vlastne")) it else "stvorec" }
         // vlastný rozmer z mobilu (nie z nastavení PC)
         val vlastny = if (pomer == "vlastne") j.optInt("sirka", 0).coerceIn(256, 1536) to j.optInt("vyska", 0).coerceIn(256, 1536) else null
-        if (popis.isEmpty()) { odpovedz(x, 400, "Chýba popis"); return }
+        if (popis.isEmpty() && j.optLong("spoj_seed", 0L) == 0L) { odpovedz(x, 400, "Chýba popis"); return }
         val hotovo = CountDownLatch(1)
         var subor: File? = null; var chyba = ""
         Platforma.naHlavnom {
             if (ObrazkyJadro.generuje) { chyba = "Na počítači sa práve kreslí iný obrázok"; hotovo.countDown() }
+            else if (j.optLong("spoj_seed", 0L) > 0L && j.optLong("uprava_seed", 0L) > 0L) {
+                // „/spoj seed A a seed B: …“ z chatu v mobile – oba obrázky sú v galérii PC
+                val dalej: (String) -> Unit = { en ->
+                    ObrazkyJadro.spojDoChatu(j.optLong("uprava_seed"), j.optLong("spoj_seed"), en) { f, e -> subor = f; chyba = e; hotovo.countDown() }
+                }
+                if (popis.isBlank() || popis == "-") dalej("") else ChatJadro.prelozUpravu(popis, dalej)
+            }
             else if (j.optLong("uprava_seed", 0L) > 0L) {
                 // „/úprava seed 8234 pridaj čiapku“ z chatu v mobile – obrázok je v galérii PC
                 ChatJadro.prelozUpravu(popis) { en ->

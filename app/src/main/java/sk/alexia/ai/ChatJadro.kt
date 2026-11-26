@@ -35,6 +35,13 @@ fun upravaObrazka(t: String): Pair<Long, String>? {
     return m.groupValues[4].toLong() to zmena
 }
 
+/** „/spoj seed 8234 a seed 5120: stoja spolu na ulici“ → (seed1, seed2, popis), inak null */
+fun spojenieObrazkov(t: String): Triple<Long, Long, String>? {
+    val m = Regex("^\\s*/?(spoj|spojiť|spojit|zlúč|zluc|zlúčiť|zlucit|combine|merge)\\s+(obr[aá]zky\\s+)?(seed\\s*)?[:#]?\\s*(\\d{3,12})\\s*(,|\\+|&|a|and|s|so|with)\\s*(seed\\s*)?[:#]?\\s*(\\d{3,12})\\s*[:,.-]?\\s*(.*)",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t) ?: return null
+    return Triple(m.groupValues[4].toLong(), m.groupValues[7].toLong(), m.groupValues[8].trim())
+}
+
 enum class StavModelu { ZIADNY, NACITAVA, PRIPRAVENY, CHYBA }
 
 /**
@@ -173,6 +180,7 @@ object ChatJadro {
 
     fun posli(text: String, obrazok: Boolean = false) {
         if (text.isBlank()) return
+        if (!obrazok) spojenieObrazkov(text)?.let { (a, b, p) -> uprav(text.trim(), a, p.ifBlank { "-" }, spoj = b); return }
         if (!obrazok) upravaObrazka(text)?.let { (seed, zmena) -> uprav(text.trim(), seed, zmena); return }
         val popis = if (obrazok) text.trim() else popisObrazka(text)
         if (popis != null) { nakresli(text.trim(), popis); return }
@@ -182,12 +190,12 @@ object ChatJadro {
     }
 
     /** úprava obrázka podľa seedu – robí ju PC (obrázok je v jeho galérii) */
-    private fun uprav(text: String, seed: Long, zmena: String) {
+    private fun uprav(text: String, seed: Long, zmena: String, spoj: Long = 0L) {
         if (ObrazkyJadro.generuje) return
         spravy += Sprava("user", text, jeObrazkova = true)
         val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
         if (!(nastavenia.vzdialene && PcSpojenie.info?.obrazky == true)) { odpoved.text = "⚠ " + T("upr_len_pc"); ulozChat(); return }
-        ObrazkyJadro.nakresliNaDialku(nastavenia.vzdialenaAdresa, nastavenia.vzdialenyPin, zmena, upravaSeed = seed) { f, e ->
+        ObrazkyJadro.nakresliNaDialku(nastavenia.vzdialenaAdresa, nastavenia.vzdialenyPin, zmena, upravaSeed = seed, spojSeed = spoj) { f, e ->
             if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"; ulozChat()
         }
     }

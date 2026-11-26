@@ -78,7 +78,9 @@ private fun spustiLog() = runCatching {
     Thread.setDefaultUncaughtExceptionHandler { t, e -> System.err.println("Chyba vo vlákne ${t.name}:"); e.printStackTrace() }
 }
 
-fun main() {
+fun main(args: Array<String>) {
+    // pomocný proces „postava spieva“ – ten istý program spustený s --spev (balík appky nemá samostatný java.exe)
+    if (args.firstOrNull() == "--spev") { SpevProces.main(args.drop(1).toTypedArray()); return }
     Platforma.presunDoDokumentov()
     spustiLog()
     ChatJadro.init()

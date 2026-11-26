@@ -38,16 +38,20 @@ object SpevProces {
     fun main(args: Array<String>) {
         try {
             val (modely, obrazok, skladba, ff, vystup) = args.map { it }
+            subStavu = File("$vystup.stav")
             spusti(File(modely), File(obrazok), File(skladba), ff, File(vystup))
-            println("O $vystup"); System.out.flush()
+            riadok("O $vystup")
         } catch (t: Throwable) {
-            println("E " + (t.message ?: t.toString()).replace('\n', ' ')); System.out.flush()
+            riadok("E " + (t.message ?: t.toString()).replace('\n', ' '))
             kotlin.system.exitProcess(1)
         }
         kotlin.system.exitProcess(0)
     }
 
-    private fun stav(p: Float, t: String) { println("P %.4f %s".format(java.util.Locale.ROOT, p, t)); System.out.flush() }
+    /** stav aj do súboru – okno appky na Windows nemusí mať napojený výstup konzoly */
+    private var subStavu: File? = null
+    private fun riadok(l: String) { println(l); System.out.flush(); runCatching { subStavu?.writeText(l) } }
+    private fun stav(p: Float, t: String) = riadok("P %.4f %s".format(java.util.Locale.ROOT, p, t))
 
     private fun spusti(modely: File, obrazok: File, skladba: File, ff: String, vystup: File) {
         // 1) spev zo skladby: stred stereo obrazu (spev býva v strede), bez basov a výšok, 16 kHz mono

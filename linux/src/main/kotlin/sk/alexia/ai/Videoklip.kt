@@ -132,16 +132,23 @@ object Videoklip {
                     }
                 }
                 val out = File(VideoJadro.priecinok().apply { mkdirs() }, "spev_${System.currentTimeMillis()}.mp4")
+                // spustenie: java (pri vývoji) alebo samotný program appky s --spev (zbalená appka nemá java.exe)
                 val java = File(System.getProperty("java.home"), "bin/" + if (Platforma.jeWindows) "java.exe" else "java")
-                val cp = System.getProperty("java.class.path").orEmpty().ifBlank {
-                    File(System.getProperty("java.home")).parentFile.resolve("app").listFiles { f -> f.extension == "jar" }
-                        ?.joinToString(File.pathSeparator) { it.path }.orEmpty()
+                val cp = System.getProperty("java.class.path").orEmpty()
+                val argy = listOf(dir.path, obrazok.path, skladba.path, ff, out.path)
+                val prikaz = if (java.exists() && cp.isNotBlank())
+                    listOf(java.path, "-Xmx3g", "-Dfile.encoding=UTF-8", "-cp", cp, "sk.alexia.ai.SpevProces") + argy
+                else {
+                    val exe = System.getenv("APPIMAGE")?.takeIf { File(it).exists() }
+                        ?: ProcessHandle.current().info().command().orElse(null)
+                        ?: throw IllegalStateException(T("spev_chyba"))
+                    listOf(exe, "--spev") + argy
                 }
-                val p = ProcessBuilder(java.path, "-Xmx3g", "-Dfile.encoding=UTF-8", "-cp", cp, "sk.alexia.ai.SpevProces",
-                    dir.path, obrazok.path, skladba.path, ff, out.path).redirectErrorStream(true).start()
+                val p = ProcessBuilder(prikaz).redirectErrorStream(true).start()
                 proces = p
                 var koniec = ""
-                p.inputStream.bufferedReader().forEachLine { l ->
+                val stavSub = File(out.path + ".stav")
+                fun spracuj(l: String) {
                     when {
                         l.startsWith("P ") -> {
                             val c = l.split(' ')
@@ -154,12 +161,23 @@ object Videoklip {
                             Platforma.naHlavnom { priebeh = pr; cinnost = txt }
                         }
                         l.startsWith("O ") || l.startsWith("E ") -> koniec = l
-                        else -> println("spev: $l")
                     }
                 }
-                p.waitFor()
+                // priebeh zo súboru (keď výstup procesu nedorazí)
+                val sledovanie = Thread {
+                    var posledny = ""
+                    while (p.isAlive) {
+                        runCatching { stavSub.readText() }.getOrNull()?.takeIf { it != posledny }?.let { posledny = it; spracuj(it) }
+                        Thread.sleep(700)
+                    }
+                }.apply { isDaemon = true; start() }
+                p.inputStream.bufferedReader().forEachLine { l -> if (l.length > 1 && l[1] == ' ' && l[0] in "POE") spracuj(l) else println("spev: $l") }
+                val kod = p.waitFor(); sledovanie.join(1500)
+                runCatching { stavSub.readText() }.getOrNull()?.let { if (it.startsWith("O ") || it.startsWith("E ")) koniec = it }
+                stavSub.delete()
                 if (zrusit) throw IllegalStateException(T("klip_zrusene"))
-                if (!koniec.startsWith("O ") || !out.exists()) throw IllegalStateException(koniec.removePrefix("E ").ifBlank { T("spev_chyba") })
+                val ok = koniec.startsWith("O ") || (koniec.isBlank() && kod == 0 && out.exists() && out.length() > 0)
+                if (!ok || !out.exists()) throw IllegalStateException(koniec.removePrefix("E ").ifBlank { T("spev_chyba") + " (kód $kod)" })
                 File(out.path + ".json").writeText(JSONObject().put("typ", "spev").put("skladba", skladba.name).put("obrazok", obrazok.name)
                     .put("trvanie", System.currentTimeMillis() - start).toString())
                 vysledok = out

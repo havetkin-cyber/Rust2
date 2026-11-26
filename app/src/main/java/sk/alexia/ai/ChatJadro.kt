@@ -27,6 +27,14 @@ fun popisObrazka(t: String): String? {
     return m?.groupValues?.get(2)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
+/** „/úprava seed 8234 pridaj čiapku“ → (seed, zmena), inak null */
+fun upravaObrazka(t: String): Pair<Long, String>? {
+    val m = Regex("^\\s*/?(úprava|uprava|upraviť|upravit|uprav|úprav|zmeniť|zmenit|zmeň|zmen|edit)\\s+(obr[aá]zok\\s+)?(seed\\s*)?[:#]?\\s*(\\d{3,12})\\s*[:,.-]?\\s*(a\\s+|and\\s+)?(.+)",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t) ?: return null
+    val zmena = m.groupValues[6].trim().takeIf { it.isNotEmpty() } ?: return null
+    return m.groupValues[4].toLong() to zmena
+}
+
 enum class StavModelu { ZIADNY, NACITAVA, PRIPRAVENY, CHYBA }
 
 /**
@@ -165,11 +173,23 @@ object ChatJadro {
 
     fun posli(text: String, obrazok: Boolean = false) {
         if (text.isBlank()) return
+        if (!obrazok) upravaObrazka(text)?.let { (seed, zmena) -> uprav(text.trim(), seed, zmena); return }
         val popis = if (obrazok) text.trim() else popisObrazka(text)
         if (popis != null) { nakresli(text.trim(), popis); return }
         if (generuje || stav != StavModelu.PRIPRAVENY) return
         spravy += Sprava("user", text.trim()).apply { kontext = Dokumenty.kontextPreOtazku(text, nastavenia.kontext) }
         generuj()
+    }
+
+    /** úprava obrázka podľa seedu – robí ju PC (obrázok je v jeho galérii) */
+    private fun uprav(text: String, seed: Long, zmena: String) {
+        if (ObrazkyJadro.generuje) return
+        spravy += Sprava("user", text, jeObrazkova = true)
+        val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
+        if (!(nastavenia.vzdialene && PcSpojenie.info?.obrazky == true)) { odpoved.text = "⚠ " + T("upr_len_pc"); ulozChat(); return }
+        ObrazkyJadro.nakresliNaDialku(nastavenia.vzdialenaAdresa, nastavenia.vzdialenyPin, zmena, upravaSeed = seed) { f, e ->
+            if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"; ulozChat()
+        }
     }
 
     /** obrázok priamo v chate */

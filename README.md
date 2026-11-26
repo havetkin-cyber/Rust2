@@ -41,6 +41,9 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
 - ✅🖥 Pozadia na výber, 1 / 4 / 8 variantov naraz, obrázky aj priamo v chate
 - 🖥 Každý obrázok má **seed**; úprava obrázka podľa seedu (`uprav seed 12345 a pridaj šiltovku`)
 - ✅🖥 **Prenos štýlu** (FLUX.3 Klein) – obrázok z Alexia AI prekreslí v štýle iného obrázka (farby, svetlo, technika); v mobile cez PC
+- ✅🖥 **Úprava v chate podľa seedu** – napíš `/úprava seed 8234 pridaj čiapku` (aj `uprav 8234 …`, `zmeň seed 8234 …`, `/edit 8234 add a hat`).
+  Chatový model preloží pokyn do angličtiny; s FLUX.3 Klein sa zmení len to, čo chceš (zvyšok obrázka ostane), inak sa obrázok
+  prekreslí s rovnakým seedom. V mobile to robí pripojené PC (obrázok z galérie PC). Len obrázky vytvorené v Alexia AI.
 - ✅🖥 **Stopky** – pri tvorbe obrázka, videa aj vylepšenia beží čas od 0:00, po dokončení ukáže *Hotovo za m:ss*
 - ✅🖥 **Údaje pod obrázkom** – prompt (tlačidlo *Kopírovať prompt*), seed, čas tvorby, rozmer a model sa uložia k obrázku a ukážu sa v detaile
 - Upravovať (seed, prenos štýlu, rozhýbanie) sa dajú **len obrázky vytvorené v appke**, nie fotky zvonka

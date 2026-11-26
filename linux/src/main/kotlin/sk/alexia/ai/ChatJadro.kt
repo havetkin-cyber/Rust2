@@ -23,10 +23,11 @@ class Sprava(val rola: String, text: String, val jeObrazkova: Boolean = false, o
 
 /** „uprav seed 12345 a sprav tam …“ / „edit 12345: …“ → (seed, zmena), inak null */
 fun upravaObrazka(t: String): Pair<Long, String>? {
-    val m = Regex("^\\s*(uprav(iť|it)?|úprav|zmeň|zmen|edit)\\s+(obr[aá]zok\\s+)?(seed\\s*)?#?(\\d{3,12})\\s*[:,.-]?\\s*(a\\s+|and\\s+)?(.+)",
+    // „/úprava seed 8234 pridaj čiapku“, „uprav 8234: …“, „zmeň seed 8234 …“, „/edit 8234 add a hat“
+    val m = Regex("^\\s*/?(úprava|uprava|upraviť|upravit|uprav|úprav|zmeniť|zmenit|zmeň|zmen|edit)\\s+(obr[aá]zok\\s+)?(seed\\s*)?[:#]?\\s*(\\d{3,12})\\s*[:,.-]?\\s*(a\\s+|and\\s+)?(.+)",
         setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t) ?: return null
-    val zmena = m.groupValues[7].trim().takeIf { it.isNotEmpty() } ?: return null
-    return m.groupValues[5].toLong() to zmena
+    val zmena = m.groupValues[6].trim().takeIf { it.isNotEmpty() } ?: return null
+    return m.groupValues[4].toLong() to zmena
 }
 
 /** sila úpravy podľa slov: jemne = drží sa predlohy, výrazne = viac zmien */
@@ -54,7 +55,7 @@ fun popisAIVidea(t: String): String? {
 
 /** „rozhýbaj seed 12345 …“ → (seed, popis pohybu alebo "") */
 fun rozhybanie(t: String): Pair<Long, String>? {
-    val m = Regex("^\\s*(rozhýbaj|rozhybaj|animuj|animate)\\s+(obr[aá]zok\\s+)?(seed\\s*)?#?(\\d{3,12})\\s*[:,.-]?\\s*(a\\s+|and\\s+)?(.*)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t) ?: return null
+    val m = Regex("^\\s*/?(rozhýbaj|rozhybaj|animuj|animate)\\s+(obr[aá]zok\\s+)?(seed\\s*)?#?(\\d{3,12})\\s*[:,.-]?\\s*(a\\s+|and\\s+)?(.*)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t) ?: return null
     return m.groupValues[4].toLong() to m.groupValues[6].trim()
 }
 
@@ -330,11 +331,46 @@ object ChatJadro {
         spravy += Sprava("user", text, jeObrazkova = true)
         val odpoved = Sprava("assistant", "", jeObrazkova = true); spravy += odpoved
         if (nastavenia.vzdialene) { odpoved.text = "⚠ " + T("upr_vzdialene"); ulozChat(); return }
-        ObrazkyJadro.upravDoChatu(seed, zmena, silaUpravy(text)) { f, e ->
-            if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"
-            ulozChat()
+        odpoved.stavText = T("upr_prekladam")
+        // príkaz po slovensky → krátky anglický pokyn (obrázkové modely rozumejú hlavne angličtine)
+        prelozUpravu(zmena) { en ->
+            odpoved.stavText = T("upr_kreslim")
+            ObrazkyJadro.upravDoChatu(seed, en, silaUpravy(text)) { f, e ->
+                odpoved.stavText = ""
+                if (f != null) odpoved.obrazok = f.path else odpoved.text = "⚠ $e"
+                ulozChat()
+            }
         }
     }
+
+    /**
+     * Úprava „pridaj čiapku“ → „Add a hat on her head.“ cez chatový model (ak je k dispozícii).
+     * Anglický pokyn alebo bez chatového modelu sa nechá tak, ako je.
+     */
+    fun prelozUpravu(zmena: String, hotovo: (String) -> Unit) {
+        val anglicky = zmena.all { it.code < 128 } &&
+            Regex("\\b(add|make|change|remove|put|give|replace|turn|with|her|his|the)\\b", RegexOption.IGNORE_CASE).containsMatchIn(zmena)
+        val mamModel = nacitany != null || nastavenia.aktivnyModel?.let { File(it).exists() } == true
+        if (anglicky || !mamModel || generuje || pisePrompt || nastavenia.vzdialene) { hotovo(zmena); return }
+        pisePrompt = true
+        obnov()
+        Thread {
+            val sb = StringBuilder()
+            runCatching {
+                generujPreSiet(listOf("system" to SYS_UPRAVA, "user" to zmena.trim()), 120) { b -> sb.append(String(b, Charsets.UTF_8)); true }
+            }
+            val v = ocistiPrompt(sb.toString()).lines().firstOrNull { it.isNotBlank() }.orEmpty().trim()
+            Platforma.naHlavnom {
+                pisePrompt = false
+                uvolniPamat()   // grafika patrí obrázkovému modelu
+                hotovo(if (v.length in 3..300) v else zmena)
+            }
+        }.start()
+    }
+
+    private const val SYS_UPRAVA = "You turn a short image edit request (often in Slovak) into one short, clear English instruction for an image editing model. " +
+        "Reply with the instruction only, no quotes, no explanation. Examples: 'pridaj jej čiapku' -> 'Add a beanie hat on her head.' " +
+        "'daj jej červené vlasy' -> 'Change her hair color to red.' 'nech sa usmieva' -> 'Make her smile.'"
 
     private fun nakresli(text: String, popisCely: String) {
         val (seed, popis) = seedZPopisu(popisCely)

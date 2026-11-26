@@ -167,6 +167,13 @@ object Server {
         var subor: File? = null; var chyba = ""
         Platforma.naHlavnom {
             if (ObrazkyJadro.generuje) { chyba = "Na počítači sa práve kreslí iný obrázok"; hotovo.countDown() }
+            else if (j.optLong("uprava_seed", 0L) > 0L) {
+                // „/úprava seed 8234 pridaj čiapku“ z chatu v mobile – obrázok je v galérii PC
+                ChatJadro.prelozUpravu(popis) { en ->
+                    if (ObrazkyJadro.generuje) { chyba = "Na počítači sa práve kreslí iný obrázok"; hotovo.countDown() }
+                    else ObrazkyJadro.upravDoChatu(j.optLong("uprava_seed"), en, silaUpravy(popis)) { f, e -> subor = f; chyba = e; hotovo.countDown() }
+                }
+            }
             else ObrazkyJadro.nakresliDoChatu(popis, negativny = neg, pomer = pomer, vlastny = vlastny) { f, e -> subor = f; chyba = e; hotovo.countDown() }
         }
         if (!hotovo.await(30, TimeUnit.MINUTES)) { odpovedz(x, 504, "Obrázok trval príliš dlho"); return }

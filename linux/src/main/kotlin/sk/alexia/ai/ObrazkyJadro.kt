@@ -485,6 +485,23 @@ object ObrazkyJadro {
         if (!mam) { hotovo(null, T("chat_obr_ziadny")); return }
         if (generuje) return
         val img = runCatching { ImageIO.read(f) }.getOrNull() ?: run { hotovo(null, T("upr_nenajdene", seed)); return }
+        // FLUX.3 Klein vidí obrázok a zmení len to, čo sa pýta („Add a hat“) – zvyšok ostane rovnaký
+        kleinSada()?.let { k ->
+            val ref = runCatching { naReferenciu(f, 1024) }.getOrElse { hotovo(null, it.message ?: T("upr_nenajdene", seed)); return }
+            val predtym = aktivnyModel
+            ChatJadro.uvolniPamat()
+            nacitaj("sada:" + k.id, uvolnitChat = false)
+            val a = img.width.toDouble() / img.height
+            val plocha = k.rozmer.toDouble() * k.rozmer
+            fun r64(x: Double) = (Math.round(x / 64.0) * 64).toInt().coerceIn(256, 1536)
+            val prompt = "Edit image 1: " + zmena.trim().trimEnd('.') + ". Keep everything else exactly the same as in image 1: " +
+                "the same person, face, expression, pose, body, clothing, background, composition, colors and lighting."
+            spust(prompt, "", r64(Math.sqrt(plocha * a)), r64(Math.sqrt(plocha / a)), k.kroky, k.cfg, pevnySeed = seed, referencie = listOf(ref)) { nf, e ->
+                if (predtym != null && predtym != aktivnyModel) { uvolniPamat(); aktivnyModel = predtym }
+                hotovo(nf, e)
+            }
+            return
+        }
         val w = img.width - img.width % 8; val v = img.height - img.height % 8
         val px = img.getRGB(0, 0, w, v, null, 0, w)
         val uvolnit = ChatJadro.velkostNacitaneho() + velkost(cesta!!) > LIMIT_SPOLU

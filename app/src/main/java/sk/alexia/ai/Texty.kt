@@ -14,6 +14,9 @@ object T {
     }
 
     private val sk = mapOf(
+        "upr_prekladam" to "Rozumiem úprave…",
+        "upr_kreslim" to "Upravujem obrázok…",
+        "upr_len_pc" to "Úprava podľa seedu ide cez PC – pripoj mobil k PC (obrázok musí byť v galérii PC).",
         "spev_prepinac" to "Postava spieva (pery podľa spevu)",
         "spev_info" to "Postava z prvého obrázka spieva skladbu – pery sa hýbu podľa spevu, hrá pôvodná skladba. Najlepšie tvár zblízka. Len obrázky z Alexia AI. Model Wav2Lip je len na osobné, nekomerčné použitie.",
         "spev_vytvorit" to "Vytvoriť spev",
@@ -416,6 +419,9 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "upr_prekladam" to "Understanding the edit…",
+        "upr_kreslim" to "Editing the image…",
+        "upr_len_pc" to "Editing by seed runs on the PC – connect the phone to the PC (the image must be in the PC gallery).",
         "spev_prepinac" to "Character sings (lips follow the vocals)",
         "spev_info" to "The character from the first image sings the song – lips follow the vocals, the original song plays. Close-up faces work best. Only Alexia AI images. The Wav2Lip model is for personal, non-commercial use only.",
         "spev_vytvorit" to "Create singing",

@@ -151,13 +151,13 @@ object ObrazkyJadro {
     }
 
     fun nakresliNaDialku(adresa: String, pin: String, popis: String, negativny: String = "", pomer: String = "stvorec",
-                         sirka: Int = 0, vyska: Int = 0, hotovo: (File?, String) -> Unit) {
+                         sirka: Int = 0, vyska: Int = 0, upravaSeed: Long = 0L, hotovo: (File?, String) -> Unit) {
         if (generuje) return
         generuje = true; priebeh = 0f; naPc = true
         val start = System.currentTimeMillis(); zaciatok = start
         Thread {
             val f = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
-            val r = runCatching { Klient.obrazok(adresa, pin, popis, f, negativny, pomer, sirka, vyska) }
+            val r = runCatching { Klient.obrazok(adresa, pin, popis, f, negativny, pomer, sirka, vyska, upravaSeed) }
             val trvanie = System.currentTimeMillis() - start
             if (r.isSuccess) ulozUdaje(f, popis, null, trvanie, "pc")
             hlavne.post {

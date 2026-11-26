@@ -527,7 +527,7 @@ object ObrazkyJadro {
         if (Podpis.zakazane(popis)) { hotovo(null, T("upr_zakazane")); return }
         val f1 = najdiPodlaSeedu(s1) ?: run { hotovo(null, T("upr_nenajdene", s1)); return }
         val f2 = najdiPodlaSeedu(s2) ?: run { hotovo(null, T("upr_nenajdene", s2)); return }
-        val k = kleinSada() ?: run { hotovo(null, T("spoj_treba_klein")); return }
+        val k = kleinSada() ?: run { spojKolazou(f1, f2, popis, hotovo); return }
         val refs = runCatching { listOf(naReferenciu(f1, 1024), naReferenciu(f2, 1024)) }.getOrElse { hotovo(null, it.message ?: T("upr_nenajdene", s1)); return }
         val predtym = aktivnyModel
         ChatJadro.uvolniPamat()
@@ -543,6 +543,51 @@ object ObrazkyJadro {
         spust(prompt, "", w, v, k.kroky, k.cfg, referencie = refs) { nf, e ->
             if (predtym != null && predtym != aktivnyModel) { uvolniPamat(); aktivnyModel = predtym }
             hotovo(nf, e)
+        }
+    }
+
+    /**
+     * Spojenie bez Kleinu (Z-Image, FLUX.1, SD): obe postavy sa položia vedľa seba na jedno plátno 4:3
+     * a aktívny obrázkový model ich prekreslí do jednej scény (img2img). Vzhľad sa drží predlohy, scéna sa zjednotí.
+     */
+    private fun spojKolazou(f1: File, f2: File, popis: String, hotovo: (File?, String) -> Unit) {
+        val cesta = aktivnyModel
+        val mam = cesta != null && !jeVideoModel && (aktivnaSada()?.let { mamSadu(it) } ?: File(cesta).exists())
+        if (!mam) { hotovo(null, T("spoj_treba_model")); return }
+        val s = aktivnaSada()
+        val zaklad = (s?.rozmer ?: 768).coerceAtLeast(512)
+        fun r64(x: Double) = (Math.round(x / 64.0) * 64).toInt().coerceIn(256, 1536)
+        val w = r64(zaklad * 1.25); val v = r64(zaklad * 0.94)
+        val platno = BufferedImage(w, v, BufferedImage.TYPE_INT_RGB)
+        runCatching {
+            val g = platno.createGraphics()
+            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            // pozadie: rozmazaný priemer oboch obrázkov, aby švy medzi nimi neboli ostré
+            val a = ImageIO.read(f1); val b = ImageIO.read(f2)
+            g.drawImage(a, 0, 0, w / 2, v, null); g.drawImage(b, w / 2, 0, w / 2, v, null)
+            for ((i, img) in listOf(a, b).withIndex()) {
+                // každá postava vyplní svoju polovicu (orez na stred), bez deformácie
+                val k = maxOf((w / 2.0) / img.width, v.toDouble() / img.height)
+                val sw = (img.width * k).toInt(); val sv = (img.height * k).toInt()
+                val x = i * (w / 2) + (w / 2 - sw) / 2; val y = (v - sv) / 2
+                val clip = java.awt.Rectangle(i * (w / 2), 0, w / 2, v)
+                g.clip = clip; g.drawImage(img, x, y, sw, sv, null); g.clip = null
+            }
+            g.dispose()
+        }.onFailure { hotovo(null, it.message ?: T("styl_nie_obrazok")); return }
+        val px = platno.getRGB(0, 0, w, v, null, 0, w)
+        val p1 = popisObrazka(f1).orEmpty().take(300); val p2 = popisObrazka(f2).orEmpty().take(300)
+        val scena = popis.trim().trimEnd('.').ifBlank { "standing next to each other, natural friendly pose" }
+        val prompt = "Two people together in one photo, $scena. On the left: $p1. On the right: $p2. " +
+            "One continuous scene with a single shared background, consistent lighting, realistic, high detail."
+        val uvolnit = ChatJadro.velkostNacitaneho() + velkost(cesta!!) > LIMIT_SPOLU
+        if (uvolnit) ChatJadro.uvolniPamat()
+        nacitaj(cesta, uvolnitChat = false)
+        val kroky = maxOf((s?.kroky ?: 20) * 3 / 2, 12)
+        spust(prompt, "two separate images, split screen, seam, border, collage, duplicate person, deformed",
+            w, v, kroky, s?.cfg ?: 7f, predloha = px, sila = 0.62f) { nf, e ->
+            hotovo(nf, e)
+            if (uvolnit) { uvolniPamat(); ChatJadro.obnov() }
         }
     }
 

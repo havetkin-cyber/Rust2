@@ -14,6 +14,7 @@ object T {
     }
 
     private val sk = mapOf(
+        "spoj_treba_model" to "Na spojenie vyber obrázkový model (Z-Image, FLUX alebo FLUX.3 Klein) v Modely → Obrázky.",
         "spoj_kreslim" to "Spájam postavy do jedného obrázka…",
         "spoj_treba_klein" to "Na spájanie obrázkov treba model FLUX.3 Klein (Modely → Obrázky).",
         "upr_prekladam" to "Rozumiem úprave…",
@@ -505,6 +506,7 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "spoj_treba_model" to "To combine images, pick an image model (Z-Image, FLUX or FLUX.3 Klein) in Models → Images.",
         "spoj_kreslim" to "Combining the characters into one image…",
         "spoj_treba_klein" to "Combining images needs the FLUX.3 Klein model (Models → Images).",
         "upr_prekladam" to "Understanding the edit…",

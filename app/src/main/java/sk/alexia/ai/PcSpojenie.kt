@@ -69,6 +69,20 @@ object PcSpojenie {
         }.start()
     }
 
+    /** videoklip na PC: skladba z mobilu (uri) + obrázky z galérie PC */
+    fun pridajKlip(uri: android.net.Uri, fotky: List<String>, tempo: Int, hotovo: (String?) -> Unit) {
+        Thread {
+            val r = runCatching {
+                val cr = Platforma.app.contentResolver
+                val meno = runCatching { cr.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } }.getOrNull() ?: "skladba.mp3"
+                val data = cr.openInputStream(uri)!!.use { it.readBytes() }
+                if (data.size > 200_000_000) throw IllegalStateException("Skladba je príliš veľká")
+                Klient.klipPridaj(adr, pin, meno, data, fotky, tempo)
+            }
+            Platforma.naHlavnom { hotovo(r.exceptionOrNull()?.let { it.message ?: it.toString() }); obnovStav() }
+        }.start()
+    }
+
     fun zrus(id: String) {
         Thread { runCatching { Klient.videoZrus(adr, pin, id) }; Platforma.naHlavnom { stiahnute.remove(id); prefs.edit().remove(id).apply(); obnovStav() } }.start()
     }

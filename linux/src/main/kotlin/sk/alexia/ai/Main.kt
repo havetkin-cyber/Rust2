@@ -1556,6 +1556,8 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
 
                 // prenos štýlu (FLUX.3 Klein): obrázok z appky prekreslí v štýle iného obrázka
                 if (!videa) PrenosStyluKarta()
+                // videoklip na skladbu z obrázkov appky
+                if (videa) VideoklipKarta()
 
                 // galéria
                 if (!videa && o.galeria.isNotEmpty()) Sekcia(T("obr_sek_galeria", o.galeria.size), ikona = Icons.Default.PhotoLibrary) {
@@ -2511,4 +2513,75 @@ private fun InfoObrazka(f: java.io.File) {
 @Composable
 private fun InfoRiadok(k: String, h: String) {
     if (h.isNotBlank()) Row { Text(T(k) + ": ", color = Farby.tlmene, fontSize = 12.sp); Text(h, color = Farby.text, fontSize = 12.sp) }
+}
+
+/** Videoklip: skladba + obrázky z galérie appky → video strihané do rytmu */
+@Composable
+private fun VideoklipKarta() {
+    val k = Videoklip
+    var skladba by remember { mutableStateOf<java.io.File?>(null) }
+    val fotky = remember { mutableStateListOf<java.io.File>() }
+    var tempo by remember { mutableIntStateOf(2) }
+    var vyber by remember { mutableStateOf(false) }
+    var hotove by remember { mutableStateOf<java.io.File?>(null) }
+    var chyba by remember { mutableStateOf("") }
+    Sekcia(T("klip_nadpis"), ikona = Icons.Default.MusicVideo) {
+        Text(T("klip_info"), color = Farby.tlmene, fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.MusicNote, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+            Text(skladba?.name ?: T("klip_ziadna_skladba"), color = if (skladba != null) Farby.text else Farby.tlmene, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = { Platforma.vyberSubor(T("klip_vyber_skladbu"), Videoklip.PRIPONY_HUDBY) { skladba = it } }, enabled = !k.pracuje) {
+                Text(T("klip_skladba"), color = Farby.ruzova)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(T("klip_fotky", fotky.size), color = Farby.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = { vyber = true }, enabled = !k.pracuje) { Text(T("klip_pridat"), color = Farby.ruzova) }
+            TextButton(onClick = { fotky.clear(); fotky.addAll(ObrazkyJadro.galeria.take(30).reversed()) }, enabled = !k.pracuje && ObrazkyJadro.galeria.isNotEmpty()) {
+                Text(T("klip_posledne"), color = Farby.ruzova)
+            }
+            if (fotky.isNotEmpty()) IconButton(onClick = { fotky.clear() }, enabled = !k.pracuje) { Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene) }
+        }
+        if (fotky.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            fotky.forEachIndexed { i, f ->
+                val n = remember(f) { Platforma.nacitajObrazok(f, 8) }
+                Box(Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(Farby.plocha2).clickable(enabled = !k.pracuje) { fotky.removeAt(i) }) {
+                    if (n != null) Image(n, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    Text("${i + 1}", color = Color.White, fontSize = 11.sp, modifier = Modifier.align(Alignment.TopStart).background(Color(0x88000000)).padding(horizontal = 4.dp))
+                }
+            }
+        }
+        Text(T("klip_tempo"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(1 to "klip_pomaly", 2 to "klip_stredne", 3 to "klip_rychlo").forEach { (t, kl) ->
+                FilterChip(selected = tempo == t, onClick = { tempo = t }, label = { Text(T(kl)) }, enabled = !k.pracuje,
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        if (k.pracuje) {
+            Text(k.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
+            Casovac(true, k.zaciatok, 0)
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(progress = { k.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+            TextButton(onClick = { k.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
+        } else {
+            Casovac(false, 0, k.posledneTrvanie)
+            GradientTlacidlo(T("klip_vytvorit"), Icons.Default.MusicVideo, Modifier.fillMaxWidth(), enabled = skladba != null && fotky.isNotEmpty()) {
+                chyba = ""; hotove = null
+                k.vytvor(skladba!!, fotky.toList(), tempo) { f, e -> hotove = f; chyba = e }
+            }
+        }
+        if (chyba.isNotBlank()) Text("⚠ $chyba", color = Farby.ruzova, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        hotove?.let { f ->
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("✓ " + f.name, color = Farby.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(f) }.onFailure { Platforma.otvorOdkaz(f.toURI().toString()) } }) {
+                    Text(T("klip_prehrat"), color = Farby.ruzova)
+                }
+            }
+        }
+    }
+    if (vyber) GaleriaVyberDialog(T("klip_pridat"), null, { vyber = false }) { f -> if (f !in fotky) fotky += f; vyber = false }
 }

@@ -133,6 +133,14 @@ object Klient {
         return JSONObject(spoj(adresa, pin, "/api/video/pridaj", t).inputStream.bufferedReader(Charsets.UTF_8).readText()).getString("id")
     }
 
+    /** videoklip na PC: skladba z mobilu + obrázky z galérie PC; vráti id úlohy */
+    fun klipPridaj(adresa: String, pin: String, nazov: String, skladba: ByteArray, fotky: List<String>, tempo: Int): String {
+        val q = "/api/klip/pridaj?tempo=$tempo&nazov=" + java.net.URLEncoder.encode(nazov, "UTF-8") +
+            "&fotky=" + java.net.URLEncoder.encode(fotky.joinToString("|"), "UTF-8")
+        val k = spojTelo(adresa, pin, q, skladba, "application/octet-stream", citanie = 120_000)
+        return JSONObject(k.inputStream.bufferedReader(Charsets.UTF_8).readText()).getString("id")
+    }
+
     fun videoStav(adresa: String, pin: String): JSONObject =
         JSONObject(spoj(adresa, pin, "/api/video/stav").inputStream.bufferedReader(Charsets.UTF_8).readText())
 

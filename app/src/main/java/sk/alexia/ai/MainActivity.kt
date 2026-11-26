@@ -1568,6 +1568,55 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                 }
                 if (galeria) GaleriaPcDialog(lenAppka = false, zavri = { galeria = false }) { pc.ulozObrazok(it) }
             }
+            // ---- videoklip na skladbu (skladba z mobilu, obrázky z galérie PC, robí PC)
+            Sekcia(T("klip_nadpis")) {
+                var skladba by remember { mutableStateOf<Uri?>(null) }
+                var menoSkladby by remember { mutableStateOf("") }
+                val fotky = remember { mutableStateListOf<String>() }
+                var tempo by remember { mutableIntStateOf(2) }
+                var vyber by remember { mutableStateOf(false) }
+                var posiela by remember { mutableStateOf(false) }
+                val vyberSkladbu = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+                    if (uri != null) {
+                        skladba = uri
+                        menoSkladby = runCatching { c.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { k -> if (k.moveToFirst()) k.getString(0) else null } }.getOrNull() ?: "skladba"
+                    }
+                }
+                Text(T("klip_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.MusicNote, null, tint = Farby.ruzova, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                    Text(menoSkladby.ifBlank { T("klip_ziadna_skladba") }, color = if (skladba != null) Farby.text else Farby.tlmene, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { vyberSkladbu.launch(arrayOf("audio/*")) }) { Text(T("klip_skladba"), color = Farby.ruzova) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("klip_fotky_pc", fotky.size), color = Farby.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { vyber = true }) { Text(T("klip_pridat"), color = Farby.ruzova) }
+                    if (fotky.isNotEmpty()) IconButton(onClick = { fotky.clear() }) { Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene) }
+                }
+                if (fotky.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    fotky.forEachIndexed { i, m ->
+                        val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, m) {
+                            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { pc.nahlad(m)?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+                        }
+                        Box(Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)).background(Farby.plocha2).clickable { fotky.removeAt(i) }) {
+                            bmp?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                            Text("${i + 1}", color = Color.White, fontSize = 11.sp, modifier = Modifier.align(Alignment.TopStart).background(Color(0x88000000)).padding(horizontal = 4.dp))
+                        }
+                    }
+                }
+                Text(T("klip_tempo"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(1 to "klip_pomaly", 2 to "klip_stredne", 3 to "klip_rychlo").forEach { (t, kl) ->
+                        FilterChip(selected = tempo == t, onClick = { tempo = t }, label = { Text(T(kl)) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                GradientTlacidlo(T("klip_odoslat"), Icons.AutoMirrored.Filled.Send, Modifier.padding(top = 8.dp).fillMaxWidth(), enabled = skladba != null && fotky.isNotEmpty() && !posiela) {
+                    posiela = true
+                    pc.pridajKlip(skladba!!, fotky.toList(), tempo) { e -> posiela = false; if (e == null) { fotky.clear(); skladba = null; menoSkladby = ""; Platforma.oznam(T("pc_odoslane")) } else Platforma.oznam("⚠ $e") }
+                }
+                if (vyber) GaleriaPcDialog(lenAppka = true, zavri = { vyber = false }) { if (it !in fotky) fotky += it; vyber = false }
+            }
             // ---- rad videí na PC
             Sekcia(T("pc_rad")) {
                 val st = pc.stav
@@ -1582,8 +1631,8 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                             Text(u.optString("popis").ifBlank { T("pc_bez_popisu") }, color = Farby.text, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             IconButton(onClick = { pc.zrus(id) }, modifier = Modifier.size(32.dp)) { Icon(if (u.optString("stav") == "bezi") Icons.Default.StopCircle else Icons.Default.DeleteOutline, null, tint = Farby.tlmene) }
                         }
-                        val druh = if (u.optString("predloha").isNotBlank()) T("pc_druh_rozhybat") else if (u.optBoolean("cezObrazok")) T("pc_druh_obrazok") else T("pc_druh_text")
-                        Text("${dlzkaText(u.optInt("sekundy"))} · $druh", color = Farby.tlmene, fontSize = 12.sp)
+                        val druh = if (u.optBoolean("klip")) T("klip_nadpis") else if (u.optString("predloha").isNotBlank()) T("pc_druh_rozhybat") else if (u.optBoolean("cezObrazok")) T("pc_druh_obrazok") else T("pc_druh_text")
+                        Text(if (u.optBoolean("klip")) druh else "${dlzkaText(u.optInt("sekundy"))} · $druh", color = Farby.tlmene, fontSize = 12.sp)
                         when (u.optString("stav")) {
                             "caka" -> Text(T("pc_caka"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                             "bezi" -> {

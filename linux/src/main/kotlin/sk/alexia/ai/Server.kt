@@ -65,6 +65,7 @@ object Server {
             s.createContext("/api/galeria/zoznam") { x -> obsluz(x) { galeria(x) } }
             s.createContext("/api/galeria/nahlad") { x -> obsluz(x) { nahlad(x) } }
             s.createContext("/api/galeria/subor") { x -> obsluz(x) { obrazokSubor(x) } }
+            s.createContext("/api/klip/pridaj") { x -> obsluz(x) { klipPridaj(x) } }
             s.createContext("/api/vylepsi") { x -> obsluz(x) { vylepsi(x) } }
             s.createContext("/api/styl") { x -> obsluz(x) { prenosStylu(x) } }
             s.start(); http = s
@@ -197,6 +198,23 @@ object Server {
         if (predloha == null && ObrazkyJadro.videoSada() == null) { odpovedz(x, 400, T("vai_ziadny")); return }
         val sek = j.optInt("sekundy", 5).coerceIn(1, 180)
         val id = VzdialeneVidea.pridaj(popis, sek, j.optBoolean("cezObrazok"), predloha)
+        odpovedz(x, 200, JSONObject().put("id", id).toString())
+    }
+
+    /** videoklip z mobilu: telo = skladba, ?fotky=meno|meno… (galéria PC), &tempo=1–3, &nazov=… */
+    private fun klipPridaj(x: HttpExchange) {
+        val fotky = parameter(x, "fotky").orEmpty().split('|').filter { it.isNotBlank() }
+        if (fotky.isEmpty()) { odpovedz(x, 400, T("klip_bez_fotiek")); return }
+        if (fotky.any { ObrazkyJadro.obrazokZGalerie(it) == null }) { odpovedz(x, 400, "Obrázok sa na PC nenašiel"); return }
+        val nazov = (parameter(x, "nazov") ?: "skladba.mp3").replace(Regex("[^\\p{L}\\p{N}._ -]"), "_").takeLast(80)
+        val d = File(Platforma.priecinok, "skladby-z-mobilu").apply { mkdirs() }
+        val f = File(d, System.currentTimeMillis().toString(36) + "_" + nazov)
+        x.requestBody.use { i -> f.outputStream().use { o ->
+            val buf = ByteArray(1 shl 16); var n = 0L
+            while (true) { val r = i.read(buf); if (r < 0) break; n += r; if (n > 200_000_000) { o.close(); f.delete(); throw IllegalStateException("Skladba je príliš veľká") }; o.write(buf, 0, r) }
+        } }
+        if (f.length() == 0L) { f.delete(); odpovedz(x, 400, T("klip_bez_skladby")); return }
+        val id = VzdialeneVidea.pridajKlip(nazov, f, fotky, parameter(x, "tempo")?.toIntOrNull() ?: 2)
         odpovedz(x, 200, JSONObject().put("id", id).toString())
     }
 

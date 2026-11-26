@@ -71,4 +71,7 @@ jobs:
           Write-Host "Pridane k vydaniu $tag"
           # stály kanál aktualizácií – appka sa pozerá sem (nezávisí od toho, ktoré vydanie je práve „najnovšie“)
           gh release view aktualizacie 2>$null; if ($LASTEXITCODE -ne 0) { gh release create aktualizacie --prerelease --title "Aktualizácie (PC)" --notes "Stály kanál aktualizácií pre Windows a Linux" }
-          gh release upload aktualizacie AlexiaAI-Windows.zip windows-verzia.txt --clobber
+          # kanál aktualizácií: Linux a Windows nahrávajú naraz, GitHub občas vráti 404 – skúsiť znova
+          $ok = $false
+          foreach ($i in 1..5) { gh release upload aktualizacie AlexiaAI-Windows.zip windows-verzia.txt --clobber; if ($LASTEXITCODE -eq 0) { $ok = $true; break }; Start-Sleep -Seconds (15 * $i) }
+          if (-not $ok) { exit 1 }

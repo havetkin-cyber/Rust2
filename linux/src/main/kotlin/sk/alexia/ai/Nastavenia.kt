@@ -34,6 +34,8 @@ class Nastavenia {
     /** dĺžka AI videa v sekundách a šetrenie VRAM (kodér a VAE videa v RAM) */
     var dlzkaVidea by mutableIntStateOf(p.getProperty("dlzkaVidea")?.toIntOrNull() ?: 2)
     var setritVram by mutableStateOf(p.getProperty("setritVram") == "true")
+    /** videá nad 2 s robiť po 2 s kúskoch – Windows inak pri dlhom výpočte reštartuje ovládač grafiky (device lost) */
+    var videoKusy by mutableStateOf(p.getProperty("videoKusy") != "false")
     /** tvar obrázka: stvorec / vyska (na výšku) / sirka (na šírku) */
     var obrPomer by mutableStateOf(p.getProperty("obrPomer") ?: "stvorec")
     /** vlastný rozmer obrázka (pri tvare „vlastne“) */
@@ -91,6 +93,7 @@ class Nastavenia {
         p.setProperty("obrSirka", obrSirka.toString())
         p.setProperty("obrVyska", obrVyska.toString())
         p.setProperty("setritVram", setritVram.toString())
+        p.setProperty("videoKusy", videoKusy.toString())
         p.setProperty("videoCezObrazok", videoCezObrazok.toString())
         p.setProperty("skladanie", skladanie)
         p.setProperty("videoZvacsenie", videoZvacsenie.toString())

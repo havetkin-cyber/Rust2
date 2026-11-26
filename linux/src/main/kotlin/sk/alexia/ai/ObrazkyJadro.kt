@@ -658,7 +658,9 @@ object ObrazkyJadro {
         // rozhýbanie obrázka: len obrázky vytvorené a podpísané appkou
         if (predloha != null && seedObrazka(predloha) == null) { hotovo(null, T("m3d_len_appka")); return }
         val dlzka = sekundy ?: ChatJadro.nastavenia.dlzkaVidea
-        val nadvazovat = dlzka > 5
+        // nad 5 s vždy po kúskoch; 3–5 s po kúskoch, ak je zapnuté „Video po kúskoch“ (jeden veľký výpočet
+        // so 121 snímkami trvá na slabšej grafike tak dlho, že Windows ovládač reštartuje a appka spadne)
+        val nadvazovat = dlzka > 5 || (dlzka > KUS_SEKUND && ChatJadro.nastavenia.videoKusy && i2vSada() != null)
         val sada = (if (predloha != null || nadvazovat) (aktivnaSada()?.takeIf { it.video?.i2v == true } ?: i2vSada())
                     else (aktivnaSada()?.takeIf { it.video != null } ?: videoSada()))
             ?: run { hotovo(null, T(if (predloha != null || nadvazovat) "vai_ziadny_i2v" else "vai_ziadny")); return }

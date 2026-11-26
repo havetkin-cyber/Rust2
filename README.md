@@ -54,6 +54,7 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
   rozhýbanie obrázkov z PC a galéria PC. **Zamknuté, kým mobil nie je pripojený k PC.** Pri každej úlohe beží čas, hotová ukáže, ako dlho trvala.
 - 🖥 Ku každému videu sa uloží prompt, dĺžka, model a čas tvorby (`video.mp4.json`)
 - 🖥 Oprava pádu pri tvorbe videa na notebookoch s dvomi grafikami – integrovaná Intel/AMD grafika sa pri tvorbe nepoužíva, všetko ide na NVIDIA
+- 🖥 **Video po kúskoch** (zapnuté) – aj 3–5 s videá sa robia po 2 s nadväzujúcich kúskoch; na 6 GB grafikách to zabráni pádu „device lost“ (Windows inak reštartuje ovládač grafiky)
 - 🖥 **Vylepšenie hocijakého videa** – doostrenie, odšumenie, farby, stabilizácia, 60 fps, AI zväčšenie na Full HD / 4K
 
 **🧩 LoRA adaptéry** (🖥)

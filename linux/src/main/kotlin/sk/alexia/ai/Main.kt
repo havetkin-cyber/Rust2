@@ -1435,6 +1435,14 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                             Switch(checked = ChatJadro.nastavenia.setritVram, onCheckedChange = { val ns = ChatJadro.nastavenia; ns.setritVram = it; ns.uloz() },
                                 colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                         }
+                        Row(Modifier.fillMaxWidth().clickable { val ns = ChatJadro.nastavenia; ns.videoKusy = !ns.videoKusy; ns.uloz() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(T("vai_kusy"), color = Farby.text, fontSize = 14.sp)
+                                Text(T("vai_kusy_info"), color = Farby.tlmene, fontSize = 12.sp)
+                            }
+                            Switch(checked = ChatJadro.nastavenia.videoKusy, onCheckedChange = { val ns = ChatJadro.nastavenia; ns.videoKusy = it; ns.uloz() },
+                                colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                        }
                         // skladanie snímok: VAE (kvalita) / TAE / LightTAE (rýchle)
                         val nsk = ChatJadro.nastavenia
                         if (o.aktivnaSada()?.let { o.maSkladanie(it) } == true || o.videoSada()?.let { o.maSkladanie(it) } == true) {

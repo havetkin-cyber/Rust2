@@ -83,4 +83,6 @@ jobs:
           echo "Pridané k vydaniu $TAG"
           # stály kanál aktualizácií – appka sa pozerá sem
           gh release view aktualizacie >/dev/null 2>&1 || gh release create aktualizacie --prerelease --title "Aktualizácie (PC)" --notes "Stály kanál aktualizácií pre Windows a Linux"
-          gh release upload aktualizacie AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage linux-verzia.txt --clobber
+          # kanál aktualizácií: Linux a Windows nahrávajú naraz, GitHub občas vráti 404 – skúsiť znova
+          ok=0; for i in 1 2 3 4 5; do gh release upload aktualizacie AlexiaAI-Linux.zip AlexiaAI-x86_64.AppImage linux-verzia.txt --clobber && { ok=1; break; }; sleep $((15*i)); done
+          [ "$ok" = 1 ]

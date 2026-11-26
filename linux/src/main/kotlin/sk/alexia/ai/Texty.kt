@@ -14,6 +14,8 @@ object T {
     }
 
     private val sk = mapOf(
+        "vai_kusy" to "Video po kúskoch (stabilnejšie)",
+        "vai_kusy_info" to "Videá nad 2 s sa robia po 2 s kúskoch, ktoré na seba nadväzujú. Na grafikách so 6 GB zabráni pádu (Windows inak reštartuje ovládač grafiky).",
         "cas_hotovo" to "Hotovo za %1\$s",
         "cas_info_prompt" to "Prompt",
         "cas_info_seed" to "Seed",
@@ -466,6 +468,8 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "vai_kusy" to "Video in pieces (more stable)",
+        "vai_kusy_info" to "Videos over 2 s are made in connected 2 s pieces. Prevents crashes on 6 GB GPUs (otherwise Windows resets the graphics driver).",
         "cas_hotovo" to "Done in %1\$s",
         "cas_info_prompt" to "Prompt",
         "cas_info_seed" to "Seed",

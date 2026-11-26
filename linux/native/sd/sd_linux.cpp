@@ -1,5 +1,25 @@
 // Alexia AI pre Linux: všetko z mobilnej verzie (sd_jni.cpp) + vylepšenie fotky, ktoré je len na Linuxe.
 #include "../../../obrazky/src/main/cpp/sd_jni.cpp"
+#ifndef __ANDROID__
+#include <cctype>
+#include "ggml-backend.h"
+// Notebook s integrovanou grafikou (Intel/AMD) a zároveň NVIDIA: auto-fit by dal časť modelu (napr. VAE) na integrovanú
+// grafiku – Vulkan medzi dvoma grafikami potom padá. Integrovanej grafike dáme takmer nulový rozpočet, aby sa nepoužila.
+static std::string skryIntegrovanu() {
+    bool samostatna = false; std::string igpu;
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        ggml_backend_dev_t d = ggml_backend_dev_get(i);
+        auto t = ggml_backend_dev_type(d);
+        if (t == GGML_BACKEND_DEVICE_TYPE_GPU) samostatna = true;
+        if (t == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+            std::string n = ggml_backend_dev_name(d);
+            for (auto& c : n) c = (char)std::tolower((unsigned char)c);
+            igpu += (igpu.empty() ? "" : ",") + n + "=0.01";
+        }
+    }
+    return samostatna ? igpu : "";
+}
+#endif
 
 // log stable-diffusion.cpp do súboru (napr. %LOCALAPPDATA%\\AlexiaAI\\sd.log)
 F(void, nastavLog)(JNIEnv* env, jobject, jstring cesta) {
@@ -117,6 +137,9 @@ F(jlong, nacitajViac)(JNIEnv* env, jobject, jobjectArray kluce, jobjectArray hod
         v = ok(sd_opt_set_string(o, k.c_str(), h.c_str()));
     }
     if (v && fa) v = ok(sd_opt_set_bool(o, "diffusion_flash_attn", true));
+#ifndef __ANDROID__
+    if (v) { std::string sk = skryIntegrovanu(); if (!sk.empty()) v = ok(sd_opt_set_string(o, "max_vram", sk.c_str())); }
+#endif
     sd_ctx_t* ctx = nullptr;
     v = v && ok(sd_ctx_create(o, &ctx));
     sd_opt_free(o);

@@ -32,6 +32,10 @@ object VylepsenieJadro {
         private set
     var rozmerVysledku by mutableStateOf(0 to 0)
         private set
+    var zaciatok by mutableStateOf(0L)
+        private set
+    var posledneTrvanie by mutableStateOf(0L)
+        private set
     var pracuje by mutableStateOf(false)
         private set
     var cinnost by mutableStateOf("")
@@ -131,7 +135,7 @@ object VylepsenieJadro {
         val f = vstup ?: return
         if (pracuje) return
         if (nasobok > 1 && !mamModel()) { chyba = T("vyl_treba_model"); return }
-        pracuje = true; chyba = ""; vysledok = null
+        pracuje = true; chyba = ""; vysledok = null; zaciatok = System.currentTimeMillis()
         ChatJadro.uvolniPamat(); ObrazkyJadro.uvolniPamat()
         val nas = nasobok; val jas = autoJas; val far = farby; val ostr = doostrit
         vlakno.execute {
@@ -170,7 +174,7 @@ object VylepsenieJadro {
                 ciel
             }
             Platforma.naHlavnom {
-                pracuje = false; cinnost = ""
+                pracuje = false; cinnost = ""; posledneTrvanie = System.currentTimeMillis() - zaciatok
                 r.onSuccess { vysledok = it; ObrazkyJadro.galeria.add(0, it) }
                 r.onFailure { chyba = if (it is OutOfMemoryError) T("vyl_pamat") else it.message ?: T("vyl_zlyhalo") }
             }
@@ -181,7 +185,7 @@ object VylepsenieJadro {
     fun vylepsiNaPc() {
         val f = vstup ?: return
         if (pracuje) return
-        pracuje = true; chyba = ""; vysledok = null; cinnost = T("vyl_pc_pracuje")
+        pracuje = true; chyba = ""; vysledok = null; zaciatok = System.currentTimeMillis(); cinnost = T("vyl_pc_pracuje")
         val nas = nasobok; val jas = autoJas; val far = farby; val ostr = doostrit
         val n = ChatJadro.nastavenia
         Thread {
@@ -203,7 +207,7 @@ object VylepsenieJadro {
                 ciel
             }
             Platforma.naHlavnom {
-                pracuje = false; cinnost = ""
+                pracuje = false; cinnost = ""; posledneTrvanie = System.currentTimeMillis() - zaciatok
                 r.onSuccess { vysledok = it; ObrazkyJadro.galeria.add(0, it) }
                 r.onFailure { chyba = it.message ?: T("vyl_zlyhalo") }
             }

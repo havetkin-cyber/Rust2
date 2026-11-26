@@ -123,6 +123,21 @@ object ObrazkyJadro {
     }
 
     /** obrázok nakreslí iné zariadenie (prepojenie v sieti) */
+    /** časovač: kedy začala tvorba a ako dlho trvala posledná */
+    var zaciatok by mutableStateOf(0L)
+        private set
+    var posledneTrvanie by mutableStateOf(0L)
+        private set
+
+    /** údaje uložené pri obrázku: popis, seed, čas tvorby, rozmer */
+    fun udaje(f: File): org.json.JSONObject? = runCatching { org.json.JSONObject(File(f.path + ".json").readText()) }.getOrNull()
+    private fun ulozUdaje(f: File, popis: String, seed: Long?, trvanie: Long, kde: String) = runCatching {
+        val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(f.path, o)
+        File(f.path + ".json").writeText(org.json.JSONObject().put("popis", popis.trim()).put("seed", seed ?: 0L).put("trvanie", trvanie)
+            .put("w", o.outWidth).put("h", o.outHeight).put("kde", kde).toString())
+    }
+
     /** kreslí práve PC (mobil nevie priebeh – ukáže sa len „kreslí PC…“) */
     var naPc by mutableStateOf(false)
         private set
@@ -139,11 +154,14 @@ object ObrazkyJadro {
                          sirka: Int = 0, vyska: Int = 0, hotovo: (File?, String) -> Unit) {
         if (generuje) return
         generuje = true; priebeh = 0f; naPc = true
+        val start = System.currentTimeMillis(); zaciatok = start
         Thread {
             val f = File(priecinokObrazkov(), "alexia_${System.currentTimeMillis()}.png")
             val r = runCatching { Klient.obrazok(adresa, pin, popis, f, negativny, pomer, sirka, vyska) }
+            val trvanie = System.currentTimeMillis() - start
+            if (r.isSuccess) ulozUdaje(f, popis, null, trvanie, "pc")
             hlavne.post {
-                generuje = false; naPc = false
+                generuje = false; naPc = false; posledneTrvanie = trvanie
                 r.onSuccess { galeria.add(0, f); hotovo(f, "") }
                 r.onFailure { f.delete(); hotovo(null, it.message ?: "Spojenie zlyhalo") }
             }
@@ -154,6 +172,7 @@ object ObrazkyJadro {
     fun prenosStyluNaPc(obsahMeno: String, styl: android.net.Uri, doplnok: String, hotovo: (File?, String) -> Unit) {
         if (generuje) return
         generuje = true; priebeh = 0f; naPc = true; chyba = ""
+        val start = System.currentTimeMillis(); zaciatok = start
         val n = ChatJadro.nastavenia
         Thread {
             val f = File(priecinokObrazkov(), "alexia_styl_${System.currentTimeMillis()}.png")
@@ -168,8 +187,10 @@ object ObrazkyJadro {
                 bmp.recycle()
                 Klient.prenosStylu(n.vzdialenaAdresa, n.vzdialenyPin, obsahMeno, jpg, doplnok, f)
             }
+            val trvanie = System.currentTimeMillis() - start
+            if (r.isSuccess) ulozUdaje(f, "prenos štýlu: $doplnok", null, trvanie, "pc")
             hlavne.post {
-                generuje = false; naPc = false
+                generuje = false; naPc = false; posledneTrvanie = trvanie
                 r.onSuccess { galeria.add(0, f); posledny = f; hotovo(f, "") }
                 r.onFailure { f.delete(); hotovo(null, it.message ?: T("styl_nepodarilo")) }
             }
@@ -178,6 +199,7 @@ object ObrazkyJadro {
 
     private fun spust(prompt: String, negativny: String, sirka: Int, vyska: Int, kroky: Int, cfg: Float, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
+        val start = System.currentTimeMillis(); zaciatok = start
         val seed = (Math.random() * Int.MAX_VALUE).toLong()
         val sledovac = object : Runnable {
             override fun run() { if (generuje) { priebeh = Sd.priebeh(); hlavne.postDelayed(this, 300) } }
@@ -197,8 +219,10 @@ object ObrazkyJadro {
                     }.onFailure { e = it.message ?: "Obrázok sa nepodarilo uložiť" }
                 } else e = Sd.chyba()
             }
+            val trvanie = System.currentTimeMillis() - start
+            subor?.let { ulozUdaje(it, prompt, seed, trvanie, "mobil") }
             hlavne.post {
-                generuje = false; priebeh = 0f
+                generuje = false; priebeh = 0f; posledneTrvanie = trvanie
                 subor?.let { galeria.add(0, it) }
                 hotovo(subor, e)
             }

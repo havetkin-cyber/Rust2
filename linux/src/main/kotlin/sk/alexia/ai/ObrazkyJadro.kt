@@ -397,6 +397,7 @@ object ObrazkyJadro {
                       pevnySeed: Long? = null, predloha: IntArray? = null, sila: Float = 0.6f, sprite: Boolean = false,
                       referencie: List<BufferedImage>? = null, hotovo: (File?, String) -> Unit) {
         generuje = true; priebeh = 0f; chyba = ""
+        val start = System.currentTimeMillis(); zaciatok = start
         // krátky seed (5 číslic), aby sa dal ľahko napísať: „uprav seed 12345 …“
         val seed = pevnySeed ?: (10000L..99999L).random()
         // priebeh čítame z iného vlákna, kým generovanie beží
@@ -434,13 +435,14 @@ object ObrazkyJadro {
                         // údaje o obrázku: seed a popis – podľa nich sa dá obrázok neskôr upraviť
                         val zaznam = JSONObject().put("seed", seed).put("popis", prompt.trim()).put("neg", negativny.trim())
                             .put("w", r[0]).put("h", r[1]).put("kroky", kroky).put("cfg", cfg.toDouble()).put("model", aktivnyModel ?: "")
+                            .put("trvanie", System.currentTimeMillis() - start)
                         Podpis.podpis(subor!!, zaznam)
                         File(subor!!.path + ".json").writeText(zaznam.toString())
                     }.onFailure { e = it.message ?: "Obrázok sa nepodarilo uložiť" }
                 } else e = Sd.chyba()
             }
             Platforma.naHlavnom {
-                generuje = false; priebeh = 0f
+                generuje = false; priebeh = 0f; posledneTrvanie = System.currentTimeMillis() - start
                 if (doGalerie) subor?.let { galeria.add(0, it) }
                 hotovo(subor, e)
             }
@@ -672,6 +674,7 @@ object ObrazkyJadro {
         val snimokKusa = snimokPre(v, if (nadvazovat) KUS_SEKUND else dlzka)
         kusovSpolu = kusov; kusHotovych = 0; kusText = if (kusov > 1) T("vai_kus", 1, kusov) else ""
         generuje = true; priebeh = 0f; chyba = ""
+        val start = System.currentTimeMillis(); zaciatok = start
         skladam = false; zrusVideo = false
         Thread {
             var kusPredtym = -1; var videlKonec = false; var sklada = false
@@ -768,8 +771,12 @@ object ObrazkyJadro {
                     else if (e.isEmpty()) e = "ffmpeg zlyhal"
                 }
             }
+            // údaje pri videu (popis, čas tvorby, dĺžka)
+            val trvanie = System.currentTimeMillis() - start
+            subor?.let { f -> runCatching { File(f.path + ".json").writeText(JSONObject().put("popis", popis.trim()).put("trvanie", trvanie)
+                .put("sekundy", dlzka).put("model", sada.nazov).put("predloha", predloha?.name ?: "").toString()) } }
             Platforma.naHlavnom {
-                generuje = false; priebeh = 0f; kusText = ""; skladam = false
+                generuje = false; priebeh = 0f; kusText = ""; skladam = false; posledneTrvanie = trvanie
                 // vráti voľbu obrázkového modelu (načíta sa, keď ho bude treba)
                 if (predtym != null && predtym != "sada:" + sada.id) { uvolniPamat(); aktivnyModel = predtym }
                 hotovo(subor, e)
@@ -779,6 +786,15 @@ object ObrazkyJadro {
 
     /** chat + obrázky spolu do ~10 GB, aby na 16 GB ostalo miesto pre systém */
     private const val LIMIT_SPOLU = 10_000L * 1024 * 1024
+
+    /** časovač: kedy začala tvorba a ako dlho trvala posledná */
+    var zaciatok by mutableStateOf(0L)
+        private set
+    var posledneTrvanie by mutableStateOf(0L)
+        private set
+
+    /** údaje uložené pri obrázku/videu: popis, seed, čas tvorby, model, rozmer */
+    fun udaje(f: File): JSONObject? = runCatching { JSONObject(File(f.path + ".json").readText()) }.getOrNull()
 
     @Volatile private var zrusVideo = false
     fun zrus() { zrusVideo = true; if (h != 0L) Sd.zrus(h) }

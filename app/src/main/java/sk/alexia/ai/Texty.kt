@@ -14,6 +14,14 @@ object T {
     }
 
     private val sk = mapOf(
+        "cas_hotovo" to "Hotovo za %1\$s",
+        "cas_info_prompt" to "Prompt",
+        "cas_info_seed" to "Seed",
+        "cas_info_trvanie" to "Trvanie",
+        "cas_info_model" to "Model",
+        "cas_info_rozmer" to "Rozmer",
+        "cas_info_kde" to "Vytvorené",
+        "cas_kopirovat" to "Kopírovať prompt",
         "akt_android_notif" to "Ťukni sem po stiahnutí a nainštaluj novú verziu",
         "akt_android_text" to "Nová verzia je v Stiahnutých. Ťukni na notifikáciu „Alexia AI“ alebo ju otvor v Stiahnutých a potvrď inštaláciu. Chaty ani modely sa nestratia.",
         "akt_android_otvorit" to "Otvoriť Stiahnuté",
@@ -376,6 +384,14 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "cas_hotovo" to "Done in %1\$s",
+        "cas_info_prompt" to "Prompt",
+        "cas_info_seed" to "Seed",
+        "cas_info_trvanie" to "Duration",
+        "cas_info_model" to "Model",
+        "cas_info_rozmer" to "Size",
+        "cas_info_kde" to "Created on",
+        "cas_kopirovat" to "Copy prompt",
         "akt_android_notif" to "Tap here after download to install the new version",
         "akt_android_text" to "The new version is in Downloads. Tap the “Alexia AI” notification or open it in Downloads and confirm the install. Chats and models are kept.",
         "akt_android_otvorit" to "Open Downloads",

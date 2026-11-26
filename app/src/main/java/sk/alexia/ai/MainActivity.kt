@@ -1014,14 +1014,17 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                     Spacer(Modifier.height(6.dp))
                     if (o.generuje && o.naPc) {
                         Text(T("obr_kresli_pc"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                        Casovac(true, o.zaciatok, 0)
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                     } else if (o.generuje) {
                         Text(stringResource(R.string.obr_tvorim, (o.priebeh * 100).roundToInt()), color = Farby.text, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                        Casovac(true, o.zaciatok, 0)
                         TextButton(onClick = { o.zrus() }) { Text(stringResource(R.string.zrusit), color = Farby.tlmene) }
                     } else {
+                        Casovac(false, 0, o.posledneTrvanie)
                         // dve tlačidlá: v mobile, alebo na PC (zamknuté, kým nie je mobil pripojený k PC)
                         LaunchedEffect(Unit) { PcSpojenie.skontroluj() }
                         val pcOk = PcSpojenie.pripojene && PcSpojenie.info?.obrazky == true
@@ -1130,6 +1133,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                         Icon(Icons.Default.DeleteOutline, null, tint = Farby.tlmene)
                     }
                 }
+                InfoObrazka(f)
             }
         }
     }
@@ -1330,8 +1334,10 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
+                if (!v.pracuje) Casovac(false, 0, v.posledneTrvanie)
                 if (v.pracuje) {
                     Text(v.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Casovac(true, v.zaciatok, 0)
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 } else {
@@ -1582,11 +1588,17 @@ private fun VideaPcObrazovka(naNastavenia: () -> Unit, spat: () -> Unit) {
                             "caka" -> Text(T("pc_caka"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                             "bezi" -> {
                                 val p = st.optDouble("priebeh", 0.0).toFloat()
-                                Text(st.optString("text").ifBlank { T("pc_tvori", (p * 100).roundToInt()) }, color = Farby.text, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                                // čas beží ďalej aj medzi obnoveniami stavu (každé 4 s)
+                                val ms = u.optLong("bezi_ms"); val prijate = remember(ms) { System.currentTimeMillis() }
+                                var teraz by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                                LaunchedEffect(Unit) { while (true) { teraz = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
+                                Text("⏱ " + Cas.text(ms + (teraz - prijate)), color = Farby.ruzova, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                                Text(st.optString("text").ifBlank { T("pc_tvori", (p * 100).roundToInt()) }, color = Farby.text, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                                 LinearProgressIndicator(progress = { p }, modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha)
                             }
                             "chyba" -> Text("⚠ " + u.optString("chyba"), color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                             "hotova" -> {
+                                if (u.optLong("trvanie") > 0) Text("✓ " + T("cas_hotovo", Cas.text(u.optLong("trvanie"))), color = Farby.zelena, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                                 val sp = pc.stahuje[id]
                                 val uri = pc.stiahnute[id]
                                 when {
@@ -1769,4 +1781,43 @@ private fun PrenosStyluPcKarta() {
             if (vyber) GaleriaPcDialog(lenAppka = true, zavri = { vyber = false }) { obsah = it; vyber = false }
         }
     }
+}
+
+/** Stopky: počas tvorby počíta od 0, po dokončení ukáže celkový čas. */
+@Composable
+private fun Casovac(bezi: Boolean, zaciatok: Long, trvanie: Long) {
+    var teraz by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(bezi, zaciatok) {
+        while (bezi) { teraz = System.currentTimeMillis(); kotlinx.coroutines.delay(500) }
+    }
+    if (bezi && zaciatok > 0) Text("⏱ " + Cas.text(teraz - zaciatok), color = Farby.ruzova, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    else if (!bezi && trvanie > 0) Text("✓ " + T("cas_hotovo", Cas.text(trvanie)), color = Farby.tlmene, fontSize = 12.sp)
+}
+
+/** Pod obrázkom: prompt (dá sa skopírovať), seed, čas tvorby, rozmer a model. */
+@Composable
+private fun InfoObrazka(f: java.io.File) {
+    val u = remember(f) { ObrazkyJadro.udaje(f) } ?: return
+    val schranka = androidx.compose.ui.platform.LocalClipboardManager.current
+    val popis = u.optString("popis")
+    Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Farby.plocha2).padding(10.dp)) {
+        if (popis.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(T("cas_info_prompt"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { schranka.setText(androidx.compose.ui.text.AnnotatedString(popis)) }) { Text(T("cas_kopirovat"), color = Farby.ruzova, fontSize = 12.sp) }
+            }
+            Text(popis, color = Farby.text, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+        }
+        if (u.has("seed")) InfoRiadok("cas_info_seed", u.optLong("seed").toString())
+        if (u.optLong("trvanie") > 0) InfoRiadok("cas_info_trvanie", Cas.text(u.optLong("trvanie")))
+        if (u.optInt("w") > 0) InfoRiadok("cas_info_rozmer", "${u.optInt("w")} × ${u.optInt("h")}")
+        InfoRiadok("cas_info_model", u.optString("model").substringAfterLast('/').substringAfterLast('\\'))
+        InfoRiadok("cas_info_kde", u.optString("kde"))
+    }
+}
+
+@Composable
+private fun InfoRiadok(k: String, h: String) {
+    if (h.isNotBlank()) Row { Text(T(k) + ": ", color = Farby.tlmene, fontSize = 12.sp); Text(h, color = Farby.text, fontSize = 12.sp) }
 }

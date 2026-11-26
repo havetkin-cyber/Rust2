@@ -41,6 +41,8 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
 - ✅🖥 Pozadia na výber, 1 / 4 / 8 variantov naraz, obrázky aj priamo v chate
 - 🖥 Každý obrázok má **seed**; úprava obrázka podľa seedu (`uprav seed 12345 a pridaj šiltovku`)
 - ✅🖥 **Prenos štýlu** (FLUX.3 Klein) – obrázok z Alexia AI prekreslí v štýle iného obrázka (farby, svetlo, technika); v mobile cez PC
+- ✅🖥 **Stopky** – pri tvorbe obrázka, videa aj vylepšenia beží čas od 0:00, po dokončení ukáže *Hotovo za m:ss*
+- ✅🖥 **Údaje pod obrázkom** – prompt (tlačidlo *Kopírovať prompt*), seed, čas tvorby, rozmer a model sa uložia k obrázku a ukážu sa v detaile
 - Upravovať (seed, prenos štýlu, rozhýbanie) sa dajú **len obrázky vytvorené v appke**, nie fotky zvonka
 
 **🎬 Videá**
@@ -49,7 +51,9 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
 - 🖥 **Podľa obrázka** – napíšeš len **seed** obrázka z galérie alebo **popis postavy**, hlavný popis je potom len pohyb
 - 🖥 Rozhýbanie obrázka z galérie, skladanie videa VAE / TAE / LightTAE (rýchlejšie, menej VRAM), Šetriť VRAM
 - ✅ **Videá PC** – z mobilu pošleš video na PC, PC ho spraví aj keď pri ňom nie si (rad úloh), hotové stiahneš do mobilu;
-  rozhýbanie obrázkov z PC a galéria PC. **Zamknuté, kým mobil nie je pripojený k PC.**
+  rozhýbanie obrázkov z PC a galéria PC. **Zamknuté, kým mobil nie je pripojený k PC.** Pri každej úlohe beží čas, hotová ukáže, ako dlho trvala.
+- 🖥 Ku každému videu sa uloží prompt, dĺžka, model a čas tvorby (`video.mp4.json`)
+- 🖥 Oprava pádu pri tvorbe videa na notebookoch s dvomi grafikami – integrovaná Intel/AMD grafika sa pri tvorbe nepoužíva, všetko ide na NVIDIA
 - 🖥 **Vylepšenie hocijakého videa** – doostrenie, odšumenie, farby, stabilizácia, 60 fps, AI zväčšenie na Full HD / 4K
 
 **🧩 LoRA adaptéry** (🖥)

@@ -12,10 +12,14 @@ object VzdialeneVidea {
     class Uloha(
         val id: String, val popis: String, val sekundy: Int, val cezObrazok: Boolean, val predloha: String?,
         var stav: String = "caka", var chyba: String = "", var subor: String? = null, val cas: Long = System.currentTimeMillis(),
+        var zacal: Long = 0L, var trvanie: Long = 0L,
     ) {
         fun json() = JSONObject().put("id", id).put("popis", popis).put("sekundy", sekundy).put("cezObrazok", cezObrazok)
             .put("predloha", predloha ?: "").put("stav", stav).put("chyba", chyba).put("subor", subor ?: "").put("cas", cas)
             .put("velkost", subor?.let { File(it).length() } ?: 0L)
+            .put("zacal", zacal).put("trvanie", trvanie)
+            // ako dlho už beží (počíta PC – hodiny mobilu môžu ísť inak)
+            .put("bezi_ms", if (stav == "bezi" && zacal > 0) System.currentTimeMillis() - zacal else 0L)
     }
 
     private val ulohy = mutableListOf<Uloha>()
@@ -32,7 +36,7 @@ object VzdialeneVidea {
                 ulohy += Uloha(o.getString("id"), o.getString("popis"), o.optInt("sekundy", 5), o.optBoolean("cezObrazok"),
                     o.optString("predloha").ifBlank { null },
                     // úloha, ktorá bežala pri vypnutí appky, sa spustí znova
-                    o.optString("stav").let { if (it == "bezi") "caka" else it }, o.optString("chyba"), Platforma.cesta(o.optString("subor").ifBlank { null }), o.optLong("cas"))
+                    o.optString("stav").let { if (it == "bezi") "caka" else it }, o.optString("chyba"), Platforma.cesta(o.optString("subor").ifBlank { null }), o.optLong("cas"), 0L, o.optLong("trvanie"))
             }
         }
     }
@@ -83,10 +87,11 @@ object VzdialeneVidea {
         } ?: return
         // PC práve tvorí niečo iné – skúsime o chvíľu
         if (ObrazkyJadro.generuje) { Thread { Thread.sleep(15_000); Platforma.naHlavnom { dalsia() } }.apply { isDaemon = true }.start(); return }
-        synchronized(this) { bezi = u; u.stav = "bezi"; uloz() }
+        synchronized(this) { bezi = u; u.stav = "bezi"; u.zacal = System.currentTimeMillis(); uloz() }
         val hotovo: (File?, String) -> Unit = { f, e ->
             synchronized(this) {
                 if (f != null) { u.stav = "hotova"; u.subor = f.path } else { u.stav = "chyba"; u.chyba = e.ifBlank { "Video sa nepodarilo vytvoriť" } }
+                if (u.zacal > 0) u.trvanie = System.currentTimeMillis() - u.zacal
                 bezi = null; uloz()
             }
             Platforma.naHlavnom { dalsia() }

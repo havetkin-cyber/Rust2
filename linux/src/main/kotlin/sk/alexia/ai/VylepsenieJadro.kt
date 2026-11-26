@@ -36,6 +36,10 @@ object VylepsenieJadro {
     /** skutočný rozmer výsledku (náhľad môže byť zmenšený) */
     var rozmerVysledku by mutableStateOf(0 to 0)
         private set
+    var zaciatok by mutableStateOf(0L)
+        private set
+    var posledneTrvanie by mutableStateOf(0L)
+        private set
     var pracuje by mutableStateOf(false)
         private set
     var cinnost by mutableStateOf("")
@@ -87,14 +91,14 @@ object VylepsenieJadro {
         val f = vstup ?: return
         if (pracuje) return
         if (nasobok > 1 && !mamModel()) { chyba = T("vyl_treba_model"); return }
-        pracuje = true; chyba = ""; vysledok = null
+        pracuje = true; chyba = ""; vysledok = null; zaciatok = System.currentTimeMillis()
         // vo VRAM nech je len vylepšovací model
         ChatJadro.uvolniPamat(); ObrazkyJadro.uvolniPamat()
         val nas = nasobok; val jas = autoJas; val far = farby; val ostr = doostrit
         vlakno.execute {
             val r = runCatching { spracuj(f, nas, jas, far, ostr) }
             Platforma.naHlavnom {
-                pracuje = false; cinnost = ""
+                pracuje = false; cinnost = ""; posledneTrvanie = System.currentTimeMillis() - zaciatok
                 r.onSuccess { vysledok = it; ObrazkyJadro.galeria.add(0, it) }
                 r.onFailure { chyba = it.message ?: T("vyl_zlyhalo") }
             }

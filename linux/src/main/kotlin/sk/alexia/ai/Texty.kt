@@ -14,6 +14,14 @@ object T {
     }
 
     private val sk = mapOf(
+        "cas_hotovo" to "Hotovo za %1\$s",
+        "cas_info_prompt" to "Prompt",
+        "cas_info_seed" to "Seed",
+        "cas_info_trvanie" to "Trvanie",
+        "cas_info_model" to "Model",
+        "cas_info_rozmer" to "Rozmer",
+        "cas_info_kde" to "Vytvorené",
+        "cas_kopirovat" to "Kopírovať prompt",
         "vai_ziadny_i2v" to "Na rozhýbanie obrázka treba v Obrázkoch stiahnuť „Wan 2.2 – video AI (5B)“.",
         "vai_rozhybat" to "Rozhýbať obrázok (video AI)",
         "vai_pohyb_hint" to "Aký pohyb? (napr. turns head and smiles, hair blowing) – anglicky",
@@ -458,6 +466,14 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "cas_hotovo" to "Done in %1\$s",
+        "cas_info_prompt" to "Prompt",
+        "cas_info_seed" to "Seed",
+        "cas_info_trvanie" to "Duration",
+        "cas_info_model" to "Model",
+        "cas_info_rozmer" to "Size",
+        "cas_info_kde" to "Created on",
+        "cas_kopirovat" to "Copy prompt",
         "vai_ziadny_i2v" to "To animate an image, download “Wan 2.2 – video AI (5B)” in Images.",
         "vai_rozhybat" to "Animate image (video AI)",
         "vai_pohyb_hint" to "What motion? (e.g. turns head and smiles, hair blowing)",

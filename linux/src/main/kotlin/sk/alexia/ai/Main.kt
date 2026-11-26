@@ -654,7 +654,7 @@ private fun BublinaVideo(s: Sprava) {
                 val p = ff ?: s.priebeh
                 LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 if (ObrazkyJadro.generuje) {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(4.dp)); Casovac(true, ObrazkyJadro.zaciatok, 0)
                     LinearProgressIndicator(progress = { ObrazkyJadro.priebeh }, modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)), color = Farby.fialova, trackColor = Farby.plocha2)
                     TextButton(onClick = { ObrazkyJadro.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
                 }
@@ -1412,8 +1412,10 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                         } else Text(T(if (videa) "vid_tvorim" else "obr_tvorim", (o.priebeh * 100).roundToInt()), color = Farby.text, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                        Spacer(Modifier.height(4.dp)); Casovac(true, o.zaciatok, 0)
                         TextButton(onClick = { o.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
                     } else if (videa) {
+                        Casovac(false, 0, o.posledneTrvanie)
                         Text(T("vai_dlzka"), color = Farby.text, fontSize = 14.sp)
                         Row(Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             val ns = ChatJadro.nastavenia
@@ -1654,6 +1656,7 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                     }
                     SeedStitok(f)
                 }
+                InfoObrazka(f)
                 Model3DRiadok(f)
                 RozhybatRiadok(f)
                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1965,8 +1968,10 @@ private fun VylepsenieObrazovka(spat: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
+                if (!v.pracuje) Casovac(false, 0, v.posledneTrvanie)
                 if (v.pracuje) {
                     Text(v.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Casovac(true, v.zaciatok, 0)
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
                 } else {
@@ -2459,4 +2464,43 @@ private fun GaleriaVyberDialog(nadpis: String, zoSuboru: (() -> Unit)?, zavri: (
             }
         }
     }
+}
+
+/** Stopky: počas tvorby počíta od 0, po dokončení ukáže celkový čas. */
+@Composable
+private fun Casovac(bezi: Boolean, zaciatok: Long, trvanie: Long) {
+    var teraz by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(bezi, zaciatok) {
+        while (bezi) { teraz = System.currentTimeMillis(); kotlinx.coroutines.delay(500) }
+    }
+    if (bezi && zaciatok > 0) Text("⏱ " + Cas.text(teraz - zaciatok), color = Farby.ruzova, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    else if (!bezi && trvanie > 0) Text("✓ " + T("cas_hotovo", Cas.text(trvanie)), color = Farby.tlmene, fontSize = 12.sp)
+}
+
+/** Pod obrázkom: prompt (dá sa skopírovať), seed, čas tvorby, rozmer a model. */
+@Composable
+private fun InfoObrazka(f: java.io.File) {
+    val u = remember(f) { ObrazkyJadro.udaje(f) } ?: return
+    val schranka = androidx.compose.ui.platform.LocalClipboardManager.current
+    val popis = u.optString("popis")
+    Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Farby.plocha2).padding(10.dp)) {
+        if (popis.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(T("cas_info_prompt"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { schranka.setText(androidx.compose.ui.text.AnnotatedString(popis)) }) { Text(T("cas_kopirovat"), color = Farby.ruzova, fontSize = 12.sp) }
+            }
+            Text(popis, color = Farby.text, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+        }
+        if (u.has("seed")) InfoRiadok("cas_info_seed", u.optLong("seed").toString())
+        if (u.optLong("trvanie") > 0) InfoRiadok("cas_info_trvanie", Cas.text(u.optLong("trvanie")))
+        if (u.optInt("w") > 0) InfoRiadok("cas_info_rozmer", "${u.optInt("w")} × ${u.optInt("h")}")
+        InfoRiadok("cas_info_model", u.optString("model").substringAfterLast('/').substringAfterLast('\\'))
+        InfoRiadok("cas_info_kde", u.optString("kde"))
+    }
+}
+
+@Composable
+private fun InfoRiadok(k: String, h: String) {
+    if (h.isNotBlank()) Row { Text(T(k) + ": ", color = Farby.tlmene, fontSize = 12.sp); Text(h, color = Farby.text, fontSize = 12.sp) }
 }

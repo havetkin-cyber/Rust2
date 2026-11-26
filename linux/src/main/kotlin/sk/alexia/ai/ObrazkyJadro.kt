@@ -664,7 +664,8 @@ object ObrazkyJadro {
         val ff = VideoJadro.ffmpeg() ?: run { VideoJadro.stiahniFfmpeg { natocAI(popis, sekundy, predloha, hotovo) }; return }
         val v = sada.video!!
         val predtym = aktivnyModel
-        ChatJadro.uvolniPamat()
+        // chatový model (napr. po „AI napíše prompt“) musí byť z grafiky preč skôr, než sa načíta Wan
+        ChatJadro.uvolniPamat(pockat = true)
         nacitaj("sada:" + sada.id, uvolnitChat = false)
         // dlhé video = kúsky po KUS_SEKUND, každý ďalší začína posledným snímkom predchádzajúceho
         val kusov = if (nadvazovat) (dlzka + KUS_SEKUND - 1) / KUS_SEKUND else 1

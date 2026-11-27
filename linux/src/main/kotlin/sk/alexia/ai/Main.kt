@@ -2687,6 +2687,8 @@ private fun DabingObrazovka(spat: () -> Unit) {
     var jazyk by remember { mutableStateOf("cs") }
     var hlas by remember { mutableStateOf("jirka") }
     var pozadie by remember { mutableStateOf(true) }
+    var dva by remember { mutableStateOf(true) }
+    var hlasMuz by remember { mutableStateOf("jirka") }
     var vysledok by remember { mutableStateOf<File?>(null) }
     var chyba by remember { mutableStateOf("") }
     val hlasy = buildList {
@@ -2717,8 +2719,25 @@ private fun DabingObrazovka(spat: () -> Unit) {
                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
                     }
                 }
-                Text(T("dab_hlas_vyber"), color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
-                hlasy.forEach { (id, meno) ->
+                Row(Modifier.fillMaxWidth().clickable(enabled = !d.pracuje) { dva = !dva }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(T("dab_dva"), color = Farby.text, fontSize = 14.sp)
+                        Text(T("dab_dva_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    Switch(checked = dva, onCheckedChange = { dva = it }, enabled = !d.pracuje, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+                if (dva) {
+                    Text(T("dab_hlas_muz"), color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+                    listOf("jirka" to "Jirka (CZ, muž) – Piper").forEach { (id, meno) ->
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !d.pracuje) { hlasMuz = id }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = hlasMuz == id, onClick = { hlasMuz = id }, enabled = !d.pracuje, colors = RadioButtonDefaults.colors(selectedColor = Farby.ruzova))
+                            Text(meno, color = Farby.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            if (!Hlas.mamDabingHlas(id)) Text(T("dab_stiahne_sa"), color = Farby.tlmene, fontSize = 11.sp)
+                        }
+                    }
+                }
+                Text(T(if (dva) "dab_hlas_zena" else "dab_hlas_vyber"), color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+                (if (dva) hlasy.filter { it.first != "jirka" } else hlasy).forEach { (id, meno) ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !d.pracuje) { hlas = id }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = hlas == id, onClick = { hlas = id }, enabled = !d.pracuje, colors = RadioButtonDefaults.colors(selectedColor = Farby.ruzova))
                         Text(meno, color = Farby.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
@@ -2742,7 +2761,8 @@ private fun DabingObrazovka(spat: () -> Unit) {
                     Casovac(false, 0, d.posledneTrvanie)
                     GradientTlacidlo(T("dab_spustit"), Icons.Default.RecordVoiceOver, Modifier.fillMaxWidth(), enabled = odkaz.isNotBlank() || subor != null) {
                         chyba = ""; vysledok = null
-                        d.spusti(subor?.path ?: odkaz.trim(), jazyk, hlas, pozadie) { f, e -> if (f != null) vysledok = f else chyba = e }
+                        val zena = if (dva && hlas == "jirka") "lili" else hlas
+                        d.spusti(subor?.path ?: odkaz.trim(), jazyk, zena, if (dva) hlasMuz else null, pozadie) { f, e -> if (f != null) vysledok = f else chyba = e }
                     }
                 }
                 if (chyba.isNotBlank()) Text("⚠ $chyba", color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))

@@ -14,6 +14,10 @@ object T {
     }
 
     private val sk = mapOf(
+        "dab_dva" to "Dva hlasy – muž a žena",
+        "dab_dva_info" to "Appka podľa výšky pôvodného hlasu v každej replike zistí, či hovorí muž alebo žena, a použije k tomu mužský alebo ženský hlas.",
+        "dab_hlas_muz" to "Mužský hlas",
+        "dab_hlas_zena" to "Ženský hlas",
         "zavriet" to "Zavrieť",
         "preh_externe" to "Otvoriť v inom prehrávači",
         "preh_nenajdene" to "Video sa nenašlo",
@@ -480,6 +484,10 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "dab_dva" to "Two voices – male and female",
+        "dab_dva_info" to "For each line the app detects from the original voice pitch whether a man or a woman speaks and uses a male or female voice.",
+        "dab_hlas_muz" to "Male voice",
+        "dab_hlas_zena" to "Female voice",
         "zavriet" to "Close",
         "preh_externe" to "Open in another player",
         "preh_nenajdene" to "Video not found",

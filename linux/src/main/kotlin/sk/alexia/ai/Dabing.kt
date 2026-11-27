@@ -29,13 +29,17 @@ object Dabing {
     private const val SR = 16000           // Whisper
     private const val SR_DAB = 24000       // výsledná stopa dabingu
 
-    private class Replika(var od: Double, var po: Double, var text: String = "", var preklad: String = "")
+    private class Replika(var od: Double, var po: Double, var text: String = "", var preklad: String = "", var muz: Boolean? = null)
 
     /**
      * [zdroj] = odkaz (http…) alebo cesta k súboru, [jazyk] = "sk" / "cs", [hlas] = id hlasu (jirka, lili, st0…),
      * [pozadie] = ponechať pôvodný zvuk (hudba, efekty) stíšený pod dabingom
      */
-    fun spusti(zdroj: String, jazyk: String, hlas: String, pozadie: Boolean, hotovo: (File?, String) -> Unit) {
+    fun spusti(zdroj: String, jazyk: String, hlas: String, pozadie: Boolean, hotovo: (File?, String) -> Unit) =
+        spusti(zdroj, jazyk, hlas, null, pozadie, hotovo)
+
+    /** [hlasMuz] != null → dva hlasy: muž/žena podľa výšky pôvodného hlasu v každej replike ([hlas] = ženský) */
+    fun spusti(zdroj: String, jazyk: String, hlas: String, hlasMuz: String?, pozadie: Boolean, hotovo: (File?, String) -> Unit) {
         if (pracuje) return
         pracuje = true; zrusit = false; priebeh = 0f; cinnost = T("dab_pripravujem")
         val start = System.currentTimeMillis(); zaciatok = start
@@ -55,7 +59,8 @@ object Dabing {
                     krok(0.01f, T("dab_whisper"))
                     Rec.stiahniTurbo { p -> Platforma.naHlavnom { priebeh = 0.01f + p * 0.04f; cinnost = T("dab_whisper") + " " + (p * 100).toInt() + " %" } }
                 }
-                if (!Hlas.mamDabingHlas(hlas)) { krok(0.02f, T("dab_hlas")); Hlas.stiahniDabingHlas(hlas) { p -> Platforma.naHlavnom { priebeh = 0.02f + p * 0.03f } } }
+                for (h in listOfNotNull(hlas, hlasMuz).distinct())
+                    if (!Hlas.mamDabingHlas(h)) { krok(0.02f, T("dab_hlas")); Hlas.stiahniDabingHlas(h) { p -> Platforma.naHlavnom { priebeh = 0.02f + p * 0.03f } } }
 
                 // 1) video
                 val video: File = if (zdroj.startsWith("http", ignoreCase = true)) {
@@ -77,6 +82,7 @@ object Dabing {
                 repliky.forEachIndexed { i, r ->
                     krok(0.18f + 0.3f * i / repliky.size, T("dab_prepis", i + 1, repliky.size))
                     val a = (r.od * SR).toInt().coerceIn(0, zvuk.size); val b = (r.po * SR).toInt().coerceIn(a, zvuk.size)
+                    if (hlasMuz != null) r.muz = jeMuz(zvuk, a, b)
                     r.text = runCatching { Rec.prepis(zvuk.copyOfRange(a, b), SR, turbo = true) }.getOrDefault("")
                         .replace(Regex("\\[[^]]*]|\\([^)]*\\)|♪"), "").trim()
                 }
@@ -97,11 +103,12 @@ object Dabing {
                     if (r.preklad.isBlank()) return@forEachIndexed
                     val dalsi = reci.getOrNull(i + 1)?.od ?: dlzka
                     val miesto = (dalsi - r.od - 0.08).coerceAtLeast(0.4)
-                    var (x, sr) = Hlas.syntetizuj(Hlas.naCitanie(r.preklad), hlas, 1f, jazyk)
+                    val h = if (hlasMuz != null && r.muz == true) hlasMuz else hlas
+                    var (x, sr) = Hlas.syntetizuj(Hlas.naCitanie(r.preklad), h, 1f, jazyk)
                     val trvanie = x.size.toDouble() / sr
                     if (trvanie > miesto) {
                         val k = (trvanie / miesto).coerceAtMost(1.6).toFloat()
-                        val y = Hlas.syntetizuj(Hlas.naCitanie(r.preklad), hlas, k, jazyk); x = y.first; sr = y.second
+                        val y = Hlas.syntetizuj(Hlas.naCitanie(r.preklad), h, k, jazyk); x = y.first; sr = y.second
                     }
                     val res = prevzorkuj(x, sr, SR_DAB)
                     val od = (r.od * SR_DAB).toInt()
@@ -124,13 +131,43 @@ object Dabing {
                     "-movflags", "+faststart", out.path))
                 srt.copyTo(File(out.path.removeSuffix(".mp4") + ".srt"), overwrite = true)
                 File(out.path + ".json").writeText(org.json.JSONObject().put("typ", "dabing").put("zdroj", zdroj).put("jazyk", jazyk)
-                    .put("hlas", hlas).put("replik", reci.size).put("trvanie", System.currentTimeMillis() - start).toString())
+                    .put("hlas", hlas).put("hlas_muz", hlasMuz ?: "").put("replik", reci.size).put("trvanie", System.currentTimeMillis() - start).toString())
                 vysledok = out
             }.onFailure { chyba = it.message ?: T("dab_chyba") }
             tmp.deleteRecursively()
             val t = System.currentTimeMillis() - start
             Platforma.naHlavnom { pracuje = false; priebeh = 0f; cinnost = ""; proces = null; posledneTrvanie = t; hotovo(vysledok, chyba) }
         }.apply { isDaemon = true }.start()
+    }
+
+    // ---------------- muž / žena podľa výšky hlasu ----------------
+
+    /**
+     * Základná výška hlasu (F0) autokoreláciou v rámcoch 40 ms; medián znelých rámcov.
+     * Muži zvyčajne 85–155 Hz, ženy 165–255 Hz → hranica 160 Hz. null = nedá sa určiť (hudba, šepot).
+     */
+    private fun jeMuz(x: FloatArray, od: Int, po: Int): Boolean? {
+        val ram = 640; val krok = 160; val minLag = SR / 400; val maxLag = SR / 70
+        val f0 = mutableListOf<Double>()
+        var i = od
+        while (i + ram + maxLag < po) {
+            var e = 0.0
+            for (k in 0 until ram) e += x[i + k] * x[i + k]
+            if (e / ram > 1e-4) {
+                var naj = 0.0; var najLag = 0
+                for (lag in minLag..maxLag) {
+                    var c = 0.0; var e2 = 0.0
+                    for (k in 0 until ram) { c += x[i + k] * x[i + k + lag]; e2 += x[i + k + lag] * x[i + k + lag] }
+                    val r = c / Math.sqrt(e * e2 + 1e-12)
+                    if (r > naj) { naj = r; najLag = lag }
+                }
+                if (naj > 0.55 && najLag > 0) f0 += SR.toDouble() / najLag
+            }
+            i += krok
+        }
+        if (f0.size < 5) return null
+        f0.sort()
+        return f0[f0.size / 2] < 160.0
     }
 
     // ---------------- úseky reči ----------------

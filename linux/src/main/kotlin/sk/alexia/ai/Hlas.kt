@@ -184,8 +184,8 @@ object Hlas {
      * Novšie súbory hlasov (piper-voices) majú v phoneme_id_map aj viacznakové fonémy („aɪ“…),
      * s ktorými starší Piper spadne („Phonemes must be one codepoint“). Tieto položky odstránime – Piper ich aj tak nepoužíva.
      */
-    private fun opravKonfig() = runCatching {
-        val f = File(model().path + ".json")
+    private fun opravKonfig(mdl: File = model()) = runCatching {
+        val f = File(mdl.path + ".json")
         val j = org.json.JSONObject(f.readText())
         val m = j.getJSONObject("phoneme_id_map")
         val zle = m.keys().asSequence().filter { it.codePointCount(0, it.length) != 1 }.toList()
@@ -304,8 +304,8 @@ object Hlas {
     }
 
     /** Lili: jeden kúsok cez Piper (surový 16-bit zvuk) */
-    private fun lili(kus: String, dlzka: Float): Pair<FloatArray, Int> {
-        val pb = ProcessBuilder(program().path, "--model", model().path, "--output_raw", "--length_scale", "%.3f".format(java.util.Locale.ROOT, dlzka),
+    private fun lili(kus: String, dlzka: Float, mdl: File = model()): Pair<FloatArray, Int> {
+        val pb = ProcessBuilder(program().path, "--model", mdl.path, "--output_raw", "--length_scale", "%.3f".format(java.util.Locale.ROOT, dlzka),
             "--espeak_data", File(program().parentFile, "espeak-ng-data").path)
             .directory(program().parentFile)
         if (!Platforma.jeWindows) pb.environment()["LD_LIBRARY_PATH"] = program().parentFile.path
@@ -315,7 +315,8 @@ object Hlas {
         val b = p.inputStream.use { it.readBytes() }
         p.waitFor()
         val x = FloatArray(b.size / 2) { ((b[2 * it + 1].toInt() shl 8) or (b[2 * it].toInt() and 0xff)).toShort() / 32768f }
-        return x to VZORKOVANIE.toInt()
+        val sr = runCatching { org.json.JSONObject(File(mdl.path + ".json").readText()).getJSONObject("audio").getInt("sample_rate") }.getOrDefault(VZORKOVANIE.toInt())
+        return x to sr
     }
 
     /** kúsky sa tvoria v pozadí a prehrávajú za sebou (ďalší sa robí, kým hrá predchádzajúci) */
@@ -389,6 +390,46 @@ object Hlas {
         for (i in f.indices) { val v = (f[i].coerceIn(-1f, 1f) * 32767).toInt(); b[2 * i] = v.toByte(); b[2 * i + 1] = (v shr 8).toByte() }
         return b
     }
+
+    // ---------------- dabing: hlasy podľa jazyka ----------------
+    /** Piper hlasy pre dabing: id → (meno, jazyk, odkaz) */
+    val DABING_PIPER = listOf(
+        Triple("jirka", "Jirka (CZ, muž)", "https://huggingface.co/rhasspy/piper-voices/resolve/main/cs/cs_CZ/jirka/medium/cs_CZ-jirka-medium.onnx"),
+        Triple("lili", "Lili (SK, žena)", HLAS),
+    )
+    private fun piperModel(id: String) = if (id == "lili") model() else File(priecinok(), "cs_CZ-$id-medium.onnx")
+    fun mamDabingHlas(id: String) = when {
+        jeSt(id) -> mamSt()
+        else -> program().exists() && piperModel(id).length() > 10_000_000 && File(piperModel(id).path + ".json").exists()
+    }
+
+    /** stiahne Piper aj zvolený hlas (blokuje – volať z vlákna) */
+    fun stiahniDabingHlas(id: String, p: (Float) -> Unit) {
+        if (jeSt(id)) { if (!mamSt()) throw IllegalStateException(T("dab_st_najprv")); return }
+        val d = priecinok()
+        if (!program().exists()) {
+            val arch = File(d, if (Platforma.jeWindows) "piper.zip" else "piper.tar.gz")
+            stiahniSubor(if (Platforma.jeWindows) PIPER_WINDOWS else PIPER_LINUX, arch) { p(it * 0.3f) }
+            if (Platforma.jeWindows) rozbalZip(arch, d)
+            else { val pr = ProcessBuilder("tar", "-xzf", arch.path, "-C", d.path).redirectErrorStream(true).start(); pr.waitFor() }
+            arch.delete(); program().setExecutable(true)
+            if (!program().exists()) throw IllegalStateException("Piper sa nepodarilo rozbaliť")
+        }
+        val url = DABING_PIPER.first { it.first == id }.third
+        val m = piperModel(id)
+        if (!File(m.path + ".json").exists()) stiahniSubor("$url.json", File(m.path + ".json")) {}
+        if (m.length() < 10_000_000) stiahniSubor(url, m) { p(0.3f + it * 0.7f) }
+        opravKonfig(m)
+    }
+
+    /** jedna replika dabingu → zvuk; [rychlost] > 1 = rýchlejšie */
+    fun syntetizuj(text: String, id: String, rychlost: Float, jazyk: String): Pair<FloatArray, Int> =
+        if (jeSt(id)) {
+            val m = stModel()
+            val g = com.k2fsa.sherpa.onnx.GenerationConfig()
+            g.sid = id.drop(2).toIntOrNull() ?: 0; g.speed = rychlost; g.numSteps = 8; g.extra = mapOf("lang" to jazyk)
+            val a = m.generateWithConfig(text, g); a.samples to a.sampleRate
+        } else lili(text, 1f / rychlost, piperModel(id))
 
     fun zastav() {
         hovori = null

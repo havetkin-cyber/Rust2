@@ -120,7 +120,7 @@ private var naspat: (() -> Unit)? = null
 private var prepni: ((Int) -> Unit)? = null
 private var chodNa: ((Int) -> Unit)? = null
 
-private enum class Obrazovka { CHAT, OBRAZKY, VIDEA, VYLEPSIT, PROMPT, LORA, MODELY, NASTAVENIA }
+private enum class Obrazovka { CHAT, OBRAZKY, VIDEA, VYLEPSIT, DABING, PROMPT, LORA, MODELY, NASTAVENIA }
 
 @Composable
 private fun Appka() {
@@ -193,6 +193,7 @@ private fun Appka() {
             Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
             Obrazovka.LORA -> LoraObrazovka { obrazovka = Obrazovka.CHAT }
             Obrazovka.PROMPT -> PromptObrazovka { obrazovka = Obrazovka.CHAT }
+            Obrazovka.DABING -> DabingObrazovka { obrazovka = Obrazovka.CHAT }
         }
         }
         }
@@ -252,6 +253,7 @@ private fun Zalozky(aktivna: Obrazovka, zvol: (Obrazovka) -> Unit) {
         Triple(Obrazovka.OBRAZKY, Icons.Default.Image, "obrazky"),
         Triple(Obrazovka.VIDEA, Icons.Default.Movie, "videa"),
         Triple(Obrazovka.VYLEPSIT, Icons.Default.AutoFixHigh, "vylepsit_kratko"),
+        Triple(Obrazovka.DABING, Icons.Default.RecordVoiceOver, "dab_zalozka"),
         Triple(Obrazovka.PROMPT, Icons.Default.Description, "prompt_zalozka"),
         Triple(Obrazovka.LORA, Icons.Default.Extension, "lora_zalozka"),
         Triple(Obrazovka.MODELY, Icons.Default.Memory, "modely"),
@@ -2669,6 +2671,86 @@ private fun PromptObrazovka(spat: () -> Unit) {
                 }
                 androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(vysledok, color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Dabing: video z YouTube / súboru → slovenský alebo český dabing AI hlasom + titulky */
+@Composable
+private fun DabingObrazovka(spat: () -> Unit) {
+    val d = Dabing
+    var odkaz by remember { mutableStateOf("") }
+    var subor by remember { mutableStateOf<File?>(null) }
+    var jazyk by remember { mutableStateOf("cs") }
+    var hlas by remember { mutableStateOf("jirka") }
+    var pozadie by remember { mutableStateOf(true) }
+    var vysledok by remember { mutableStateOf<File?>(null) }
+    var chyba by remember { mutableStateOf("") }
+    val hlasy = buildList {
+        add("jirka" to "Jirka (CZ, muž) – Piper"); add("lili" to "Lili (SK, žena) – Piper")
+        if (jazyk == "sk") listOf("st0", "st1", "st2", "st3", "st4").forEach { add(it to Hlas.meno(it) + " (SK) – Supertonic") }
+    }
+    Column(Modifier.fillMaxSize()) {
+        Hlavicka(T("dab_nadpis"), T("dab_podnadpis"), spat = spat)
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Karta { Text(T("dab_info"), color = Farby.tlmene, fontSize = 13.sp) }
+            Karta {
+                Text(T("dab_zdroj"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(value = odkaz, onValueChange = { odkaz = it; if (it.isNotBlank()) subor = null }, singleLine = true, enabled = !d.pracuje,
+                    modifier = Modifier.padding(top = 6.dp).fillMaxWidth().nadKlavesnicou(),
+                    placeholder = { Text("https://www.youtube.com/watch?v=…", color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(subor?.name ?: T("dab_alebo_subor"), color = if (subor != null) Farby.text else Farby.tlmene, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    val nadpis = T("dab_vyber_video")
+                    TextButton(onClick = { Platforma.vyberSubor(nadpis, setOf("mp4", "mkv", "webm", "mov", "avi")) { subor = it; odkaz = "" } }, enabled = !d.pracuje) {
+                        Text(T("dab_subor"), color = Farby.ruzova)
+                    }
+                }
+                Text(T("dab_jazyk"), color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                    listOf("cs" to "Čeština", "sk" to "Slovenčina").forEach { (k, m) ->
+                        FilterChip(selected = jazyk == k, onClick = { jazyk = k; hlas = if (k == "cs") "jirka" else "lili" }, label = { Text(m) }, enabled = !d.pracuje,
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                Text(T("dab_hlas_vyber"), color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+                hlasy.forEach { (id, meno) ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !d.pracuje) { hlas = id }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = hlas == id, onClick = { hlas = id }, enabled = !d.pracuje, colors = RadioButtonDefaults.colors(selectedColor = Farby.ruzova))
+                        Text(meno, color = Farby.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        if (!Hlas.mamDabingHlas(id)) Text(T("dab_stiahne_sa"), color = Farby.tlmene, fontSize = 11.sp)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().clickable(enabled = !d.pracuje) { pozadie = !pozadie }.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(T("dab_pozadie"), color = Farby.text, fontSize = 14.sp)
+                        Text(T("dab_pozadie_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    Switch(checked = pozadie, onCheckedChange = { pozadie = it }, enabled = !d.pracuje, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
+                Spacer(Modifier.height(8.dp))
+                if (d.pracuje) {
+                    Text(d.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Casovac(true, d.zaciatok, 0)
+                    LinearProgressIndicator(progress = { d.priebeh }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    TextButton(onClick = { d.zrus() }) { Text(T("zrusit"), color = Farby.tlmene) }
+                } else {
+                    Casovac(false, 0, d.posledneTrvanie)
+                    GradientTlacidlo(T("dab_spustit"), Icons.Default.RecordVoiceOver, Modifier.fillMaxWidth(), enabled = odkaz.isNotBlank() || subor != null) {
+                        chyba = ""; vysledok = null
+                        d.spusti(subor?.path ?: odkaz.trim(), jazyk, hlas, pozadie) { f, e -> if (f != null) vysledok = f else chyba = e }
+                    }
+                }
+                if (chyba.isNotBlank()) Text("⚠ $chyba", color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                vysledok?.let { f ->
+                    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("✓ " + f.name, color = Farby.zelena, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(f) } }) { Text(T("klip_prehrat"), color = Farby.ruzova) }
+                        TextButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(f.parentFile) } }) { Text(T("dab_priecinok"), color = Farby.ruzova) }
+                    }
                 }
             }
         }

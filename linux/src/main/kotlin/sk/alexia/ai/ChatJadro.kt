@@ -210,7 +210,7 @@ object ChatJadro {
         "'smooth natural motion, realistic'. Never write sexual content, nudity or anything explicit."
 
     /** odpoveď malého modelu očistí na jeden odsek bez úvodzoviek a nadpisov */
-    private fun ocistiPrompt(t: String): String {
+    internal fun ocistiPrompt(t: String): String {
         var s = t.replace(Regex("<think>[\\s\\S]*?</think>"), "").trim()
         s = s.lines().map { it.trim() }.filter { it.isNotEmpty() }
             .filterNot { it.endsWith(":") && it.length < 40 }
@@ -379,10 +379,10 @@ object ChatJadro {
         val mamModel = nacitany != null || nastavenia.aktivnyModel?.let { File(it).exists() } == true
         if (anglicky || !mamModel || generuje || pisePrompt || nastavenia.vzdialene) { hotovo(zmena); return }
         pisePrompt = true
-        obnov()
         Thread {
             val sb = StringBuilder()
             runCatching {
+                if (!cakajNaModel(120)) return@runCatching
                 generujPreSiet(listOf("system" to SYS_UPRAVA, "user" to zmena.trim()), 120) { b -> sb.append(String(b, Charsets.UTF_8)); true }
             }
             val v = ocistiPrompt(sb.toString()).lines().firstOrNull { it.isNotBlank() }.orEmpty().trim()
@@ -500,6 +500,18 @@ object ChatJadro {
     }
 
     /** po návrate do chatu znova načíta posledný model */
+    /** načíta chatový model (ak treba) a počká, kým je pripravený – volať len z vlákna na pozadí */
+    fun cakajNaModel(sekund: Int = 180): Boolean {
+        if (nacitany != null && stav == StavModelu.PRIPRAVENY) return true
+        Platforma.naHlavnom { obnov() }
+        repeat(sekund * 4) {
+            if (nacitany != null && stav == StavModelu.PRIPRAVENY) return true
+            if (stav == StavModelu.CHYBA) return false
+            Thread.sleep(250)
+        }
+        return false
+    }
+
     fun obnov() {
         if (nastavenia.vzdialene) { if (stav != StavModelu.PRIPRAVENY && stav != StavModelu.NACITAVA) pripoj(); return }
         val m = nastavenia.aktivnyModel ?: return

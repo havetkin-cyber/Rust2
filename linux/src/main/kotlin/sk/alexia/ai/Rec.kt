@@ -74,6 +74,17 @@ object Rec {
         rozpoznavac = r; jazykModelu = jazyk; r
     }
 
+    /** prepis kúska zvuku (dabing); jazyk "" = Whisper ho zistí sám */
+    fun prepis(x: FloatArray, sr: Int, jazyk: String = ""): String = synchronized(this) {
+        val r = model(jazyk)
+        val st = r.createStream()
+        st.acceptWaveform(x, sr)
+        r.decode(st)
+        val t = r.getResult(st).text.trim()
+        st.release()
+        t
+    }
+
     @Volatile private var linka: TargetDataLine? = null
 
     /** prvé stlačenie začne nahrávať, druhé zastaví a text pošle do [hotovo] */

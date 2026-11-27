@@ -199,6 +199,7 @@ private fun Appka() {
         }
         SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(16.dp))
         Platforma.ziadostOVyber?.let { z -> VyberSuboru(z) { Platforma.ziadostOVyber = null } }
+        PrehravacOkno()
     }
 }
 
@@ -606,7 +607,7 @@ private fun BublinaVideo(s: Sprava) {
                 val f = File(cesta)
                 val nahlad = remember(cesta) { s.obrazok?.let { Platforma.nacitajObrazok(File(it)) } }
                 Box(Modifier.widthIn(max = 480.dp).clip(RoundedCornerShape(16.dp)).background(Color.Black)
-                    .clickable { runCatching { java.awt.Desktop.getDesktop().open(f) }.onFailure { Platforma.otvorOdkaz(f.toURI().toString()) } },
+                    .clickable { Prehravac.otvor(f) },
                     contentAlignment = Alignment.Center) {
                     nahlad?.let { Image(it, null, Modifier.fillMaxWidth().aspectRatio(it.width.toFloat() / it.height), contentScale = ContentScale.Fit) }
                     Box(Modifier.size(56.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
@@ -645,7 +646,7 @@ private fun BublinaVideo(s: Sprava) {
                     }, enabled = znova == null && !v.pracuje, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Farby.okraj)) {
                         Icon(Icons.Default.MusicNote, null, tint = Farby.text, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(T("video_hudba"), color = Farby.text, fontSize = 13.sp)
                     }
-                    IconButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(proj.mp4) }.onFailure { Platforma.otvorOdkaz(proj.mp4.toURI().toString()) } }, enabled = proj.mp4.exists()) {
+                    IconButton(onClick = { Prehravac.otvor(proj.mp4) }, enabled = proj.mp4.exists()) {
                         Icon(Icons.Default.OpenInNew, T("video_otvorit"), tint = Farby.tlmene, modifier = Modifier.size(18.dp))
                     }
                     proj.obrazky.firstOrNull()?.let { f ->
@@ -1544,7 +1545,7 @@ private fun ObrazkyObrazovka(videa: Boolean, spat: () -> Unit) {
                         Text(T("vai_info"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                         aiVideo?.let { f ->
                             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                GradientTlacidlo(T("video_prehrat"), Icons.Default.PlayArrow) { runCatching { java.awt.Desktop.getDesktop().open(f) }.onFailure { Platforma.otvorOdkaz(f.toURI().toString()) } }
+                                GradientTlacidlo(T("video_prehrat"), Icons.Default.PlayArrow) { Prehravac.otvor(f) }
                                 OutlinedButton(onClick = {
                                     val d = File(System.getProperty("user.home"), "Videos/Alexia AI").apply { mkdirs() }
                                     val u = runCatching { f.copyTo(File(d, f.name), overwrite = true) }.getOrNull()
@@ -1884,7 +1885,7 @@ private fun ColumnScope.VideoVylepsenie() {
                 Text(T("vv_hotovo", r.path), color = Farby.zelena, fontSize = 13.sp)
                 Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GradientTlacidlo(T("video_otvorit"), Icons.Default.PlayArrow) {
-                        runCatching { java.awt.Desktop.getDesktop().open(r) }.onFailure { Platforma.otvorOdkaz(r.toURI().toString()) }
+                        Prehravac.otvor(r)
                     }
                     OutlinedButton(onClick = { val u = v.ulozDoVidei(); Platforma.oznam(if (u != null) T("video_ulozene") + " " + u.parent else T("obr_neulozene")) },
                         shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Farby.okraj)) { Text(T("vv_do_videi"), color = Farby.text) }
@@ -2257,7 +2258,7 @@ private fun RozhybatRiadok(f: File) {
                 o.natocAI(popis, null, f) { v, e -> pracuje = false; if (v != null) vysledok = v else Platforma.oznam("⚠ $e") }
             }, enabled = !o.generuje, label = { Text(T("vai_rozhybat_tlacidlo"), fontSize = 12.sp) }, colors = AssistChipDefaults.assistChipColors(labelColor = Farby.text))
             vysledok?.let { v ->
-                AssistChip(onClick = { runCatching { java.awt.Desktop.getDesktop().open(v) }.onFailure { Platforma.otvorOdkaz(v.toURI().toString()) } },
+                AssistChip(onClick = { Prehravac.otvor(v) },
                     label = { Text(T("video_prehrat"), fontSize = 12.sp) }, colors = AssistChipDefaults.assistChipColors(labelColor = Farby.zelena))
             }
         }
@@ -2603,7 +2604,7 @@ private fun VideoklipKarta() {
         hotove?.let { f ->
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("✓ " + f.name, color = Farby.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                TextButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(f) }.onFailure { Platforma.otvorOdkaz(f.toURI().toString()) } }) {
+                TextButton(onClick = { Prehravac.otvor(f) }) {
                     Text(T("klip_prehrat"), color = Farby.ruzova)
                 }
             }
@@ -2748,7 +2749,7 @@ private fun DabingObrazovka(spat: () -> Unit) {
                 vysledok?.let { f ->
                     Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("✓ " + f.name, color = Farby.zelena, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(f) } }) { Text(T("klip_prehrat"), color = Farby.ruzova) }
+                        TextButton(onClick = { Prehravac.otvor(f) }) { Text(T("klip_prehrat"), color = Farby.ruzova) }
                         TextButton(onClick = { runCatching { java.awt.Desktop.getDesktop().open(f.parentFile) } }) { Text(T("dab_priecinok"), color = Farby.ruzova) }
                     }
                 }

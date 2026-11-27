@@ -14,6 +14,9 @@ object T {
     }
 
     private val sk = mapOf(
+        "zavriet" to "Zavrieť",
+        "preh_externe" to "Otvoriť v inom prehrávači",
+        "preh_nenajdene" to "Video sa nenašlo",
         "dab_prekladac" to "Sťahujem model na preklad (Qwen3 4B, ~2,5 GB)… %1\$d %%",
         "dab_zalozka" to "Dabing",
         "dab_nadpis" to "Dabing videa",
@@ -477,6 +480,9 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "zavriet" to "Close",
+        "preh_externe" to "Open in another player",
+        "preh_nenajdene" to "Video not found",
         "dab_prekladac" to "Downloading the translation model (Qwen3 4B, ~2.5 GB)… %1\$d %%",
         "dab_zalozka" to "Dubbing",
         "dab_nadpis" to "Video dubbing",

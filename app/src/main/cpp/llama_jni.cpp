@@ -250,3 +250,87 @@ F(void, uvolni)(JNIEnv*, jobject, jlong h) {
     if (s->model) llama_model_free(s->model);
     delete s;
 }
+
+#ifdef ALEXIA_MTMD
+// ------------------------------------------------------------------------------------------------
+// Videnie (len PC / Linux): malý model, ktorý vidí obrázky (Qwen3-VL cez mtmd). Načíta sa, opíše
+// jeden obrázok a hneď sa uvoľní. Beží na procesore – grafiku nechá obrázkovému modelu.
+#include "mtmd.h"
+#include "mtmd-helper.h"
+
+F(jbyteArray, opisObrazka)(JNIEnv* env, jobject, jstring modelCesta, jstring mmprojCesta, jbyteArray data,
+                           jstring system, jstring otazka, jint maxTok, jint vlakna) {
+    static bool init = false;
+    if (!init) { llama_log_set(logovanie, nullptr); mtmd_log_set(logovanie, nullptr); llama_backend_init(); init = true; }
+    g_chyba.clear();
+    std::string mPath = jstr(env, modelCesta), pPath = jstr(env, mmprojCesta);
+    std::string sys = jutf8(env, system), ot = jutf8(env, otazka);
+    jsize len = env->GetArrayLength(data);
+    std::vector<unsigned char> buf((size_t)len);
+    env->GetByteArrayRegion(data, 0, len, (jbyte*)buf.data());
+
+    auto mp = llama_model_default_params();
+    mp.n_gpu_layers = 0;
+    llama_model* model = llama_model_load_from_file(mPath.c_str(), mp);
+    if (!model) { g_chyba = "Model na videnie sa nedá načítať"; return nullptr; }
+    auto cp = llama_context_default_params();
+    cp.n_ctx = 6144; cp.n_batch = 2048; cp.n_ubatch = 2048;
+    cp.n_threads = vlakna; cp.n_threads_batch = vlakna;
+    cp.op_offload = false;
+    llama_context* ctx = llama_init_from_model(model, cp);
+    if (!ctx) { llama_model_free(model); g_chyba = "Na model videnia nie je dosť pamäte"; return nullptr; }
+
+    auto mpar = mtmd_context_params_default();
+    mpar.use_gpu = false; mpar.n_threads = vlakna; mpar.print_timings = false; mpar.warmup = false;
+    mpar.image_max_tokens = 1024;
+    mtmd_context* mctx = mtmd_init_from_file(pPath.c_str(), model, mpar);
+    std::string vysl;
+    llama_sampler* smpl = nullptr;
+    mtmd_input_chunks* chunks = nullptr;
+    mtmd_bitmap* bmp = nullptr;
+    do {
+        if (!mctx) { g_chyba = "Časť modelu na videnie (mmproj) sa nedá načítať"; break; }
+        auto w = mtmd_helper_bitmap_init_from_buf(mctx, buf.data(), buf.size(), false, mtmd_helper_init_opt_default());
+        bmp = w.bitmap;
+        if (!bmp) { g_chyba = "Obrázok sa nedá prečítať"; break; }
+        const char* t = llama_model_chat_template(model, nullptr);
+        std::string prompt = formatuj(t ? t : "", {"system", "user"}, {sys, std::string(mtmd_default_marker()) + "\n" + ot});
+        mtmd_input_text txt{prompt.c_str(), prompt.size(), true, true};
+        chunks = mtmd_input_chunks_init();
+        const mtmd_bitmap* bm[1] = {bmp};
+        if (mtmd_tokenize(mctx, chunks, &txt, bm, 1) != 0) { g_chyba = "Obrázok sa nepodarilo pripraviť"; break; }
+        llama_pos nPast = 0;
+        if (mtmd_helper_eval_chunks(mctx, ctx, chunks, 0, 0, (int32_t)cp.n_batch, true, &nPast) != 0) { g_chyba = "Spracovanie obrázka zlyhalo"; break; }
+
+        smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
+        llama_sampler_chain_add(smpl, llama_sampler_init_penalties(llama_vocab_n_tokens(llama_model_get_vocab(model)), 64, 1.05f, 0.0f, 0.0f));
+        llama_sampler_chain_add(smpl, llama_sampler_init_top_k(20));
+        llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.8f, 1));
+        llama_sampler_chain_add(smpl, llama_sampler_init_temp(0.4f));
+        llama_sampler_chain_add(smpl, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+        const llama_vocab* vocab = llama_model_get_vocab(model);
+        llama_batch b = llama_batch_init(1, 0, 1);
+        char piece[256];
+        for (int i = 0; i < maxTok && nPast + 1 < (llama_pos)cp.n_ctx; i++) {
+            llama_token tok = llama_sampler_sample(smpl, ctx, -1);
+            if (llama_vocab_is_eog(vocab, tok)) break;
+            int n = llama_token_to_piece(vocab, tok, piece, sizeof piece, 0, false);
+            if (n > 0) vysl.append(piece, (size_t)n);
+            b.n_tokens = 1; b.token[0] = tok; b.pos[0] = nPast; b.n_seq_id[0] = 1; b.seq_id[0][0] = 0; b.logits[0] = true;
+            if (llama_decode(ctx, b) != 0) { g_chyba = "Opis obrázka zlyhal"; break; }
+            nPast++;
+        }
+        llama_batch_free(b);
+    } while (false);
+    if (smpl) llama_sampler_free(smpl);
+    if (chunks) mtmd_input_chunks_free(chunks);
+    if (bmp) mtmd_bitmap_free(bmp);
+    if (mctx) mtmd_free(mctx);
+    llama_free(ctx);
+    llama_model_free(model);
+    if (vysl.empty()) { if (g_chyba.empty()) g_chyba = "Model nič nenapísal"; return nullptr; }
+    jbyteArray a = env->NewByteArray((jsize)vysl.size());
+    env->SetByteArrayRegion(a, 0, (jsize)vysl.size(), (const jbyte*)vysl.data());
+    return a;
+}
+#endif

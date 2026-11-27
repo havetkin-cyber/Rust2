@@ -15,6 +15,8 @@ set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_COMMON OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_MTMD ON CACHE BOOL "" FORCE)    # videnie obrázkov (Qwen3-VL) – sekcia Prompt, prenos štýlu
+set(MTMD_VIDEO OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)      # beží aj na inom procesore než CI
 set(GGML_AVX2 ON CACHE BOOL "" FORCE)         # Zen 3+ (Z2 Go) má AVX2/FMA/F16C
 set(GGML_FMA ON CACHE BOOL "" FORCE)
@@ -32,7 +34,8 @@ target_include_directories(alexiaai PRIVATE ${JNI_INCLUDE_DIRS})
 if(NOT MSVC)
     target_compile_options(alexiaai PRIVATE -O3)
 endif()
-target_link_libraries(alexiaai llama)
+target_link_libraries(alexiaai llama mtmd)
+target_compile_definitions(alexiaai PRIVATE ALEXIA_MTMD)
 if(NOT MSVC)
     target_link_options(alexiaai PRIVATE -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,--no-undefined)
 endif()

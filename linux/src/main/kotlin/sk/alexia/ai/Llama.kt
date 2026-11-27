@@ -15,6 +15,8 @@ object Llama {
     external fun generuj(h: Long, roly: Array<String>, obsahy: Array<String>, maxTokenov: Int, cb: Odpoved): Int
     /** LoRA adaptéry (GGUF) pre chatový model; vráti "" alebo text chyby */
     external fun nastavLory(h: Long, cesty: Array<String>, sily: FloatArray): String
+    /** Videnie (len PC/Linux): model Qwen3-VL opíše obrázok; vráti UTF-8 text alebo null (pozri [chyba]) */
+    external fun opisObrazka(model: String, mmproj: String, data: ByteArray, system: String, otazka: String, maxTokenov: Int, vlakna: Int): ByteArray?
     external fun zastav(h: Long)
     external fun zabudni(h: Long)
     external fun uvolni(h: Long)

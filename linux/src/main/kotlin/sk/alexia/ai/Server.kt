@@ -65,6 +65,7 @@ object Server {
             s.createContext("/api/galeria/zoznam") { x -> obsluz(x) { galeria(x) } }
             s.createContext("/api/galeria/nahlad") { x -> obsluz(x) { nahlad(x) } }
             s.createContext("/api/galeria/subor") { x -> obsluz(x) { obrazokSubor(x) } }
+            s.createContext("/api/opis") { x -> obsluz(x) { opisObrazka(x) } }
             s.createContext("/api/klip/pridaj") { x -> obsluz(x) { klipPridaj(x) } }
             s.createContext("/api/vylepsi") { x -> obsluz(x) { vylepsi(x) } }
             s.createContext("/api/styl") { x -> obsluz(x) { prenosStylu(x) } }
@@ -213,6 +214,18 @@ object Server {
         val sek = j.optInt("sekundy", 5).coerceIn(1, 180)
         val id = VzdialeneVidea.pridaj(popis, sek, j.optBoolean("cezObrazok"), predloha)
         odpovedz(x, 200, JSONObject().put("id", id).toString())
+    }
+
+    /** sekcia Prompt z mobilu: telo = obrázok, ?rezim=styl|prompt → {"text": …} */
+    private fun opisObrazka(x: HttpExchange) {
+        val data = x.requestBody.use { it.readNBytes(40_000_000) }
+        if (data.isEmpty()) { odpovedz(x, 400, T("styl_nie_obrazok")); return }
+        val f = File.createTempFile("alexia_opis", ".img").apply { writeBytes(data); deleteOnExit() }
+        val rezim = if (parameter(x, "rezim") == "styl") Videnie.Rezim.STYL else Videnie.Rezim.PROMPT
+        val (t, e) = Videnie.opisCakaj(f, rezim)
+        f.delete()
+        if (t == null) { odpovedz(x, 500, e.ifBlank { T("vid_chyba") }); return }
+        odpovedz(x, 200, JSONObject().put("text", t).toString())
     }
 
     /** videoklip z mobilu: telo = skladba, ?fotky=meno|meno… (galéria PC), &tempo=1–3, &nazov=… */

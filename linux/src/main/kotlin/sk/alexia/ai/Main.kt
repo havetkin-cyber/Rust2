@@ -120,7 +120,7 @@ private var naspat: (() -> Unit)? = null
 private var prepni: ((Int) -> Unit)? = null
 private var chodNa: ((Int) -> Unit)? = null
 
-private enum class Obrazovka { CHAT, OBRAZKY, VIDEA, VYLEPSIT, LORA, MODELY, NASTAVENIA }
+private enum class Obrazovka { CHAT, OBRAZKY, VIDEA, VYLEPSIT, PROMPT, LORA, MODELY, NASTAVENIA }
 
 @Composable
 private fun Appka() {
@@ -192,6 +192,7 @@ private fun Appka() {
             Obrazovka.VIDEA -> key("videa") { ObrazkyObrazovka(videa = true) { obrazovka = Obrazovka.CHAT } }
             Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
             Obrazovka.LORA -> LoraObrazovka { obrazovka = Obrazovka.CHAT }
+            Obrazovka.PROMPT -> PromptObrazovka { obrazovka = Obrazovka.CHAT }
         }
         }
         }
@@ -251,6 +252,7 @@ private fun Zalozky(aktivna: Obrazovka, zvol: (Obrazovka) -> Unit) {
         Triple(Obrazovka.OBRAZKY, Icons.Default.Image, "obrazky"),
         Triple(Obrazovka.VIDEA, Icons.Default.Movie, "videa"),
         Triple(Obrazovka.VYLEPSIT, Icons.Default.AutoFixHigh, "vylepsit_kratko"),
+        Triple(Obrazovka.PROMPT, Icons.Default.Description, "prompt_zalozka"),
         Triple(Obrazovka.LORA, Icons.Default.Extension, "lora_zalozka"),
         Triple(Obrazovka.MODELY, Icons.Default.Memory, "modely"),
         Triple(Obrazovka.NASTAVENIA, Icons.Default.Tune, "nastavenia"),
@@ -2397,10 +2399,21 @@ private fun PrenosStyluKarta() {
                 }
             }
         }
+        Row(Modifier.fillMaxWidth().clickable { val ns = ChatJadro.nastavenia; ns.autoStyl = !ns.autoStyl; ns.uloz() }.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(T("styl_auto"), color = Farby.text, fontSize = 14.sp)
+                Text(T("styl_auto_info"), color = Farby.tlmene, fontSize = 12.sp)
+            }
+            Switch(checked = ChatJadro.nastavenia.autoStyl, onCheckedChange = { val ns = ChatJadro.nastavenia; ns.autoStyl = it; ns.uloz() },
+                colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+        }
         OutlinedTextField(value = doplnok, onValueChange = { doplnok = it }, singleLine = true, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().nadKlavesnicou(),
             placeholder = { Text(T("styl_doplnok_hint"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
-        if (bezi) {
+        if (bezi && Videnie.pracuje) {
+            Text(Videnie.cinnost, color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+            Casovac(true, Videnie.zaciatok, 0)
+        } else if (bezi) {
             Text(T("styl_pracuje", (o.priebeh * 100).roundToInt()), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             LinearProgressIndicator(progress = { o.priebeh }, modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
         } else GradientTlacidlo(T("styl_spustit"), Icons.Default.Palette, Modifier.padding(top = 8.dp).fillMaxWidth(),
@@ -2595,4 +2608,69 @@ private fun VideoklipKarta() {
         }
     }
     if (vyber) GaleriaVyberDialog(T("klip_pridat"), null, { vyber = false }) { f -> if (f !in fotky) fotky += f; vyber = false }
+}
+
+/** Sekcia Prompt: model, ktorý vidí obrázky, napíše z ľubovoľného obrázka (aj bežnej fotky) veľmi podrobný prompt */
+@Composable
+private fun PromptObrazovka(spat: () -> Unit) {
+    val v = Videnie
+    var obrazok by remember { mutableStateOf<File?>(null) }
+    var rezim by remember { mutableStateOf(Videnie.Rezim.PROMPT) }
+    var vysledok by remember { mutableStateOf("") }
+    var chyba by remember { mutableStateOf("") }
+    var vyber by remember { mutableStateOf(false) }
+    val schranka = androidx.compose.ui.platform.LocalClipboardManager.current
+    val nadpis = T("prompt_vyber")
+    if (vyber) GaleriaVyberDialog(nadpis,
+        zoSuboru = { Platforma.vyberSubor(nadpis, setOf("png", "jpg", "jpeg", "bmp", "gif")) { f -> obrazok = f; vysledok = ""; chyba = "" }; vyber = false },
+        zavri = { vyber = false }) { f -> obrazok = f; vysledok = ""; chyba = ""; vyber = false }
+    Column(Modifier.fillMaxSize()) {
+        Hlavicka(T("prompt_nadpis"), T("prompt_podnadpis"), spat = spat)
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Karta { Text(T("prompt_info"), color = Farby.tlmene, fontSize = 13.sp) }
+            Karta {
+                val nb = remember(obrazok) { obrazok?.let { Platforma.nacitajObrazok(it) } }
+                Box(Modifier.fillMaxWidth().height(320.dp).clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).clickable(enabled = !v.pracuje) { vyber = true },
+                    contentAlignment = Alignment.Center) {
+                    if (nb != null) Image(nb, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                    else Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.AddPhotoAlternate, null, tint = Farby.tlmene, modifier = Modifier.size(40.dp))
+                        Text(T("prompt_klikni"), color = Farby.tlmene, fontSize = 13.sp)
+                    }
+                }
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(Videnie.Rezim.PROMPT to "prompt_rezim_cely", Videnie.Rezim.STYL to "prompt_rezim_styl").forEach { (r, k) ->
+                        FilterChip(selected = rezim == r, onClick = { rezim = r }, label = { Text(T(k)) }, enabled = !v.pracuje,
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                if (v.pracuje) {
+                    Text(v.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
+                    Casovac(true, v.zaciatok, 0)
+                    if (v.priebeh >= 0f) LinearProgressIndicator(progress = { v.priebeh }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    else LinearProgressIndicator(modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                } else {
+                    Casovac(false, 0, v.posledneTrvanie)
+                    GradientTlacidlo(T("prompt_napis"), Icons.Default.Description, Modifier.fillMaxWidth(), enabled = obrazok != null) {
+                        chyba = ""; vysledok = ""
+                        v.opis(obrazok!!, rezim) { t, e -> if (t != null) vysledok = t else chyba = e }
+                    }
+                    if (!v.mamModel()) Text(T("prompt_prvy_raz"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+                if (chyba.isNotBlank()) Text("⚠ $chyba", color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+            if (vysledok.isNotBlank()) Karta {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("prompt_vysledok"), color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { schranka.setText(androidx.compose.ui.text.AnnotatedString(vysledok)); Platforma.oznam(T("prompt_skopirovane")) }) {
+                        Text(T("cas_kopirovat"), color = Farby.ruzova)
+                    }
+                }
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(vysledok, color = Farby.text, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
 }

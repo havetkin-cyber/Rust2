@@ -134,6 +134,12 @@ object Klient {
         return JSONObject(spoj(adresa, pin, "/api/video/pridaj", t).inputStream.bufferedReader(Charsets.UTF_8).readText()).getString("id")
     }
 
+    /** sekcia Prompt: PC (model videnia) opíše obrázok – rezim "prompt" alebo "styl" */
+    fun opis(adresa: String, pin: String, obrazok: ByteArray, rezim: String): String {
+        val k = spojTelo(adresa, pin, "/api/opis?rezim=$rezim", obrazok, "application/octet-stream", citanie = 30 * 60_000)
+        return JSONObject(k.inputStream.bufferedReader(Charsets.UTF_8).readText()).getString("text")
+    }
+
     /** videoklip na PC: skladba z mobilu + obrázky z galérie PC; vráti id úlohy */
     fun klipPridaj(adresa: String, pin: String, nazov: String, skladba: ByteArray, fotky: List<String>, tempo: Int, spev: Boolean = false): String {
         val q = "/api/klip/pridaj?tempo=$tempo&spev=${if (spev) 1 else 0}&nazov=" + java.net.URLEncoder.encode(nazov, "UTF-8") +

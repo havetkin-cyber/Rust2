@@ -681,9 +681,21 @@ object ObrazkyJadro {
      * Fotky zvonka sa ako obsah nedajú – rovnaké pravidlo ako pri úpravách.
      */
     fun prenosStylu(obsah: File, styl: File, doplnok: String, hotovo: (File?, String) -> Unit) {
-        if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
+        if (generuje || Videnie.pracuje) { hotovo(null, T("video_zaneprazdnene")); return }
         val obsah = originalZAppky(obsah) ?: run { hotovo(null, T("styl_len_appka")); return }
         if (Podpis.zakazane(doplnok)) { hotovo(null, T("upr_zakazane")); return }
+        kleinSada() ?: run { hotovo(null, T("styl_treba_klein")); return }
+        // model, ktorý vidí obrázky, najprv sám opíše štýl predlohy → Klein netipuje (nič netreba písať)
+        if (!ChatJadro.nastavenia.autoStyl) { prenosStyluKlein(obsah, styl, doplnok, hotovo); return }
+        Videnie.opis(styl, Videnie.Rezim.STYL) { opis, chyba ->
+            if (opis == null && chyba == T("vid_zakazane")) { hotovo(null, chyba); return@opis }
+            val spolu = listOfNotNull(opis?.let { "Style of image 2: $it." }, doplnok.trim().ifBlank { null }).joinToString(" ")
+            prenosStyluKlein(obsah, styl, spolu, hotovo)
+        }
+    }
+
+    private fun prenosStyluKlein(obsah: File, styl: File, doplnok: String, hotovo: (File?, String) -> Unit) {
+        if (generuje) { hotovo(null, T("video_zaneprazdnene")); return }
         val k = kleinSada() ?: run { hotovo(null, T("styl_treba_klein")); return }
         val refs = runCatching { listOf(naReferenciu(obsah, 1024), naReferenciu(styl, 1024)) }.getOrElse { hotovo(null, it.message ?: T("styl_nie_obrazok")); return }
         val predtym = aktivnyModel

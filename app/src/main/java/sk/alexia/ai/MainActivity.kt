@@ -1045,6 +1045,7 @@ private fun ObrazkyObrazovka(spat: () -> Unit) {
                 }
 
                 PrenosStyluPcKarta()
+                PromptPcKarta()
 
                 // galéria
                 if (o.galeria.isNotEmpty()) Sekcia(T("obr_sek_galeria", o.galeria.size), ikona = Icons.Default.PhotoLibrary) {
@@ -1877,4 +1878,69 @@ private fun InfoObrazka(f: java.io.File) {
 @Composable
 private fun InfoRiadok(k: String, h: String) {
     if (h.isNotBlank()) Row { Text(T(k) + ": ", color = Farby.tlmene, fontSize = 12.sp); Text(h, color = Farby.text, fontSize = 12.sp) }
+}
+
+/** Sekcia Prompt: fotka z mobilu → PC (model, ktorý vidí obrázky) napíše veľmi podrobný prompt. Zamknuté bez PC. */
+@Composable
+private fun PromptPcKarta() {
+    val c = LocalContext.current
+    var obr by remember { mutableStateOf<Uri?>(null) }
+    var styl by remember { mutableStateOf(false) }
+    var vysledok by remember { mutableStateOf("") }
+    var chyba by remember { mutableStateOf("") }
+    var bezi by remember { mutableStateOf(false) }
+    var zaciatok by remember { mutableLongStateOf(0L) }
+    var trvanie by remember { mutableLongStateOf(0L) }
+    val vyber = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u: Uri? -> if (u != null) { obr = u; vysledok = ""; chyba = "" } }
+    val schranka = androidx.compose.ui.platform.LocalClipboardManager.current
+    val pcOk = PcSpojenie.pripojene
+    Sekcia(T("prompt_nadpis"), ikona = if (pcOk) Icons.Default.Description else Icons.Default.Lock) {
+        Text(if (pcOk) T("prompt_info") else T("obr_pc_zamknute"), color = Farby.tlmene, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+        if (pcOk) {
+            val bmp = remember(obr) { obr?.let { u -> runCatching { c.contentResolver.openInputStream(u)!!.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 }) }?.asImageBitmap() }.getOrNull() } }
+            Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(12.dp)).background(Farby.plocha2).clickable(enabled = !bezi) { vyber.launch("image/*") }, contentAlignment = Alignment.Center) {
+                if (bmp != null) Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                else Text(T("prompt_klikni"), color = Farby.tlmene, fontSize = 12.sp)
+            }
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(selected = !styl, onClick = { styl = false }, label = { Text(T("prompt_rezim_cely")) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                FilterChip(selected = styl, onClick = { styl = true }, label = { Text(T("prompt_rezim_styl")) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+            }
+            if (bezi) {
+                Text(T("prompt_pc_pracuje"), color = Farby.text, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                Casovac(true, zaciatok, 0)
+                LinearProgressIndicator(modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+            } else {
+                Casovac(false, 0, trvanie)
+                GradientTlacidlo(T("prompt_napis"), Icons.AutoMirrored.Filled.Send, Modifier.padding(top = 8.dp).fillMaxWidth(), enabled = obr != null) {
+                    bezi = true; chyba = ""; vysledok = ""; zaciatok = System.currentTimeMillis()
+                    val u = obr!!
+                    Thread {
+                        val r = runCatching {
+                            // zmenšiť na max 1280 px (rýchlejší prenos), JPEG
+                            val b = c.contentResolver.openInputStream(u)!!.use { android.graphics.BitmapFactory.decodeStream(it) } ?: throw IllegalStateException(T("styl_nie_obrazok"))
+                            val k = minOf(1f, 1280f / maxOf(b.width, b.height))
+                            val m = if (k < 1f) android.graphics.Bitmap.createScaledBitmap(b, (b.width * k).toInt(), (b.height * k).toInt(), true) else b
+                            val out = java.io.ByteArrayOutputStream(); m.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)
+                            Klient.opis(ChatJadro.nastavenia.vzdialenaAdresa, ChatJadro.nastavenia.vzdialenyPin, out.toByteArray(), if (styl) "styl" else "prompt")
+                        }
+                        Platforma.naHlavnom {
+                            bezi = false; trvanie = System.currentTimeMillis() - zaciatok
+                            r.onSuccess { vysledok = it }.onFailure { chyba = it.message ?: T("vid_chyba") }
+                        }
+                    }.start()
+                }
+            }
+            if (chyba.isNotBlank()) Text("⚠ $chyba", color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            if (vysledok.isNotBlank()) {
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(T("prompt_vysledok"), color = Farby.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { schranka.setText(androidx.compose.ui.text.AnnotatedString(vysledok)); Platforma.oznam(T("prompt_skopirovane")) }) { Text(T("cas_kopirovat"), color = Farby.ruzova) }
+                }
+                androidx.compose.foundation.text.selection.SelectionContainer { Text(vysledok, color = Farby.text, fontSize = 13.sp) }
+            }
+        }
+    }
 }

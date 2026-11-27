@@ -36,6 +36,8 @@ class Nastavenia {
     var setritVram by mutableStateOf(p.getProperty("setritVram") == "true")
     /** videá nad 2 s robiť po 2 s kúskoch – Windows inak pri dlhom výpočte reštartuje ovládač grafiky (device lost) */
     var videoKusy by mutableStateOf(p.getProperty("videoKusy") != "false")
+    /** prenos štýlu: model videnia sám opíše štýl predlohy */
+    var autoStyl by mutableStateOf(p.getProperty("autoStyl") != "false")
     /** tvar obrázka: stvorec / vyska (na výšku) / sirka (na šírku) */
     var obrPomer by mutableStateOf(p.getProperty("obrPomer") ?: "stvorec")
     /** vlastný rozmer obrázka (pri tvare „vlastne“) */
@@ -94,6 +96,7 @@ class Nastavenia {
         p.setProperty("obrVyska", obrVyska.toString())
         p.setProperty("setritVram", setritVram.toString())
         p.setProperty("videoKusy", videoKusy.toString())
+        p.setProperty("autoStyl", autoStyl.toString())
         p.setProperty("videoCezObrazok", videoCezObrazok.toString())
         p.setProperty("skladanie", skladanie)
         p.setProperty("videoZvacsenie", videoZvacsenie.toString())

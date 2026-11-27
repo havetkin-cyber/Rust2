@@ -72,6 +72,12 @@ jobs:
           # stály kanál aktualizácií – appka sa pozerá sem (nezávisí od toho, ktoré vydanie je práve „najnovšie“)
           gh release view aktualizacie 2>$null; if ($LASTEXITCODE -ne 0) { gh release create aktualizacie --prerelease --title "Aktualizácie (PC)" --notes "Stály kanál aktualizácií pre Windows a Linux" }
           # kanál aktualizácií: Linux a Windows nahrávajú naraz, GitHub občas vráti 404 – skúsiť znova
+          # staršie zostavenie, ktoré dobehne neskôr, nesmie prepísať novšiu verziu v kanáli
+          $moja = [int]((Get-Content windows-verzia.txt -Raw).Trim().Split('.')[-1])
+          $kanal = 0
+          gh release download aktualizacie -p windows-verzia.txt -O kanal-verzia.txt --clobber 2>$null
+          if (Test-Path kanal-verzia.txt) { $kanal = [int]((Get-Content kanal-verzia.txt -Raw).Trim().Split('.')[-1]) }
+          if ($kanal -gt $moja) { Write-Host "Kanál už má novšiu verziu ($kanal) – preskakujem"; exit 0 }
           $ok = $false
           foreach ($i in 1..5) { gh release upload aktualizacie AlexiaAI-Windows.zip windows-verzia.txt --clobber; if ($LASTEXITCODE -eq 0) { $ok = $true; break }; Start-Sleep -Seconds (15 * $i) }
           if (-not $ok) { exit 1 }

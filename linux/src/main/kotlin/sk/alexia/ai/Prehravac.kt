@@ -124,7 +124,7 @@ private class PrehravacStav(val f: File) {
         DataInputStream(v.inputStream.buffered(velkost * 2)).use { vstup ->
             var i = 0
             while (bezi) {
-                runCatching { vstup.readFully(ram) }.getOrElse { break }
+                try { vstup.readFully(ram) } catch (e: Exception) { break }
                 val t = i.toDouble() / FPS; i++
                 // čakať na zvuk; ak obraz mešká o viac ako 0,1 s, snímok sa preskočí
                 while (bezi && hodiny() < t - 0.005) Thread.sleep(3)

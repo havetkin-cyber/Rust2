@@ -124,23 +124,27 @@ object Dabing {
                 prelozVsetko(reci, jazyk) { hotovych -> krok(0.5f + 0.2f * hotovych / reci.size, T("dab_prekladam", hotovych, reci.size)) }
                 Platforma.naHlavnom { ChatJadro.uvolniPamat() }
 
-                // 5) dabing: každá replika na svoje miesto, ak je dlhšia ako miesto, zrýchli sa (najviac 1,6×)
-                val stopa = FloatArray((dlzka * SR_DAB).toInt() + SR_DAB)
+                // 5) dabing: repliky idú za sebou a NIKDY sa neprekrývajú (inak hovorí ten istý hlas dvakrát naraz – „ozvena“);
+                //    ak sa nezmestí, zrýchli sa (najviac 1,8×) a ďalšia replika počká, kým predchádzajúca dohovorí
+                val stopa = FloatArray((dlzka * SR_DAB).toInt() + SR_DAB * 30)
+                var kurzor = 0.0
                 reci.forEachIndexed { i, r ->
                     krok(0.7f + 0.22f * i / reci.size, T("dab_hovorim", i + 1, reci.size))
                     if (r.preklad.isBlank()) return@forEachIndexed
-                    val dalsi = reci.getOrNull(i + 1)?.od ?: dlzka
-                    val miesto = (dalsi - r.od - 0.08).coerceAtLeast(0.4)
+                    val start = maxOf(r.od, kurzor + 0.06)
+                    val dalsi = reci.getOrNull(i + 1)?.od ?: (dlzka + 1.0)
+                    val miesto = (dalsi - start - 0.06).coerceAtLeast(0.5)
                     val h = if (hlasMuz != null && r.muz == true) hlasMuz else hlas
                     var (x, sr) = Hlas.syntetizuj(Hlas.naCitanie(r.preklad), h, 1f, jazyk)
                     val trvanie = x.size.toDouble() / sr
                     if (trvanie > miesto) {
-                        val k = (trvanie / miesto).coerceAtMost(1.6).toFloat()
+                        val k = (trvanie / miesto).coerceAtMost(1.8).toFloat()
                         val y = Hlas.syntetizuj(Hlas.naCitanie(r.preklad), h, k, jazyk); x = y.first; sr = y.second
                     }
                     val res = prevzorkuj(x, sr, SR_DAB)
-                    val od = (r.od * SR_DAB).toInt()
-                    for (j in res.indices) { val k = od + j; if (k < stopa.size) stopa[k] += res[j] * 0.95f }
+                    val od = (start * SR_DAB).toInt()
+                    for (j in res.indices) { val k = od + j; if (k < stopa.size) stopa[k] = res[j] * 0.95f }
+                    kurzor = start + res.size.toDouble() / SR_DAB
                 }
                 val dabWav = File(tmp, "dabing.wav"); zapisWav(dabWav, stopa, SR_DAB)
 
@@ -149,7 +153,9 @@ object Dabing {
                 val srt = File(tmp, "titulky.srt").apply { writeText(srt(reci)) }
                 val out = File(VideoJadro.priecinok().apply { mkdirs() }, "dabing_${jazyk}_${nazov}_${System.currentTimeMillis() / 1000}.mp4")
                 val filter = if (pozadie)
-                    "[1:a]aresample=48000,asplit=2[d][sc];[0:a]aresample=48000[p];[p][sc]sidechaincompress=threshold=0.015:ratio=14:attack=15:release=450[bg];[bg][d]amix=inputs=2:duration=first:normalize=0[a]"
+                    // pôvodné hlasy sú zvyčajne v strede stereo obrazu → odčítaním kanálov zmiznú, hudba a efekty ostanú; pri dabingu sa pozadie ešte stíši
+                    "[1:a]aresample=48000,asplit=2[d][sc];[0:a]aresample=48000,aformat=channel_layouts=stereo,pan=stereo|c0=0.7*c0-0.7*c1|c1=0.7*c1-0.7*c0,volume=0.8[p];" +
+                    "[p][sc]sidechaincompress=threshold=0.01:ratio=20:attack=10:release=500[bg];[bg][d]amix=inputs=2:duration=first:normalize=0[a]"
                 else "[1:a]aresample=48000[a]"
                 prikaz(listOf(ff, "-y", "-v", "error", "-i", video.path, "-i", dabWav.path, "-i", srt.path,
                     "-filter_complex", filter, "-map", "0:v:0", "-map", "[a]", "-map", "2:s:0",

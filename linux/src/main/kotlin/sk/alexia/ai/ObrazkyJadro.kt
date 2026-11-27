@@ -694,8 +694,11 @@ object ObrazkyJadro {
         val plocha = k.rozmer.toDouble() * k.rozmer
         fun r64(x: Double) = (Math.round(x / 64.0) * 64).toInt().coerceIn(256, 1536)
         val w = r64(Math.sqrt(plocha * a)); val v = r64(Math.sqrt(plocha / a))
-        val prompt = "Redraw image 1 in the artistic style of image 2. Keep the exact composition, subject, pose, face, clothing and layout of image 1. " +
-            "Take only the style from image 2: colors, color grading, lighting, texture, brushwork and mood. Do not copy objects or people from image 2." +
+        // pozor: „brushwork“ ťahalo všetko do olejomaľby – štýl sa berie podľa techniky obrázka 2 (anime, 3D, foto, maľba…)
+        val prompt = "Redraw image 1 so that it looks as if it was created by the same artist with the same rendering technique as image 2. " +
+            "First recognize what kind of image image 2 is (for example anime illustration, 3D render, photograph, oil painting, watercolor, pixel art) " +
+            "and make the result exactly that kind of image, matching its line work, shading, level of realism, colors, color grading, lighting and mood. " +
+            "Keep the composition, subject, pose, face, clothing and layout of image 1. Do not copy objects or people from image 2." +
             doplnok.trim().let { if (it.isBlank()) "" else " $it" }
         spust(prompt, "", w, v, k.kroky, k.cfg, referencie = refs) { f, e ->
             if (predtym != null && predtym != aktivnyModel) { uvolniPamat(); aktivnyModel = predtym }

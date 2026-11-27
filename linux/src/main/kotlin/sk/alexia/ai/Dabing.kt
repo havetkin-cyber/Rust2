@@ -107,7 +107,7 @@ object Dabing {
                     if (zrusit) throw IllegalStateException(T("klip_zrusene"))
                     vystupF.takeIf { it.exists() }?.readLines()?.forEach { l ->
                         val i = l.substringBefore('\t').toIntOrNull() ?: return@forEach
-                        repliky.getOrNull(i)?.text = l.substringAfter('\t').replace(Regex("\\[[^]]*]|\\([^)]*\\)|♪"), "").trim()
+                        repliky.getOrNull(i)?.text = cistiPrepis(l.substringAfter('\t'))
                     }
                     if (kod == 0) { hotovo = true; break }
                     posledna = "Whisper $pred skončil s kódom $kod"
@@ -172,6 +172,30 @@ object Dabing {
             val t = System.currentTimeMillis() - start
             Platforma.naHlavnom { pracuje = false; priebeh = 0f; cinnost = ""; proces = null; posledneTrvanie = t; hotovo(vysledok, chyba) }
         }.apply { isDaemon = true }.start()
+    }
+
+    // ---------------- čistenie prepisu (halucinácie Whispera) ----------------
+
+    private val HALUCINACIE = listOf("thank you for watching", "thanks for watching", "subtitles by", "amara.org", "please subscribe",
+        "like and subscribe", "transcribed by", "captions by", "translated by")
+
+    /**
+     * Whisper si pri hudbe bez reči (úvod, znelka) vymýšľa – opakuje jedno slovo („more more more…“)
+     * alebo vetu typu „Thanks for watching“. Opakovania sa zlúčia, úseky, kde je skoro len jedno slovo, sa zahodia.
+     */
+    internal fun cistiPrepis(t0: String): String {
+        var t = t0.replace(Regex("\\[[^]]*]|\\([^)]*\\)|♪|\\*[^*]*\\*"), " ").replace(Regex("\\s+"), " ").trim()
+        if (t.isEmpty()) return ""
+        val male = t.lowercase()
+        if (HALUCINACIE.any { male.contains(it) } && t.length < 80) return ""
+        val slova = male.split(Regex("[^\\p{L}\\p{N}']+")).filter { it.isNotBlank() }
+        if (slova.size >= 4) {
+            val naj = slova.groupingBy { it }.eachCount().maxByOrNull { it.value }!!
+            if (naj.value >= 4 && naj.value * 2 >= slova.size) return ""        // „more more more more…“
+        }
+        // opakujúce sa frázy (1–6 slov) za sebou → raz
+        for (n in 1..6) t = t.replace(Regex("(?i)\\b((?:[\\p{L}\\p{N}']+[\\s,.!?-]+){$n})(?:\\1){2,}"), "$1")
+        return t.trim()
     }
 
     // ---------------- muž / žena podľa výšky hlasu ----------------

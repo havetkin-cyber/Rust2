@@ -54,6 +54,10 @@ object Rec {
     // ---- Whisper large-v3-turbo (dabing): presnejší ako small, rýchlosť medzi base a small ----
     private const val TURBO = "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/"
     private val TURBO_SUBORY = listOf("turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt")
+    internal fun dirTurboVerejne() = dirTurbo()
+    internal fun dirSmall() = dir()
+    /** uvoľní Whisper z pamäte (pred chatovým modelom pri dabingu) */
+    fun uvolni() = synchronized(this) { rozpoznavac?.release(); rozpoznavac = null; jazykModelu = "" }
     private fun dirTurbo() = File(Platforma.priecinok, "hlas/whisper-turbo").apply { mkdirs() }
     fun mamTurbo() = File(dirTurbo(), "turbo-encoder.int8.onnx").length() > 200_000_000 &&
         File(dirTurbo(), "turbo-decoder.int8.onnx").length() > 50_000_000 && File(dirTurbo(), "turbo-tokens.txt").exists()

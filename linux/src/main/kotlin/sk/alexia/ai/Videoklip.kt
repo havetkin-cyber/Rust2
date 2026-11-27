@@ -104,6 +104,19 @@ object Videoklip {
         "wav2lip_gan_96.onnx" to "https://huggingface.co/facefusion/models-3.0.0/resolve/main/wav2lip_gan_96.onnx",
         "yoloface_8n.onnx" to "https://huggingface.co/facefusion/models-3.0.0/resolve/main/yoloface_8n.onnx",
     )
+    /** príkaz na spustenie pomocného procesu: java (pri vývoji) alebo samotný program appky s prepínačom */
+    internal fun pomocnyProces(trieda: String, prepinac: String, argy: List<String>): List<String> {
+        val java = File(System.getProperty("java.home"), "bin/" + if (Platforma.jeWindows) "java.exe" else "java")
+        val cp = System.getProperty("java.class.path").orEmpty()
+        return if (java.exists() && cp.isNotBlank()) listOf(java.path, "-Xmx3g", "-Dfile.encoding=UTF-8", "-cp", cp, trieda) + argy
+        else {
+            val exe = System.getenv("APPIMAGE")?.takeIf { File(it).exists() }
+                ?: ProcessHandle.current().info().command().orElse(null)
+                ?: throw IllegalStateException("Pomocný proces sa nedá spustiť")
+            listOf(exe, prepinac) + argy
+        }
+    }
+
     private fun priecinokSpevu() = File(Platforma.priecinok, "spev-modely").apply { mkdirs() }
 
     /**

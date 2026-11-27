@@ -47,7 +47,9 @@ object Dabing {
             val tmp = File(Platforma.priecinok, "dabing-tmp/$start").apply { mkdirs() }
             var vysledok: File? = null; var chyba = ""
             runCatching {
-                fun krok(p: Float, t: String) { if (zrusit) throw IllegalStateException(T("klip_zrusene")); Platforma.naHlavnom { priebeh = p; cinnost = t } }
+                fun krok(p: Float, t: String) { if (zrusit) throw IllegalStateException(T("klip_zrusene")); println("dabing: $t"); Platforma.naHlavnom { priebeh = p; cinnost = t } }
+                // grafika aj RAM pre dabing (na Legione je pamäť spoločná – obrázkový model by zabral miesto Whisperu)
+                Platforma.naHlavnom { runCatching { ObrazkyJadro.uvolniPamat() }; runCatching { ChatJadro.uvolniPamat() } }
                 // 0) nástroje a modely
                 val ff = VideoJadro.ffmpeg() ?: run {
                     val l = java.util.concurrent.CountDownLatch(1)
@@ -57,7 +59,8 @@ object Dabing {
                 // Whisper large-v3-turbo (~1 GB) – presnejší prepis ako malý model v chate
                 if (!Rec.mamTurbo()) {
                     krok(0.01f, T("dab_whisper"))
-                    Rec.stiahniTurbo { p -> Platforma.naHlavnom { priebeh = 0.01f + p * 0.04f; cinnost = T("dab_whisper") + " " + (p * 100).toInt() + " %" } }
+                    runCatching { Rec.stiahniTurbo { p -> Platforma.naHlavnom { priebeh = 0.01f + p * 0.04f; cinnost = T("dab_whisper") + " " + (p * 100).toInt() + " %" } } }
+                        .onFailure { println("dabing: Whisper turbo sa nestiahol: ${it.message}"); if (!Rec.mam()) throw IllegalStateException(T("dab_whisper_chyba") + " – " + it.message) }
                 }
                 for (h in listOfNotNull(hlas, hlasMuz).distinct())
                     if (!Hlas.mamDabingHlas(h)) { krok(0.02f, T("dab_hlas")); Hlas.stiahniDabingHlas(h) { p -> Platforma.naHlavnom { priebeh = 0.02f + p * 0.03f } } }
@@ -78,14 +81,39 @@ object Dabing {
                 if (dlzka < 1) throw IllegalStateException(T("dab_bez_zvuku"))
                 val repliky = useky(ff, video, dlzka)
 
-                // 3) prepis
-                repliky.forEachIndexed { i, r ->
-                    krok(0.18f + 0.3f * i / repliky.size, T("dab_prepis", i + 1, repliky.size))
+                // 3) prepis – v samostatnom procese (pád Whisperu nezhodí appku), najprv turbo, pri chybe malý model
+                val zvukF = File(tmp, "rec.f32"); zapisF32(zvukF, zvuk)
+                val usekyF = File(tmp, "useky.txt").apply { writeText(repliky.joinToString("\n") { "${it.od} ${it.po}" }) }
+                if (hlasMuz != null) repliky.forEach { r ->
                     val a = (r.od * SR).toInt().coerceIn(0, zvuk.size); val b = (r.po * SR).toInt().coerceIn(a, zvuk.size)
-                    if (hlasMuz != null) r.muz = jeMuz(zvuk, a, b)
-                    r.text = runCatching { Rec.prepis(zvuk.copyOfRange(a, b), SR, turbo = true) }.getOrDefault("")
-                        .replace(Regex("\\[[^]]*]|\\([^)]*\\)|♪"), "").trim()
+                    r.muz = jeMuz(zvuk, a, b)
                 }
+                val moznosti = buildList {
+                    if (Rec.mamTurbo()) add(Rec.dirTurboVerejne() to "turbo")
+                    if (Rec.mam()) add(Rec.dirSmall() to "small")
+                }
+                var hotovo = false; var posledna = ""
+                for ((dir, pred) in moznosti) {
+                    val vystupF = File(tmp, "prepis-$pred.txt")
+                    val p = ProcessBuilder(Videoklip.pomocnyProces("sk.alexia.ai.PrepisProces", "--prepis",
+                        listOf(Hlas.sherpaDir().path, dir.path, pred, zvukF.path, usekyF.path, vystupF.path))).redirectErrorStream(true).start()
+                    proces = p
+                    p.inputStream.bufferedReader().forEachLine { l ->
+                        val m = Regex("^P (\\d+) (\\d+)$").find(l.trim())
+                        if (m != null) { val i = m.groupValues[1].toInt(); val n = m.groupValues[2].toInt(); krok(0.18f + 0.3f * i / n, T("dab_prepis", i + 1, n)) }
+                        else println("prepis: $l")
+                    }
+                    val kod = p.waitFor()
+                    if (zrusit) throw IllegalStateException(T("klip_zrusene"))
+                    vystupF.takeIf { it.exists() }?.readLines()?.forEach { l ->
+                        val i = l.substringBefore('\t').toIntOrNull() ?: return@forEach
+                        repliky.getOrNull(i)?.text = l.substringAfter('\t').replace(Regex("\\[[^]]*]|\\([^)]*\\)|♪"), "").trim()
+                    }
+                    if (kod == 0) { hotovo = true; break }
+                    posledna = "Whisper $pred skončil s kódom $kod"
+                    println("dabing: $posledna – skúšam ďalší model")
+                }
+                if (!hotovo) throw IllegalStateException(posledna.ifBlank { T("dab_whisper_chyba") })
                 val reci = repliky.filter { it.text.length >= 2 }
                 if (reci.isEmpty()) throw IllegalStateException(T("dab_bez_reci"))
 
@@ -282,6 +310,11 @@ object Dabing {
         val k = pr.waitFor()
         if (zrusit) throw IllegalStateException(T("klip_zrusene"))
         if (k != 0) throw IllegalStateException("ffmpeg: " + v.lines().lastOrNull { it.isNotBlank() }.orEmpty())
+    }
+
+    private fun zapisF32(f: File, x: FloatArray) {
+        val b = ByteBuffer.allocate(x.size * 4).order(ByteOrder.LITTLE_ENDIAN)
+        b.asFloatBuffer().put(x); f.writeBytes(b.array())
     }
 
     private fun citajF32(f: File): FloatArray {

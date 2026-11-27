@@ -50,13 +50,10 @@ object Dabing {
                     Platforma.naHlavnom { VideoJadro.stiahniFfmpeg { l.countDown() } }; l.await()
                     VideoJadro.ffmpeg() ?: throw IllegalStateException(T("nahovor_ffmpeg"))
                 }
-                if (!Rec.mam()) {
+                // Whisper large-v3-turbo (~1 GB) – presnejší prepis ako malý model v chate
+                if (!Rec.mamTurbo()) {
                     krok(0.01f, T("dab_whisper"))
-                    val l = java.util.concurrent.CountDownLatch(1)
-                    Platforma.naHlavnom { Rec.stiahni() }
-                    Thread { while (Rec.priebeh != null || !Rec.mam()) { Thread.sleep(500); if (Rec.chyba.isNotBlank() && Rec.priebeh == null) break }; l.countDown() }.start()
-                    l.await()
-                    if (!Rec.mam()) throw IllegalStateException(Rec.chyba.ifBlank { T("dab_whisper_chyba") })
+                    Rec.stiahniTurbo { p -> Platforma.naHlavnom { priebeh = 0.01f + p * 0.04f; cinnost = T("dab_whisper") + " " + (p * 100).toInt() + " %" } }
                 }
                 if (!Hlas.mamDabingHlas(hlas)) { krok(0.02f, T("dab_hlas")); Hlas.stiahniDabingHlas(hlas) { p -> Platforma.naHlavnom { priebeh = 0.02f + p * 0.03f } } }
 
@@ -80,7 +77,7 @@ object Dabing {
                 repliky.forEachIndexed { i, r ->
                     krok(0.18f + 0.3f * i / repliky.size, T("dab_prepis", i + 1, repliky.size))
                     val a = (r.od * SR).toInt().coerceIn(0, zvuk.size); val b = (r.po * SR).toInt().coerceIn(a, zvuk.size)
-                    r.text = runCatching { Rec.prepis(zvuk.copyOfRange(a, b), SR) }.getOrDefault("")
+                    r.text = runCatching { Rec.prepis(zvuk.copyOfRange(a, b), SR, turbo = true) }.getOrDefault("")
                         .replace(Regex("\\[[^]]*]|\\([^)]*\\)|♪"), "").trim()
                 }
                 val reci = repliky.filter { it.text.length >= 2 }

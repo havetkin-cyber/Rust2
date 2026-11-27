@@ -51,32 +51,54 @@ object Rec {
         }.start()
     }
 
+    // ---- Whisper large-v3-turbo (dabing): presnejší ako small, rýchlosť medzi base a small ----
+    private const val TURBO = "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/"
+    private val TURBO_SUBORY = listOf("turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt")
+    private fun dirTurbo() = File(Platforma.priecinok, "hlas/whisper-turbo").apply { mkdirs() }
+    fun mamTurbo() = File(dirTurbo(), "turbo-encoder.int8.onnx").length() > 200_000_000 &&
+        File(dirTurbo(), "turbo-decoder.int8.onnx").length() > 50_000_000 && File(dirTurbo(), "turbo-tokens.txt").exists()
+
+    /** stiahne Whisper turbo (~1 GB), blokuje – volať z vlákna */
+    fun stiahniTurbo(p: (Float) -> Unit) {
+        Hlas.pripravSherpa {}
+        TURBO_SUBORY.forEachIndexed { i, meno ->
+            val f = File(dirTurbo(), meno)
+            if (f.exists() && (meno.endsWith(".txt") || f.length() > 50_000_000)) return@forEachIndexed
+            val t = File(f.path + ".part")
+            Hlas.stiahniSubor(TURBO + meno, t) { x -> p((i + x) / TURBO_SUBORY.size) }
+            f.delete(); t.renameTo(f)
+        }
+        if (!mamTurbo()) throw IllegalStateException("Whisper turbo sa nepodarilo stiahnuť")
+    }
+
     @Volatile private var rozpoznavac: com.k2fsa.sherpa.onnx.OfflineRecognizer? = null
     private var jazykModelu = ""
 
-    private fun model(jazyk: String): com.k2fsa.sherpa.onnx.OfflineRecognizer = synchronized(this) {
-        rozpoznavac?.takeIf { jazykModelu == jazyk }?.let { return it }
+    private fun model(jazyk: String, turbo: Boolean = false): com.k2fsa.sherpa.onnx.OfflineRecognizer = synchronized(this) {
+        val kluc = jazyk + if (turbo) "|turbo" else ""
+        rozpoznavac?.takeIf { jazykModelu == kluc }?.let { return it }
         rozpoznavac?.release(); rozpoznavac = null
         Hlas.pripravSherpa {}
-        val d = dir()
+        val d = if (turbo) dirTurbo() else dir()
+        val pred = if (turbo) "turbo" else "small"
         val w = com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig.builder()
-            .setEncoder(File(d, "small-encoder.int8.onnx").path)
-            .setDecoder(File(d, "small-decoder.int8.onnx").path)
+            .setEncoder(File(d, "$pred-encoder.int8.onnx").path)
+            .setDecoder(File(d, "$pred-decoder.int8.onnx").path)
             .setLanguage(jazyk)
             .setTask("transcribe")
             .build()
         val mc = com.k2fsa.sherpa.onnx.OfflineModelConfig.builder()
             .setWhisper(w)
-            .setTokens(File(d, "small-tokens.txt").path)
-            .setNumThreads((Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 6))
+            .setTokens(File(d, "$pred-tokens.txt").path)
+            .setNumThreads(if (turbo) (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 8) else (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 6))
             .build()
         val r = com.k2fsa.sherpa.onnx.OfflineRecognizer(com.k2fsa.sherpa.onnx.OfflineRecognizerConfig.builder().setOfflineModelConfig(mc).build())
-        rozpoznavac = r; jazykModelu = jazyk; r
+        rozpoznavac = r; jazykModelu = kluc; r
     }
 
     /** prepis kúska zvuku (dabing); jazyk "" = Whisper ho zistí sám */
-    fun prepis(x: FloatArray, sr: Int, jazyk: String = ""): String = synchronized(this) {
-        val r = model(jazyk)
+    fun prepis(x: FloatArray, sr: Int, jazyk: String = "", turbo: Boolean = false): String = synchronized(this) {
+        val r = model(jazyk, turbo && mamTurbo())
         val st = r.createStream()
         st.acceptWaveform(x, sr)
         r.decode(st)

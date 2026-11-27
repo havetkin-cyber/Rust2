@@ -47,7 +47,7 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
 - ✅🖥 **Spojenie dvoch postáv v chate** – `/spoj seed 8234 a seed 5120: stoja spolu na ulici v meste` → postavy z dvoch obrázkov appky
   spolu na jednom obrázku (FLUX.3 Klein – tvár, vlasy a oblečenie ostanú; so Z-Image / FLUX.1 / SD sa postavy položia vedľa seba
   a model ich prekreslí do jednej scény). Windows aj Linux; v mobile cez PC. Len obrázky z Alexia AI.
-- 🖥 **Dabing videa** (PC a Linux) – odkaz z YouTube alebo video zo súboru → prepis reči (Whisper, aj čínština) → preklad do
+- 🖥 **Dabing videa** (PC a Linux) – odkaz z YouTube alebo video zo súboru → prepis reči (**Whisper large-v3-turbo**, ~1 GB, presnejší ako malý model; aj čínština) → preklad do
   **češtiny alebo slovenčiny** chatovým modelom → dabing AI hlasom **Piper Jirka (CZ, muž)** alebo **Lili (SK, žena)**, pre slovenčinu aj
   hlasy Supertonic, načasovaný podľa pôvodných replík (dlhšie repliky sa zrýchlia). Pôvodná hudba a zvuky ostanú v pozadí, hlasy sa stíšia;
   titulky .srt aj priamo v MP4. Hlasy hercov sa nenapodobňujú. yt-dlp sa stiahne sám a aktualizuje raz za týždeň. Len na vlastné pozeranie.

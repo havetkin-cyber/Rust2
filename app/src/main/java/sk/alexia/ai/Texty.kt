@@ -14,6 +14,7 @@ object T {
     }
 
     private val sk = mapOf(
+        "dab_prekladac" to "Sťahujem model na preklad (Qwen3 4B, ~2,5 GB)… %1\$d %%",
         "dab_zalozka" to "Dabing",
         "dab_nadpis" to "Dabing videa",
         "dab_podnadpis" to "Preklad a dabing AI hlasom + titulky",
@@ -476,6 +477,7 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
+        "dab_prekladac" to "Downloading the translation model (Qwen3 4B, ~2.5 GB)… %1\$d %%",
         "dab_zalozka" to "Dubbing",
         "dab_nadpis" to "Video dubbing",
         "dab_podnadpis" to "Translation and AI voice dubbing + subtitles",

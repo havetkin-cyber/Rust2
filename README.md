@@ -50,7 +50,7 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
 - 🖥 **Dabing videa** (PC a Linux) – odkaz z YouTube alebo video zo súboru → prepis reči (**Whisper large-v3-turbo**, ~1 GB, presnejší ako malý model; aj čínština) → preklad do
   **češtiny alebo slovenčiny** chatovým modelom → dabing AI hlasom **Piper Jirka (CZ, muž)** alebo **Lili (SK, žena)**, pre slovenčinu aj
   hlasy Supertonic, načasovaný podľa pôvodných replík (dlhšie repliky sa zrýchlia). Pôvodná hudba a zvuky ostanú v pozadí, hlasy sa stíšia;
-  titulky .srt aj priamo v MP4. Hlasy hercov sa nenapodobňujú. yt-dlp sa stiahne sám a aktualizuje raz za týždeň. Len na vlastné pozeranie.
+  titulky .srt aj priamo v MP4. Hlasy hercov sa nenapodobňujú. Všetko potrebné si stiahne sám: Whisper turbo, hlas Piper, ffmpeg, yt-dlp (aktualizuje raz za týždeň) a ak nemáš chatový model, aj Qwen3-4B (~2,5 GB) na preklad. Len na vlastné pozeranie.
 - ✅🖥 **Sekcia Prompt** – model, ktorý vidí obrázky (Qwen3-VL 2B, ~1,8 GB, stiahne sa pri prvom použití), napíše z hocijakého obrázka –
   aj bežnej fotky – veľmi podrobný anglický prompt (štýl, postava, tvár, vlasy, oblečenie, póza, prostredie, svetlo, kamera, farby),
   alebo len opis štýlu. Beží na procesore, skutočných ľudí nepomenúva, explicitný obsah nespracuje. V mobile v Obrázkoch cez PC.

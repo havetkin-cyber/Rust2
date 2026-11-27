@@ -85,6 +85,7 @@ object Dabing {
 
                 // 4) preklad (po dávkach, číslované riadky)
                 krok(0.5f, T("dab_prekladam", 0, reci.size))
+                pripravPrekladac { p -> Platforma.naHlavnom { priebeh = 0.5f; cinnost = T("dab_prekladac", (p * 100).toInt()) } }
                 if (!ChatJadro.cakajNaModel()) throw IllegalStateException(T("dab_treba_chat"))
                 prelozVsetko(reci, jazyk) { hotovych -> krok(0.5f + 0.2f * hotovych / reci.size, T("dab_prekladam", hotovych, reci.size)) }
                 Platforma.naHlavnom { ChatJadro.uvolniPamat() }
@@ -164,6 +165,23 @@ object Dabing {
     }
 
     // ---------------- preklad ----------------
+
+    private const val PREKLADAC = "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+
+    /**
+     * Ak nie je zvolený chatový model, appka si ho zariadi sama: najprv použije Qwen3 4B, ktorý už leží pri Z-Image,
+     * inak stiahne Qwen3-4B-Instruct (Q4_K_M, ~2,5 GB) – vie dobre po česky aj slovensky.
+     */
+    private fun pripravPrekladac(p: (Float) -> Unit) {
+        val n = ChatJadro.nastavenia
+        if (n.vzdialene || n.aktivnyModel?.let { File(it).exists() } == true) return
+        val existujuci = (ObrazkyJadro.priecinokModelov().walkTopDown() + Modely.priecinok().walkTopDown())
+            .firstOrNull { it.isFile && it.name.startsWith("Qwen3-4B-Instruct", ignoreCase = true) && it.extension.equals("gguf", true) && it.length() > 1_500_000_000 }
+        val f = existujuci ?: Modely.stiahni(PREKLADAC, p, { zrusit })
+        val l = java.util.concurrent.CountDownLatch(1)
+        Platforma.naHlavnom { ChatJadro.nacitajModel(f.path); l.countDown() }
+        l.await()
+    }
 
     private fun prelozVsetko(reci: List<Replika>, jazyk: String, priebeh: (Int) -> Unit) {
         val jazykMeno = if (jazyk == "cs") "Czech" else "Slovak"

@@ -29,7 +29,11 @@ object Dabing {
     private const val SR = 16000           // Whisper
     private const val SR_DAB = 24000       // výsledná stopa dabingu
 
-    private class Replika(var od: Double, var po: Double, var text: String = "", var preklad: String = "", var muz: Boolean? = null)
+    private class Replika(var od: Double, var po: Double, var text: String = "", var preklad: String = "", var muz: Boolean? = null,
+                          var hovoriaci: Int = -1, var db: Double = -30.0, var f0: Double? = null)
+
+    /** hlas postavy: Piper/Supertonic id + posun výšky (1 = bez zmeny) */
+    private data class Hlasovka(val id: String, val vyska: Float)
 
     /**
      * [zdroj] = odkaz (http…) alebo cesta k súboru, [jazyk] = "sk" / "cs", [hlas] = id hlasu (jirka, lili, st0…),
@@ -41,6 +45,7 @@ object Dabing {
     /** [hlasMuz] != null → dva hlasy: muž/žena podľa výšky pôvodného hlasu v každej replike ([hlas] = ženský) */
     fun spusti(zdroj: String, jazyk: String, hlas: String, hlasMuz: String?, pozadie: Boolean, hotovo: (File?, String) -> Unit) {
         if (pracuje) return
+        val postavy = hlasMuz != null
         pracuje = true; zrusit = false; priebeh = 0f; cinnost = T("dab_pripravujem")
         val start = System.currentTimeMillis(); zaciatok = start
         Thread {
@@ -72,36 +77,66 @@ object Dabing {
                 } else File(zdroj).takeIf { it.exists() } ?: throw IllegalStateException(T("dab_ziadne_video"))
                 val nazov = video.nameWithoutExtension.replace(Regex("[^\\p{L}\\p{N}._ -]"), "_").take(60)
 
-                // 2) zvuk pre Whisper + úseky reči (ticho medzi replikami)
-                krok(0.16f, T("dab_hladam_rec"))
-                val pcm = File(tmp, "rec.f32")
-                prikaz(listOf(ff, "-y", "-v", "error", "-i", video.path, "-vn", "-ac", "1", "-ar", "$SR", "-f", "f32le", pcm.path))
-                val zvuk = citajF32(pcm); pcm.delete()
+                // 2) zvuk: AI oddelenie hlasov od hudby (Demucs) – čisté pozadie (hudba, efekty) a čisté hlasy pre Whisper
+                val orig = File(tmp, "orig.s16")
+                prikaz(listOf(ff, "-y", "-v", "error", "-i", video.path, "-vn", "-ac", "2", "-ar", "44100", "-f", "s16le", orig.path))
+                if (orig.length() < 44100L * 4) throw IllegalStateException(T("dab_bez_zvuku"))
+                val bgF = File(tmp, "pozadie.s16"); val vocF = File(tmp, "hlasy.s16")
+                var oddelene = false
+                runCatching {
+                    val m = demucsModel { p -> Platforma.naHlavnom { priebeh = 0.15f; cinnost = T("dab_demucs", (p * 100).toInt()) } }
+                    krok(0.16f, T("dab_oddelujem", 0, 1))
+                    val p = ProcessBuilder(Videoklip.pomocnyProces("sk.alexia.ai.DemucsProces", "--demucs",
+                        listOf(m.path, orig.path, bgF.path, vocF.path))).redirectErrorStream(true).start()
+                    proces = p
+                    p.inputStream.bufferedReader().forEachLine { l ->
+                        val mm = Regex("^P (\\d+) (\\d+)$").find(l.trim())
+                        if (mm != null) { val i = mm.groupValues[1].toInt(); val n = maxOf(1, mm.groupValues[2].toInt()); krok(0.16f + 0.14f * i / n, T("dab_oddelujem", i, n)) }
+                        else println("demucs: $l")
+                    }
+                    val kod = p.waitFor()
+                    if (zrusit) throw IllegalStateException(T("klip_zrusene"))
+                    oddelene = kod == 0 && bgF.length() > 0 && vocF.length() > 0
+                    if (!oddelene) println("dabing: oddelenie hlasov zlyhalo (kód $kod) – pokračujem s pôvodným zvukom")
+                }.onFailure { if (zrusit) throw it; println("dabing: oddelenie hlasov nejde: ${it.message}") }
+                val zdrojReci = if (oddelene) vocF else orig
+                val surove = listOf("-f", "s16le", "-ar", "44100", "-ac", "2", "-i", zdrojReci.path)
+
+                krok(0.3f, T("dab_hladam_rec"))
+                val zvukF = File(tmp, "rec.f32")
+                prikaz(listOf(ff, "-y", "-v", "error") + surove + listOf("-ac", "1", "-ar", "$SR", "-f", "f32le", zvukF.path))
+                val zvuk = citajF32(zvukF)
                 val dlzka = zvuk.size.toDouble() / SR
                 if (dlzka < 1) throw IllegalStateException(T("dab_bez_zvuku"))
-                val repliky = useky(ff, video, dlzka)
+                val repliky = useky(ff, surove, dlzka)
+                // hlasitosť a výška hlasu každej repliky (emócie: krik / šepot, rozrušenie)
+                repliky.forEach { r ->
+                    val a = (r.od * SR).toInt().coerceIn(0, zvuk.size); val b = (r.po * SR).toInt().coerceIn(a, zvuk.size)
+                    var e = 0.0; for (k in a until b) e += zvuk[k] * zvuk[k]
+                    r.db = 10 * Math.log10(e / maxOf(1, b - a) + 1e-10)
+                    if (postavy) r.f0 = vyskaHlasu(zvuk, a, b)
+                }
+
+                // modely na rozpoznanie hovoriacich (kto je kto) – len pre „rôzne hlasy pre postavy“
+                val diar = if (postavy) runCatching { krok(0.31f, T("dab_hovoriaci_model")); diarModely() }.onFailure { println("dabing: modely hovoriacich: ${it.message}") }.getOrNull() else null
 
                 // 3) prepis – v samostatnom procese (pád Whisperu nezhodí appku), najprv turbo, pri chybe malý model
-                val zvukF = File(tmp, "rec.f32"); zapisF32(zvukF, zvuk)
                 val usekyF = File(tmp, "useky.txt").apply { writeText(repliky.joinToString("\n") { "${it.od} ${it.po}" }) }
-                if (hlasMuz != null) repliky.forEach { r ->
-                    val a = (r.od * SR).toInt().coerceIn(0, zvuk.size); val b = (r.po * SR).toInt().coerceIn(a, zvuk.size)
-                    r.muz = jeMuz(zvuk, a, b)
-                }
                 val moznosti = buildList {
                     if (Rec.mamTurbo()) add(Rec.dirTurboVerejne() to "turbo")
                     if (Rec.mam()) add(Rec.dirSmall() to "small")
                 }
-                var hotovo = false; var posledna = ""
+                var hotovo = false; var posledna = ""; var hovF: File? = null
                 for ((dir, pred) in moznosti) {
                     val vystupF = File(tmp, "prepis-$pred.txt")
-                    val p = ProcessBuilder(Videoklip.pomocnyProces("sk.alexia.ai.PrepisProces", "--prepis",
-                        listOf(Hlas.sherpaDir().path, dir.path, pred, zvukF.path, usekyF.path, vystupF.path))).redirectErrorStream(true).start()
+                    val argy = listOf(Hlas.sherpaDir().path, dir.path, pred, zvukF.path, usekyF.path, vystupF.path) +
+                        (diar?.let { listOf(it.first.path, it.second.path) } ?: emptyList())
+                    val p = ProcessBuilder(Videoklip.pomocnyProces("sk.alexia.ai.PrepisProces", "--prepis", argy)).redirectErrorStream(true).start()
                     proces = p
                     p.inputStream.bufferedReader().forEachLine { l ->
                         val m = Regex("^P (\\d+) (\\d+)$").find(l.trim())
-                        if (m != null) { val i = m.groupValues[1].toInt(); val n = m.groupValues[2].toInt(); krok(0.18f + 0.3f * i / n, T("dab_prepis", i + 1, n)) }
-                        else println("prepis: $l")
+                        if (m != null) { val i = m.groupValues[1].toInt(); val n = m.groupValues[2].toInt(); krok(0.32f + 0.18f * i / n, T("dab_prepis", i + 1, n)) }
+                        else { println("prepis: $l"); if (l.contains("rozpoznávam hovoriacich")) Platforma.naHlavnom { cinnost = T("dab_hovoriaci") } }
                     }
                     val kod = p.waitFor()
                     if (zrusit) throw IllegalStateException(T("klip_zrusene"))
@@ -109,6 +144,7 @@ object Dabing {
                         val i = l.substringBefore('\t').toIntOrNull() ?: return@forEach
                         repliky.getOrNull(i)?.text = cistiPrepis(l.substringAfter('\t'))
                     }
+                    File(vystupF.path + ".hov").takeIf { it.exists() && it.length() > 0 }?.let { hovF = it }
                     if (kod == 0) { hotovo = true; break }
                     posledna = "Whisper $pred skončil s kódom $kod"
                     println("dabing: $posledna – skúšam ďalší model")
@@ -117,6 +153,16 @@ object Dabing {
                 val reci = repliky.filter { it.text.length >= 2 }
                 if (reci.isEmpty()) throw IllegalStateException(T("dab_bez_reci"))
 
+                // kto hovorí: podľa rozpoznania hovoriacich, inak aspoň muž/žena podľa výšky hlasu
+                hovF?.readLines()?.mapNotNull { l -> l.split(' ').takeIf { it.size >= 3 }?.let { Triple(it[0].toDouble(), it[1].toDouble(), it[2].toInt()) } }?.let { seg ->
+                    reci.forEach { r ->
+                        r.hovoriaci = seg.groupBy { it.third }.mapValues { (_, l) -> l.sumOf { maxOf(0.0, minOf(it.second, r.po) - maxOf(it.first, r.od)) } }
+                            .filter { it.value > 0 }.maxByOrNull { it.value }?.key ?: -1
+                    }
+                }
+                val hlasy = if (postavy) priradHlasy(reci, hlas, hlasMuz ?: "jirka", jazyk) else emptyMap()
+                println("dabing: hovoriaci ${reci.map { it.hovoriaci }.distinct()} → ${hlasy.values.distinct()}")
+
                 // 4) preklad (po dávkach, číslované riadky)
                 krok(0.5f, T("dab_prekladam", 0, reci.size))
                 pripravPrekladac { p -> Platforma.naHlavnom { priebeh = 0.5f; cinnost = T("dab_prekladac", (p * 100).toInt()) } }
@@ -124,9 +170,10 @@ object Dabing {
                 prelozVsetko(reci, jazyk) { hotovych -> krok(0.5f + 0.2f * hotovych / reci.size, T("dab_prekladam", hotovych, reci.size)) }
                 Platforma.naHlavnom { ChatJadro.uvolniPamat() }
 
-                // 5) dabing: repliky idú za sebou a NIKDY sa neprekrývajú (inak hovorí ten istý hlas dvakrát naraz – „ozvena“);
-                //    ak sa nezmestí, zrýchli sa (najviac 1,8×) a ďalšia replika počká, kým predchádzajúca dohovorí
+                // 5) dabing: repliky idú za sebou a NIKDY sa neprekrývajú; každá postava svoj hlas, hlasitosť a výška podľa originálu
                 val stopa = FloatArray((dlzka * SR_DAB).toInt() + SR_DAB * 30)
+                val medianDb = reci.map { it.db }.sorted().let { it[it.size / 2] }
+                val medianF0 = reci.groupBy { it.hovoriaci }.mapValues { (_, l) -> l.mapNotNull { it.f0 }.sorted().let { v -> if (v.isEmpty()) null else v[v.size / 2] } }
                 var kurzor = 0.0
                 reci.forEachIndexed { i, r ->
                     krok(0.7f + 0.22f * i / reci.size, T("dab_hovorim", i + 1, reci.size))
@@ -134,16 +181,17 @@ object Dabing {
                     val start = maxOf(r.od, kurzor + 0.06)
                     val dalsi = reci.getOrNull(i + 1)?.od ?: (dlzka + 1.0)
                     val miesto = (dalsi - start - 0.06).coerceAtLeast(0.5)
-                    val h = if (hlasMuz != null && r.muz == true) hlasMuz else hlas
-                    var (x, sr) = Hlas.syntetizuj(Hlas.naCitanie(r.preklad), h, 1f, jazyk)
-                    val trvanie = x.size.toDouble() / sr
-                    if (trvanie > miesto) {
-                        val k = (trvanie / miesto).coerceAtMost(1.8).toFloat()
-                        val y = Hlas.syntetizuj(Hlas.naCitanie(r.preklad), h, k, jazyk); x = y.first; sr = y.second
-                    }
-                    val res = prevzorkuj(x, sr, SR_DAB)
+                    val zaklad = hlasy[r.hovoriaci] ?: if (postavy && r.muz == true) Hlasovka(hlasMuz ?: "jirka", 1f) else Hlasovka(hlas, 1f)
+                    // rozrušenie: vyšší hlas ako je u postavy bežné → dabing o kúsok vyšší (a naopak)
+                    val pomer = r.f0?.let { f -> medianF0[r.hovoriaci]?.let { m -> f / m } } ?: 1.0
+                    val vyska = zaklad.vyska * when { pomer > 1.15 -> 1.04f; pomer < 0.88 -> 0.97f; else -> 1f }
+                    var res = hovor(r.preklad, zaklad.id, vyska, 1f, jazyk)
+                    val trvanie = res.size.toDouble() / SR_DAB
+                    if (trvanie > miesto) res = hovor(r.preklad, zaklad.id, vyska, (trvanie / miesto).coerceAtMost(1.8).toFloat(), jazyk)
+                    // krik / šepot: hlasitosť podľa originálu (zmiernená)
+                    val zisk = Math.pow(10.0, (r.db - medianDb) * 0.6 / 20).coerceIn(0.6, 1.45).toFloat()
                     val od = (start * SR_DAB).toInt()
-                    for (j in res.indices) { val k = od + j; if (k < stopa.size) stopa[k] = res[j] * 0.95f }
+                    for (j in res.indices) { val k = od + j; if (k < stopa.size) stopa[k] = jemnyLimit(res[j] * 0.92f * zisk) }
                     kurzor = start + res.size.toDouble() / SR_DAB
                 }
                 val dabWav = File(tmp, "dabing.wav"); zapisWav(dabWav, stopa, SR_DAB)
@@ -152,16 +200,23 @@ object Dabing {
                 krok(0.93f, T("dab_spajam"))
                 val srt = File(tmp, "titulky.srt").apply { writeText(srt(reci)) }
                 val out = File(VideoJadro.priecinok().apply { mkdirs() }, "dabing_${jazyk}_${nazov}_${System.currentTimeMillis() / 1000}.mp4")
-                val filter = if (pozadie)
-                    // pôvodné hlasy sú zvyčajne v strede stereo obrazu → odčítaním kanálov zmiznú, hudba a efekty ostanú; pri dabingu sa pozadie ešte stíši
-                    "[1:a]aresample=48000,asplit=2[d][sc];[0:a]aresample=48000,aformat=channel_layouts=stereo,pan=stereo|c0=0.7*c0-0.7*c1|c1=0.7*c1-0.7*c0,volume=0.8[p];" +
-                    "[p][sc]sidechaincompress=threshold=0.01:ratio=20:attack=10:release=500[bg];[bg][d]amix=inputs=2:duration=first:normalize=0[a]"
-                else "[1:a]aresample=48000[a]"
-                prikaz(listOf(ff, "-y", "-v", "error", "-i", video.path, "-i", dabWav.path, "-i", srt.path,
+                val jazykMeta = if (jazyk == "cs") "ces" else "slk"
+                val vstupy = mutableListOf("-i", video.path, "-i", dabWav.path, "-i", srt.path)
+                val filter = when {
+                    !pozadie -> "[1:a]aresample=48000[a]"
+                    oddelene -> {
+                        // čisté pozadie z Demucsu (bez reči) – pri dabingu sa len jemne stíši
+                        vstupy += listOf("-f", "s16le", "-ar", "44100", "-ac", "2", "-i", bgF.path)
+                        "[1:a]aresample=48000,asplit=2[d][sc];[3:a]aresample=48000[p];[p][sc]sidechaincompress=threshold=0.03:ratio=3:attack=20:release=400[bg];[bg][d]amix=inputs=2:duration=longest:normalize=0[a]"
+                    }
+                    // záloha: pôvodné hlasy sú zvyčajne v strede sterea → odčítaním kanálov zmiznú
+                    else -> "[1:a]aresample=48000,asplit=2[d][sc];[0:a]aresample=48000,aformat=channel_layouts=stereo,pan=stereo|c0=0.7*c0-0.7*c1|c1=0.7*c1-0.7*c0,volume=0.8[p];" +
+                        "[p][sc]sidechaincompress=threshold=0.01:ratio=20:attack=10:release=500[bg];[bg][d]amix=inputs=2:duration=first:normalize=0[a]"
+                }
+                prikaz(listOf(ff, "-y", "-v", "error") + vstupy + listOf(
                     "-filter_complex", filter, "-map", "0:v:0", "-map", "[a]", "-map", "2:s:0",
-                    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-c:s", "mov_text",
-                    "-metadata:s:a:0", "language=" + (if (jazyk == "cs") "ces" else "slk"),
-                    "-metadata:s:s:0", "language=" + (if (jazyk == "cs") "ces" else "slk"),
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-c:s", "mov_text", "-shortest",
+                    "-metadata:s:a:0", "language=$jazykMeta", "-metadata:s:s:0", "language=$jazykMeta",
                     "-movflags", "+faststart", out.path))
                 srt.copyTo(File(out.path.removeSuffix(".mp4") + ".srt"), overwrite = true)
                 File(out.path + ".json").writeText(org.json.JSONObject().put("typ", "dabing").put("zdroj", zdroj).put("jazyk", jazyk)
@@ -172,6 +227,82 @@ object Dabing {
             val t = System.currentTimeMillis() - start
             Platforma.naHlavnom { pracuje = false; priebeh = 0f; cinnost = ""; proces = null; posledneTrvanie = t; hotovo(vysledok, chyba) }
         }.apply { isDaemon = true }.start()
+    }
+
+    // ---------------- hlasy postáv ----------------
+
+    /**
+     * Každý hovoriaci dostane vlastný hlas: pohlavie podľa mediánu výšky hlasu, poradie podľa toho, kto hovorí najviac.
+     * Mužom Jirka (a jeho hlbšia / vyššia verzia), ženám Lili, Supertonic (SK) a ich varianty.
+     */
+    private fun priradHlasy(reci: List<Replika>, zena: String, muz: String, jazyk: String): Map<Int, Hlasovka> {
+        val muzske = listOf(Hlasovka(muz, 1f), Hlasovka(muz, 0.9f), Hlasovka(muz, 1.09f), Hlasovka(muz, 0.83f), Hlasovka(muz, 1.16f))
+        val zenske = buildList {
+            add(Hlasovka(zena, 1f))
+            if (jazyk == "sk" && Hlas.mamSt()) listOf("st0", "st1", "st2", "st3", "st4").filter { it != zena }.forEach { add(Hlasovka(it, 1f)) }
+            add(Hlasovka(zena, 1.08f)); add(Hlasovka(zena, 0.93f)); add(Hlasovka(zena, 1.15f))
+        }
+        val skupiny = reci.groupBy { it.hovoriaci }
+        val poradie = skupiny.entries.sortedByDescending { (_, l) -> l.sumOf { it.po - it.od } }
+        var m = 0; var z = 0
+        val vysl = mutableMapOf<Int, Hlasovka>()
+        for ((spk, l) in poradie) {
+            if (spk < 0) continue
+            val f = l.mapNotNull { it.f0 }.sorted()
+            val jeMuz = f.isNotEmpty() && f[f.size / 2] < 160.0
+            vysl[spk] = if (jeMuz) muzske[m++ % muzske.size] else zenske[z++ % zenske.size]
+        }
+        // repliky bez hovoriaceho: aspoň muž / žena podľa vlastnej výšky hlasu
+        reci.filter { it.hovoriaci < 0 }.forEach { it.muz = it.f0?.let { f -> f < 160.0 } }
+        return vysl
+    }
+
+    /** syntéza s posunom výšky: TTS rýchlejšie/pomalšie a prehratie r× → výška ×r, dĺžka podľa [rychlost] */
+    private fun hovor(text: String, id: String, vyska: Float, rychlost: Float, jazyk: String): FloatArray {
+        val r = vyska.toDouble()
+        val (x, sr) = Hlas.syntetizuj(Hlas.naCitanie(text), id, (rychlost / vyska).coerceIn(0.5f, 3f), jazyk)
+        val y = if (kotlin.math.abs(r - 1) < 0.005) x else FloatArray((x.size / r).toInt()) { i ->
+            val t = i * r; val a = t.toInt(); val f = (t - a).toFloat()
+            val v0 = x.getOrElse(a) { 0f }; val v1 = x.getOrElse(a + 1) { v0 }; v0 + (v1 - v0) * f
+        }
+        return prevzorkuj(y, sr, SR_DAB)
+    }
+
+    private fun jemnyLimit(v: Float): Float = if (v > 0.9f) 0.9f + (v - 0.9f) / (1 + (v - 0.9f) * 10) else if (v < -0.9f) -0.9f + (v + 0.9f) / (1 - (v + 0.9f) * 10) else v
+
+    // ---------------- modely: Demucs a rozpoznanie hovoriacich ----------------
+
+    private const val DEMUCS_URL = "https://github.com/havetkin-cyber/alexia-dj-update/releases/download/ai-v1/htdemucs.onnx"
+    private const val DEMUCS_VELKOST = 174264711L
+    private fun dirModelov() = File(Platforma.priecinok, "dabing").apply { mkdirs() }
+
+    private fun demucsModel(p: (Float) -> Unit): File {
+        val f = File(dirModelov(), "htdemucs.onnx")
+        if (f.length() == DEMUCS_VELKOST) return f
+        val t = File(f.path + ".part")
+        Hlas.stiahniSubor(DEMUCS_URL, t, p)
+        if (t.length() != DEMUCS_VELKOST) { t.delete(); throw IllegalStateException("Model Demucs sa nestiahol celý") }
+        f.delete(); t.renameTo(f); return f
+    }
+
+    /** (segmentácia pyannote, hlasový odtlačok 3D-Speaker) – spolu ~40 MB */
+    private fun diarModely(): Pair<File, File> {
+        val d = File(dirModelov(), "hovoriaci").apply { mkdirs() }
+        val seg = File(d, "model.onnx")
+        if (seg.length() < 1_000_000) {
+            val arch = File(d, "seg.tar.bz2")
+            Hlas.stiahniSubor("https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2", arch) {}
+            Hlas.rozbalTarBz2(arch, d) { it.endsWith("/model.onnx") || it == "model.onnx" }
+            arch.delete()
+        }
+        val emb = File(d, "3dspeaker_eres2net_base_16k.onnx")
+        if (emb.length() < 1_000_000) {
+            val t = File(emb.path + ".part")
+            Hlas.stiahniSubor("https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx", t) {}
+            emb.delete(); t.renameTo(emb)
+        }
+        if (!seg.exists() || emb.length() < 1_000_000) throw IllegalStateException("Modely hovoriacich sa nestiahli")
+        return seg to emb
     }
 
     // ---------------- čistenie prepisu (halucinácie Whispera) ----------------
@@ -204,8 +335,11 @@ object Dabing {
      * Základná výška hlasu (F0) autokoreláciou v rámcoch 40 ms; medián znelých rámcov.
      * Muži zvyčajne 85–155 Hz, ženy 165–255 Hz → hranica 160 Hz. null = nedá sa určiť (hudba, šepot).
      */
-    private fun jeMuz(x: FloatArray, od: Int, po: Int): Boolean? {
-        val ram = 640; val krok = 160; val minLag = SR / 400; val maxLag = SR / 70
+    private fun jeMuz(x: FloatArray, od: Int, po: Int): Boolean? = vyskaHlasu(x, od, po)?.let { it < 160.0 }
+
+    /** medián F0 (Hz) úseku, null = nedá sa určiť; rámce sa berú s krokom 20 ms (rýchlosť) */
+    private fun vyskaHlasu(x: FloatArray, od: Int, po: Int): Double? {
+        val ram = 640; val krok = 320; val minLag = SR / 400; val maxLag = SR / 70
         val f0 = mutableListOf<Double>()
         var i = od
         while (i + ram + maxLag < po) {
@@ -225,15 +359,15 @@ object Dabing {
         }
         if (f0.size < 5) return null
         f0.sort()
-        return f0[f0.size / 2] < 160.0
+        return f0[f0.size / 2]
     }
 
     // ---------------- úseky reči ----------------
 
     /** ticho (ffmpeg silencedetect na pásme reči) → úseky reči; dlhé sa delia na ≤ 20 s (Whisper berie 30 s) */
-    private fun useky(ff: String, video: File, dlzka: Double): List<Replika> {
-        val p = ProcessBuilder(ff, "-v", "info", "-i", video.path, "-vn", "-ac", "1",
-            "-af", "highpass=f=200,lowpass=f=3500,silencedetect=noise=-30dB:d=0.35", "-f", "null", "-").redirectErrorStream(true).start()
+    private fun useky(ff: String, vstup: List<String>, dlzka: Double): List<Replika> {
+        val p = ProcessBuilder(listOf(ff, "-v", "info") + vstup + listOf("-vn", "-ac", "1",
+            "-af", "highpass=f=200,lowpass=f=3500,silencedetect=noise=-32dB:d=0.3", "-f", "null", "-")).redirectErrorStream(true).start()
         proces = p
         val log = p.inputStream.bufferedReader().readText(); p.waitFor()
         val ticha = mutableListOf<Pair<Double, Double>>()
@@ -280,19 +414,20 @@ object Dabing {
 
     private fun prelozVsetko(reci: List<Replika>, jazyk: String, priebeh: (Int) -> Unit) {
         val jazykMeno = if (jazyk == "cs") "Czech" else "Slovak"
-        val sys = "You are a professional film dubbing translator. Translate each numbered line into natural, spoken $jazykMeno " +
-            "for dubbing: short, colloquial, similar length to the original, keep the meaning and tone, no explanations. " +
-            "Return exactly the same numbering, one line per number, in the format N|translation."
+        val sys = "You are a professional film dubbing translator writing a $jazykMeno dubbing script. Each input line is N|seconds|text, " +
+            "where seconds is how long the original line lasts. Translate into natural, spoken, colloquial $jazykMeno that a voice actor can say " +
+            "comfortably within that time (about 14 characters per second) – shorten, simplify and rephrase when needed, keep the meaning, tone and emotion. " +
+            "Return exactly the same numbering, one line per number, in the format N|translation, nothing else."
         var hotovych = 0
         for (davka in reci.chunked(12)) {
-            val vstup = davka.mapIndexed { i, r -> "${i + 1}|${r.text}" }.joinToString("\n")
+            val vstup = davka.mapIndexed { i, r -> "${i + 1}|${"%.1f".format(java.util.Locale.ROOT, r.po - r.od)}|${r.text}" }.joinToString("\n")
             val sb = StringBuilder()
             ChatJadro.generujPreSiet(listOf("system" to sys, "user" to vstup), 1200) { b -> sb.append(String(b, Charsets.UTF_8)); !zrusit }
             val riadky = ChatJadro.ocistiPrompt(sb.toString()).lines()
             for (l in riadky) {
                 val m = Regex("^\\s*(\\d+)\\s*[|:.)-]\\s*(.+)$").find(l) ?: continue
                 val i = m.groupValues[1].toInt() - 1
-                if (i in davka.indices) davka[i].preklad = m.groupValues[2].trim()
+                if (i in davka.indices) davka[i].preklad = m.groupValues[2].trim().replace(Regex("^[0-9]+([.,][0-9]+)?\\s*s?\\s*\\|\\s*"), "")
             }
             // čo sa nepreložilo v dávke, skúsi sa po jednom
             for (r in davka.filter { it.preklad.isBlank() }) {

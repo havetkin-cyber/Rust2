@@ -21,6 +21,23 @@ object PrepisProces {
             val b = ByteBuffer.wrap(File(zvukCesta).readBytes()).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
             val x = FloatArray(b.remaining()).also { b.get(it) }
             val useky = File(usekyCesta).readLines().filter { it.isNotBlank() }.map { l -> l.split(' ').let { it[0].toDouble() to it[1].toDouble() } }
+            // rozpoznanie hovoriacich (kto hovorí kedy) – voliteľné: args[6] = pyannote segmentácia, args[7] = model hlasového odtlačku
+            if (args.size >= 8 && File(args[6]).exists() && File(args[7]).exists()) runCatching {
+                println("prepis: rozpoznávam hovoriacich"); System.out.flush()
+                val vlakna = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 8)
+                val cfg = com.k2fsa.sherpa.onnx.OfflineSpeakerDiarizationConfig.builder()
+                    .setSegmentation(com.k2fsa.sherpa.onnx.OfflineSpeakerSegmentationModelConfig.builder()
+                        .setPyannote(com.k2fsa.sherpa.onnx.OfflineSpeakerSegmentationPyannoteModelConfig.builder().setModel(args[6]).build())
+                        .setNumThreads(vlakna).build())
+                    .setEmbedding(com.k2fsa.sherpa.onnx.SpeakerEmbeddingExtractorConfig.builder().setModel(args[7]).setNumThreads(vlakna).build())
+                    .setClustering(com.k2fsa.sherpa.onnx.FastClusteringConfig.builder().setNumClusters(-1).setThreshold(0.6f).build())
+                    .setMinDurationOn(0.3f).setMinDurationOff(0.5f).build()
+                val sd = com.k2fsa.sherpa.onnx.OfflineSpeakerDiarization(cfg)
+                val seg = sd.process(x)
+                File(vystup.path + ".hov").writeText(seg.joinToString("\n") { "${it.start} ${it.end} ${it.speaker}" })
+                sd.release()
+                println("prepis: hovoriacich ${seg.map { it.speaker }.distinct().size}"); System.out.flush()
+            }.onFailure { System.err.println("prepis: rozpoznanie hovoriacich zlyhalo: $it") }
             val d = File(modelDir)
             val w = com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig.builder()
                 .setEncoder(File(d, "$pred-encoder.int8.onnx").path)

@@ -53,6 +53,13 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
   **češtiny alebo slovenčiny** chatovým modelom → dabing AI hlasom **Piper Jirka (CZ, muž)** alebo **Lili (SK, žena)**, pre slovenčinu aj
   hlasy Supertonic, načasovaný podľa pôvodných replík (dlhšie repliky sa zrýchlia). **Dva hlasy** (zapnuté): podľa výšky pôvodného hlasu v každej replike hovorí muž Jirka alebo žena Lili / Supertonic. Pôvodná hudba a zvuky ostanú v pozadí, hlasy sa stíšia;
   titulky .srt aj priamo v MP4. Hlasy hercov sa nenapodobňujú. Všetko potrebné si stiahne sám: Whisper turbo, hlas Piper, ffmpeg, yt-dlp (aktualizuje raz za týždeň) a ak nemáš chatový model, aj Qwen3-4B (~2,5 GB) na preklad. Len na vlastné pozeranie.
+- 🖥 **Dabing ako v kine** (vetva dabing-pro, zatiaľ nevydané):
+  - **Rôzne hlasy pre postavy** – AI rozpozná, kto kedy hovorí (sherpa-onnx pyannote + 3D-Speaker), každá postava dostane vlastný hlas
+    (Jirka, hlbší/vyšší Jirka, Lili, Supertonic a varianty) a znie rovnako celé video.
+  - **Emócie** – hlasitosť (krik / šepot) a výška hlasu (rozrušenie) sa preberú z originálu; hlas herca sa nekopíruje.
+  - **Čisté pozadie** – AI oddelí hlasy od hudby (Demucs htdemucs ako v ALEXIA DJ): hudba a efekty ostanú, pôvodná reč zmizne;
+    Whisper prepisuje už čisté hlasy (menej chýb a halucinácií).
+  - **Preklad na dĺžku vety** – preklad sa píše tak, aby sa zmestil do času originálu (~14 znakov za sekundu), menej zrýchľovania.
 - ✅🖥 **Sekcia Prompt** – model, ktorý vidí obrázky (Qwen3-VL 2B, ~1,8 GB, stiahne sa pri prvom použití), napíše z hocijakého obrázka –
   aj bežnej fotky – veľmi podrobný anglický prompt (štýl, postava, tvár, vlasy, oblečenie, póza, prostredie, svetlo, kamera, farby),
   alebo len opis štýlu. Beží na procesore, skutočných ľudí nepomenúva, explicitný obsah nespracuje. V mobile v Obrázkoch cez PC.

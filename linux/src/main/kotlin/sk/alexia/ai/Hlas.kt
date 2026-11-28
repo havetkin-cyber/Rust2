@@ -51,7 +51,7 @@ object Hlas {
     internal fun sherpaDir() = File(priecinok(), "sherpa")
     private fun sherpa() = File(sherpaDir(), System.mapLibraryName("sherpa-onnx-jni"))
     private fun stDir() = File(priecinok(), "supertonic")
-    private fun mamSt() = sherpa().exists() && File(stDir(), "vector_estimator.int8.onnx").length() > 50_000_000 && File(stDir(), "voice.bin").exists()
+    internal fun mamSt() = sherpa().exists() && File(stDir(), "vector_estimator.int8.onnx").length() > 50_000_000 && File(stDir(), "voice.bin").exists()
     private fun mamLili() = program().exists() && model().length() > 10_000_000 && File(model().path + ".json").exists()
     fun mam(id: String = ChatJadro.nastavenia.hlas) = if (jeSt(id)) mamSt() else mamLili()
 

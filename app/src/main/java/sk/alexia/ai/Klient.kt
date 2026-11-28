@@ -148,6 +148,28 @@ object Klient {
         return JSONObject(k.inputStream.bufferedReader(Charsets.UTF_8).readText()).getString("id")
     }
 
+    // ---------------- LoRA na PC (obrázky / videá) ----------------
+    /** katalóg LoRA z Hugging Face cez PC: {zaklad, zaklady[], polozky[{repo,stiahnutia,paci,zmenene,mam}]} */
+    fun loryKatalog(adresa: String, pin: String, kat: String, zaklad: String, nanovo: Boolean): JSONObject =
+        JSONObject(spoj(adresa, pin, "/api/lory/katalog", JSONObject().put("kat", kat).put("zaklad", zaklad).put("nanovo", nanovo), 120_000).inputStream.bufferedReader().readText())
+
+    fun loryStiahni(adresa: String, pin: String, kat: String, zaklad: String, repo: String) {
+        spoj(adresa, pin, "/api/lory/stiahni", JSONObject().put("kat", kat).put("zaklad", zaklad).put("repo", repo), 120_000).inputStream.close()
+    }
+
+    /** repo → {p, hotovo, chyba} */
+    fun loryStav(adresa: String, pin: String): JSONObject =
+        JSONObject(spoj(adresa, pin, "/api/lory/stav").inputStream.bufferedReader().readText())
+
+    fun loryMoje(adresa: String, pin: String, kat: String): org.json.JSONArray =
+        JSONObject(spoj(adresa, pin, "/api/lory/moje", JSONObject().put("kat", kat)).inputStream.bufferedReader().readText()).optJSONArray("lory") ?: org.json.JSONArray()
+
+    fun loryPrepni(adresa: String, pin: String, kat: String, meno: String, zapnut: Boolean? = null, sila: Float? = null) {
+        val t = JSONObject().put("kat", kat).put("meno", meno)
+        if (zapnut != null) t.put("zapnut", zapnut); if (sila != null) t.put("sila", sila.toDouble())
+        spoj(adresa, pin, "/api/lory/prepni", t).inputStream.close()
+    }
+
     fun videoStav(adresa: String, pin: String): JSONObject =
         JSONObject(spoj(adresa, pin, "/api/video/stav").inputStream.bufferedReader(Charsets.UTF_8).readText())
 

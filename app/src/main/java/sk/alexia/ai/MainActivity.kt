@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Obrazovka { CHAT, OBRAZKY, VIDEA_PC, VYLEPSIT, MODELY, NASTAVENIA }
+private enum class Obrazovka { CHAT, OBRAZKY, VIDEA_PC, VYLEPSIT, MODELY, NASTAVENIA, LORA }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -108,7 +108,8 @@ private fun Appka() {
             Box(Modifier.weight(1f)) {
                 when (obrazovka) {
                     Obrazovka.CHAT -> ChatObrazovka(naModely = { obrazovka = Obrazovka.MODELY })
-                    Obrazovka.MODELY -> ModelyObrazovka { obrazovka = Obrazovka.CHAT }
+                    Obrazovka.MODELY -> ModelyObrazovka(naLory = { obrazovka = Obrazovka.LORA }) { obrazovka = Obrazovka.CHAT }
+                    Obrazovka.LORA -> LoraObrazovka { obrazovka = Obrazovka.MODELY }
                     Obrazovka.NASTAVENIA -> NastaveniaObrazovka { obrazovka = Obrazovka.CHAT }
                     Obrazovka.OBRAZKY -> ObrazkyObrazovka { obrazovka = Obrazovka.CHAT }
                     Obrazovka.VYLEPSIT -> VylepsenieObrazovka { obrazovka = Obrazovka.CHAT }
@@ -541,7 +542,7 @@ private fun Bodky() {
 // ---------------------------------------------------------------- modely
 
 @Composable
-private fun ModelyObrazovka(spat: () -> Unit) {
+private fun ModelyObrazovka(naLory: () -> Unit, spat: () -> Unit) {
     val c = LocalContext.current
     val j = ChatJadro
     var subory by remember { mutableStateOf(Modely.zoznam(c)) }
@@ -581,6 +582,18 @@ private fun ModelyObrazovka(spat: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Hlavicka(stringResource(R.string.modely), spat = spat)
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // LoRA adaptéry – obrázky a videá cez PC, chat v mobile
+            item {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Farby.prechodJemny).border(1.dp, Farby.fialova, RoundedCornerShape(20.dp))
+                    .clickable { naLory() }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Extension, null, tint = Farby.ruzova); Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(T("lora_nadpis"), color = Farby.text, fontWeight = FontWeight.SemiBold)
+                        Text(T("lora_tlacidlo_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    Icon(Icons.Default.ChevronRight, null, tint = Farby.ruzova)
+                }
+            }
             priebeh?.let { p ->
                 item {
                     Karta {
@@ -1940,6 +1953,206 @@ private fun PromptPcKarta() {
                     TextButton(onClick = { schranka.setText(androidx.compose.ui.text.AnnotatedString(vysledok)); Platforma.oznam(T("prompt_skopirovane")) }) { Text(T("cas_kopirovat"), color = Farby.ruzova) }
                 }
                 androidx.compose.foundation.text.selection.SelectionContainer { Text(vysledok, color = Farby.text, fontSize = 13.sp) }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- LoRA (obrázky a videá cez PC, chat v mobile)
+
+private data class LoraPolozka(val repo: String, val stiahnutia: Int, val paci: Int, val zmenene: String, val mam: Boolean) {
+    val meno get() = repo.substringAfter('/')
+    val autor get() = repo.substringBefore('/')
+}
+private data class MojaLora(val meno: String, val zapnuta: Boolean, val sila: Float, val mb: Long)
+
+@Composable
+private fun LoraObrazovka(spat: () -> Unit) {
+    var kat by remember { mutableStateOf("obrazky") }
+    val cezPc = kat != "chat"
+    val zamknute = cezPc && !PcSpojenie.pripojene
+    val adr = ChatJadro.nastavenia.vzdialenaAdresa; val pin = ChatJadro.nastavenia.vzdialenyPin
+
+    var zaklady by remember(kat) { mutableStateOf(if (cezPc) emptyList() else LoraKatalog.ZAKLADY.filter { it.kat == "chat" }.map { it.nazov }) }
+    var zaklad by remember(kat) { mutableStateOf(if (cezPc) "" else "Qwen3 4B 2507") }
+    var zoznam by remember(kat) { mutableStateOf<List<LoraPolozka>?>(null) }
+    var moje by remember(kat) { mutableStateOf<List<MojaLora>>(emptyList()) }
+    var nacitava by remember { mutableStateOf(false) }
+    var chyba by remember { mutableStateOf("") }
+    var hladaj by remember { mutableStateOf("") }
+    var ukaz by remember { mutableIntStateOf(40) }
+    var stahuje by remember { mutableStateOf<String?>(null) }
+    var priebeh by remember { mutableFloatStateOf(0f) }
+    val v = Lory.verzia
+
+    fun nacitajMoje() {
+        if (!cezPc) { moje = Lory.subory().map { MojaLora(it.name, Lory.zapnuta(it.name), Lory.sila(it.name), it.length() / 1_000_000) }; return }
+        val k = kat
+        thread {
+            val r = runCatching { Klient.loryMoje(adr, pin, k) }
+            Platforma.naHlavnom {
+                if (k != kat) return@naHlavnom
+                r.getOrNull()?.let { a -> moje = (0 until a.length()).map { a.getJSONObject(it) }.map { MojaLora(it.optString("meno"), it.optBoolean("zapnuta"), it.optDouble("sila", 1.0).toFloat(), it.optLong("mb")) } }
+            }
+        }
+    }
+
+    fun nacitaj(nanovo: Boolean) {
+        val k = kat; val z = zaklad
+        nacitava = true; chyba = ""; ukaz = 40
+        thread {
+            val r = runCatching {
+                if (k == "chat") {
+                    val zz = LoraKatalog.ZAKLADY.first { it.kat == "chat" && it.nazov == z }
+                    Triple(z, zaklady, LoraKatalog.nacitaj(zz, nanovo).map { LoraPolozka(it.repo, it.stiahnutia, it.paci, it.zmenene, LoraKatalog.mam(it)) })
+                } else {
+                    val j = Klient.loryKatalog(adr, pin, k, z, nanovo)
+                    val zs = j.optJSONArray("zaklady")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
+                    val p = j.optJSONArray("polozky") ?: org.json.JSONArray()
+                    Triple(j.optString("zaklad"), zs, (0 until p.length()).map { p.getJSONObject(it) }.map {
+                        LoraPolozka(it.optString("repo"), it.optInt("stiahnutia"), it.optInt("paci"), it.optString("zmenene"), it.optBoolean("mam"))
+                    })
+                }
+            }
+            Platforma.naHlavnom {
+                if (k != kat) return@naHlavnom
+                nacitava = false
+                r.getOrNull()?.let { (zv, zs, l) -> zaklad = zv; zaklady = zs; zoznam = l }
+                r.exceptionOrNull()?.let { chyba = T("lkat_chyba") + " " + (it.message ?: "") }
+            }
+        }
+    }
+
+    fun stiahni(p: LoraPolozka) {
+        val k = kat; val z = zaklad
+        stahuje = p.repo; priebeh = 0f; chyba = ""
+        thread {
+            val r = runCatching {
+                if (k == "chat") {
+                    val zz = LoraKatalog.ZAKLADY.first { it.kat == "chat" && it.nazov == z }
+                    val pol = LoraKatalog.nacitaj(zz).first { it.repo == p.repo }
+                    val f = LoraKatalog.stiahni(pol) { x -> Platforma.naHlavnom { priebeh = x } }
+                    Platforma.naHlavnom { Lory.prepni(f.name, true) }
+                } else {
+                    Klient.loryStiahni(adr, pin, k, z, p.repo)
+                    while (true) {
+                        Thread.sleep(1000)
+                        val s = Klient.loryStav(adr, pin).optJSONObject(p.repo) ?: continue
+                        Platforma.naHlavnom { priebeh = s.optDouble("p", 0.0).toFloat() }
+                        if (s.has("hotovo")) { if (!s.optBoolean("hotovo")) throw IllegalStateException(s.optString("chyba")); break }
+                    }
+                }
+            }
+            Platforma.naHlavnom {
+                stahuje = null
+                r.exceptionOrNull()?.let { chyba = T("lora_chyba") + ": " + (it.message ?: "") }
+                if (r.isSuccess) { zoznam = zoznam?.map { if (it.repo == p.repo) it.copy(mam = true) else it }; nacitajMoje() }
+            }
+        }
+    }
+
+    LaunchedEffect(kat, zamknute) { if (!zamknute) { nacitajMoje(); if (zoznam == null) nacitaj(false) } }
+    LaunchedEffect(v) { if (!cezPc) nacitajMoje() }
+
+    Column(Modifier.fillMaxSize()) {
+        Hlavicka(T("lora_nadpis"), T("lora_podnadpis"), spat = spat)
+        Row(Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("obrazky" to "lora_kat_obrazky", "videa" to "lora_kat_videa", "chat" to "lora_kat_chat").forEach { (k, kl) ->
+                FilterChip(selected = kat == k, onClick = { if (kat != k) { kat = k; hladaj = "" } },
+                    label = { Text(T(kl)) },
+                    leadingIcon = if (k != "chat" && !PcSpojenie.pripojene) { { Icon(Icons.Default.Lock, null, modifier = Modifier.size(14.dp)) } } else null,
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+            }
+        }
+        if (zamknute) {
+            Karta(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Lock, null, tint = Farby.ruzova); Spacer(Modifier.width(10.dp))
+                    Text(T("lora_pc_zamknute"), color = Farby.text, fontSize = 14.sp)
+                }
+            }
+            return@Column
+        }
+        val vsetky = zoznam
+        val slova = hladaj.trim().lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
+        val filtr = remember(vsetky, hladaj) { vsetky?.filter { p -> slova.all { p.repo.lowercase().contains(it) } } ?: emptyList() }
+        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                Text(T(if (cezPc) "lora_cez_pc" else "lora_info_chat_m"), color = Farby.tlmene, fontSize = 12.sp)
+                if (!cezPc && ChatJadro.chybaLory.isNotBlank()) Text(ChatJadro.chybaLory, color = Farby.cervena, fontSize = 12.sp)
+            }
+            // moje LoRA
+            item { SekciaHlavicka(T("lora_moje_m", moje.size), Icons.Default.Extension, kluc = "lora_moje_$kat") }
+            if (jeOtvorena("lora_moje_$kat")) {
+                if (moje.isEmpty()) item { Text(T("lora_prazdne_m"), color = Farby.tlmene, fontSize = 13.sp) }
+                items(moje, key = { "m_" + it.meno }) { m ->
+                    Karta {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(m.meno.substringBeforeLast('.'), color = Farby.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${m.mb} MB", color = Farby.tlmene, fontSize = 11.sp)
+                            }
+                            Switch(checked = m.zapnuta, onCheckedChange = { z ->
+                                moje = moje.map { if (it.meno == m.meno) it.copy(zapnuta = z) else it }
+                                if (cezPc) thread { runCatching { Klient.loryPrepni(adr, pin, kat, m.meno, zapnut = z) } } else Lory.prepni(m.meno, z)
+                            }, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                        }
+                        if (m.zapnuta) {
+                            var s by remember(m.meno) { mutableFloatStateOf(m.sila) }
+                            Text(T("lora_sila", "%.2f".format(s)), color = Farby.tlmene, fontSize = 12.sp)
+                            Slider(value = s, onValueChange = { s = it }, valueRange = 0f..2f, onValueChangeFinished = {
+                                moje = moje.map { if (it.meno == m.meno) it.copy(sila = s) else it }
+                                if (cezPc) thread { runCatching { Klient.loryPrepni(adr, pin, kat, m.meno, sila = s) } } else Lory.nastavSilu(m.meno, s)
+                            }, colors = SliderDefaults.colors(thumbColor = Farby.ruzova, activeTrackColor = Farby.fialova))
+                        }
+                    }
+                }
+            }
+            // katalóg
+            item { SekciaHlavicka(T("lkat_nadpis"), Icons.Default.CloudDownload, kluc = "lora_kat_$kat") }
+            if (jeOtvorena("lora_kat_$kat")) {
+                item {
+                    Text(T("lkat_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        zaklady.forEach { z ->
+                            FilterChip(selected = zaklad == z, onClick = { if (zaklad != z) { zaklad = z; zoznam = null; nacitaj(false) } }, label = { Text(z) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+                        }
+                    }
+                    OutlinedTextField(value = hladaj, onValueChange = { hladaj = it; ukaz = 40 }, singleLine = true, modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
+                        placeholder = { Text(T("lkat_hladaj"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
+                        leadingIcon = { Icon(Icons.Default.Search, null, tint = Farby.tlmene) },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+                    if (nacitava) {
+                        Text(T("lkat_nacitavam", zaklad.ifBlank { "…" }), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                        LinearProgressIndicator(modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+                    }
+                    if (chyba.isNotBlank()) Text(chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    if (vsetky != null) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(T("lkat_pocet", filtr.size, zaklad), color = Farby.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { nacitaj(true) }, enabled = !nacitava) { Text(T("lora_obnovit"), color = Farby.ruzova) }
+                    }
+                    if (vsetky != null && filtr.isEmpty() && !nacitava) Text(T("lkat_prazdne"), color = Farby.tlmene, fontSize = 13.sp)
+                }
+                items(filtr.take(ukaz), key = { "k_" + it.repo }) { p ->
+                    val ctx = LocalContext.current
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(p.meno, color = Farby.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${p.autor} · ⬇ ${p.stiahnutia} · ♥ ${p.paci}", color = Farby.tlmene, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        IconButton(onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/${p.repo}"))) } }) {
+                            Icon(Icons.Default.OpenInNew, T("lkat_stranka"), tint = Farby.tlmene)
+                        }
+                        when {
+                            p.mam -> Icon(Icons.Default.CheckCircle, T("lkat_mam"), tint = Farby.zelena, modifier = Modifier.padding(horizontal = 12.dp))
+                            stahuje == p.repo -> CircularProgressIndicator(progress = { priebeh }, modifier = Modifier.padding(horizontal = 10.dp).size(26.dp), color = Farby.ruzova, strokeWidth = 3.dp)
+                            else -> IconButton(onClick = { stiahni(p) }, enabled = stahuje == null) { Icon(Icons.Default.Download, T("lkat_stiahnut"), tint = Farby.ruzova) }
+                        }
+                    }
+                }
+                if (filtr.size > ukaz) item { TextButton(onClick = { ukaz += 40 }) { Text(T("lkat_dalsie", filtr.size - ukaz), color = Farby.ruzova) } }
             }
         }
     }

@@ -98,7 +98,7 @@ object ChatJadro {
             if (h != 0L) { Llama.uvolni(h); h = 0L }
             val novy = Llama.nacitaj(cesta, ctx, vl)
             val chybaText = if (novy == 0L) Llama.chyba() else ""
-            if (novy != 0L) nastavVzorkovanie(novy)
+            if (novy != 0L) { nastavVzorkovanie(novy); Lory.pole().let { (c, sl) -> if (c.isNotEmpty()) Llama.nastavLory(novy, c, sl).let { e -> if (e.isNotBlank()) android.util.Log.w("lora", e) } } }
             val popis = if (novy != 0L) Llama.popis(novy) else ""
             h = novy
             hlavne.post {
@@ -109,6 +109,17 @@ object ChatJadro {
                     stav = StavModelu.CHYBA; chyba = chybaText; nacitany = null
                 }
             }
+        }
+    }
+
+    /** po zmene výberu LoRA ich použi v načítanom modeli (vymaže pamäť rozhovoru modelu) */
+    var chybaLory by androidx.compose.runtime.mutableStateOf("")
+    fun pouziLory() {
+        vlakno.execute {
+            if (h == 0L) return@execute
+            val (c, sl) = Lory.pole()
+            val e = Llama.nastavLory(h, c, sl)
+            hlavne.post { chybaLory = e }
         }
     }
 

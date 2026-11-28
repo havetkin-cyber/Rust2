@@ -49,9 +49,11 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
   a model ich prekreslí do jednej scény). Windows aj Linux; v mobile cez PC. Len obrázky z Alexia AI.
 - 🖥 **Prehrávač priamo v appke** (PC a Linux) – videá (AI video, videoklip, spev, dabing) sa prehrajú v okne Alexia AI:
   play/pauza, posúvanie, hlasitosť, tlačidlo na otvorenie v inom prehrávači. Netreba inštalovať VLC – obraz aj zvuk dekóduje ffmpeg.
-- 🖥 **Katalóg LoRA (Hugging Face)** (vetva lora-katalog, zatiaľ nevydané) – v sekcii LoRA sa živo načítajú **všetky** LoRA, ktoré autori označili pre modely appky
+- 🖥 **Katalóg LoRA (Hugging Face)** – v sekcii LoRA (PC / Linux) aj v mobile (Modely → LoRA adaptéry) sa živo načítajú **všetky** LoRA, ktoré autori označili pre modely appky
   (Z-Image Turbo, FLUX.1 schnell, SD 1.5, Wan 2.2 5B, Wan 2.1 1.3B, chatové modely Qwen / Llama / Gemma / Mistral / Phi v GGUF), zoradené podľa stiahnutí,
   s hľadaním a stiahnutím jedným ťuknutím. Explicitný obsah sa vyradí, Wan 14B LoRA sa nezobrazia.
+  V mobile: obrázkové a video LoRA hľadá, sťahuje a zapína PC (zamknuté, kým nie je mobil pripojený), chatové LoRA (GGUF) sa sťahujú
+  a používajú priamo v mobile s modelom v mobile; pri každej LoRA sa dá nastaviť sila.
 - 🖥 **Úpravy bez pádu na Legione** – obrázok sa na konci skladá po kúskoch (VAE tiling), úprava Kleinom sa zmestí aj do spoločnej pamäte.
 - 🖥 **Celá šírka okna** (PC a Linux) – obsah appky sa roztiahne na celé okno, nie je len úzky stĺpec v strede.
 - 🖥 **Dabing videa** (PC a Linux) – odkaz z YouTube alebo video zo súboru → prepis reči (**Whisper large-v3-turbo**, ~1 GB, presnejší ako malý model; aj čínština) → preklad do

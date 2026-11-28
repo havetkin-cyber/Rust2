@@ -69,6 +69,11 @@ object Server {
             s.createContext("/api/klip/pridaj") { x -> obsluz(x) { klipPridaj(x) } }
             s.createContext("/api/vylepsi") { x -> obsluz(x) { vylepsi(x) } }
             s.createContext("/api/styl") { x -> obsluz(x) { prenosStylu(x) } }
+            s.createContext("/api/lory/katalog") { x -> obsluz(x) { loryKatalog(x) } }
+            s.createContext("/api/lory/stiahni") { x -> obsluz(x) { loryStiahni(x) } }
+            s.createContext("/api/lory/stav") { x -> obsluz(x) { odpovedz(x, 200, synchronized(loryStav) { JSONObject(loryStav.mapValues { it.value }).toString() }) } }
+            s.createContext("/api/lory/moje") { x -> obsluz(x) { loryMoje(x) } }
+            s.createContext("/api/lory/prepni") { x -> obsluz(x) { loryPrepni(x) } }
             s.start(); http = s
             spustiHladanie()
             bezi = true
@@ -128,12 +133,62 @@ object Server {
 
     private fun telo(x: HttpExchange) = JSONObject(x.requestBody.readBytes().toString(Charsets.UTF_8).ifBlank { "{}" })
 
+    // ---------------- LoRA (katalóg z Hugging Face, sťahuje sa do PC) ----------------
+    /** repo → {p: priebeh, chyba, hotovo} */
+    private val loryStav = mutableMapOf<String, JSONObject>()
+
+    private fun zakladLory(kat: String, meno: String) =
+        LoraKatalog.ZAKLADY.firstOrNull { it.kat == kat && it.nazov == meno } ?: LoraKatalog.ZAKLADY.first { it.kat == kat }
+
+    private fun loryKatalog(x: HttpExchange) {
+        val t = telo(x); val kat = t.optString("kat", "obrazky")
+        val z = zakladLory(kat, t.optString("zaklad"))
+        val zoznam = LoraKatalog.nacitaj(z, t.optBoolean("nanovo"))
+        val pol = org.json.JSONArray()
+        zoznam.forEach { p -> pol.put(JSONObject().put("repo", p.repo).put("stiahnutia", p.stiahnutia).put("paci", p.paci).put("zmenene", p.zmenene).put("mam", LoraKatalog.mam(kat, p))) }
+        val zaklady = org.json.JSONArray(LoraKatalog.ZAKLADY.filter { it.kat == kat }.map { it.nazov })
+        odpovedz(x, 200, JSONObject().put("zaklad", z.nazov).put("zaklady", zaklady).put("polozky", pol).toString())
+    }
+
+    private fun loryStiahni(x: HttpExchange) {
+        val t = telo(x); val kat = t.optString("kat", "obrazky"); val repo = t.optString("repo")
+        val z = zakladLory(kat, t.optString("zaklad"))
+        val p = LoraKatalog.nacitaj(z).firstOrNull { it.repo == repo } ?: throw IllegalStateException("LoRA $repo sa nenašla")
+        synchronized(loryStav) { loryStav[repo] = JSONObject().put("p", 0.0) }
+        Thread {
+            val r = runCatching { LoraKatalog.stiahni(kat, p) { v -> synchronized(loryStav) { loryStav[repo]?.put("p", v.toDouble()) } } }
+            r.getOrNull()?.let { f -> Platforma.naHlavnom { Lory.pridany(); Lory.prepni(kat, f.name, true) } }
+            synchronized(loryStav) {
+                loryStav[repo] = JSONObject().put("p", 1.0).put("hotovo", r.isSuccess).put("chyba", r.exceptionOrNull()?.message ?: "")
+            }
+        }.apply { isDaemon = true }.start()
+        odpovedz(x, 200, "{}")
+    }
+
+    private fun loryMoje(x: HttpExchange) {
+        val kat = telo(x).optString("kat", "obrazky")
+        val a = org.json.JSONArray()
+        Lory.subory(kat).forEach { f -> a.put(JSONObject().put("meno", f.name).put("zapnuta", Lory.zapnuta(kat, f.name)).put("sila", Lory.sila(kat, f.name).toDouble()).put("mb", f.length() / 1_000_000)) }
+        odpovedz(x, 200, JSONObject().put("lory", a).toString())
+    }
+
+    private fun loryPrepni(x: HttpExchange) {
+        val t = telo(x); val kat = t.optString("kat", "obrazky"); val meno = t.optString("meno")
+        if (Lory.subory(kat).none { it.name == meno }) throw IllegalStateException("LoRA $meno nie je v PC")
+        Platforma.naHlavnom {
+            if (t.has("sila")) Lory.nastavSilu(kat, meno, t.optDouble("sila", 1.0).toFloat())
+            if (t.has("zapnut")) Lory.prepni(kat, meno, t.optBoolean("zapnut"))
+        }
+        odpovedz(x, 200, "{}")
+    }
+
     private fun info(x: HttpExchange) {
         val j = JSONObject()
             .put("meno", meno())
             .put("model", ChatJadro.nazovModelu())
             .put("pripraveny", ChatJadro.stav == StavModelu.PRIPRAVENY)
             .put("obrazky", ObrazkyJadro.aktivnyModel != null)
+            .put("lory", true)
             .put("video", ObrazkyJadro.videoSada() != null)
             .put("rozhybat", ObrazkyJadro.i2vSada() != null)
             .put("vylepsit", VylepsenieJadro.mamModel())

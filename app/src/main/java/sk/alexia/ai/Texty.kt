@@ -14,10 +14,14 @@ object T {
     }
 
     private val sk = mapOf(
-        "dab_dva" to "Dva hlasy – muž a žena",
-        "dab_dva_info" to "Appka podľa výšky pôvodného hlasu v každej replike zistí, či hovorí muž alebo žena, a použije k tomu mužský alebo ženský hlas.",
-        "dab_hlas_muz" to "Mužský hlas",
-        "dab_hlas_zena" to "Ženský hlas",
+        "dab_demucs" to "Sťahujem model na oddelenie hlasov od hudby (~174 MB)… %1\$d %%",
+        "dab_oddelujem" to "Oddeľujem hlasy od hudby (AI) %1\$d / %2\$d",
+        "dab_hovoriaci_model" to "Sťahujem model na rozpoznanie hovoriacich…",
+        "dab_hovoriaci" to "Zisťujem, kto kedy hovorí…",
+        "dab_dva" to "Rôzne hlasy pre postavy",
+        "dab_dva_info" to "AI rozpozná, kto kedy hovorí, a každá postava dostane vlastný hlas – mužom Jirka (aj hlbší / vyšší), ženám Lili a ďalšie. Postava znie rovnako celé video.",
+        "dab_hlas_muz" to "Základný mužský hlas",
+        "dab_hlas_zena" to "Základný ženský hlas",
         "zavriet" to "Zavrieť",
         "preh_externe" to "Otvoriť v inom prehrávači",
         "preh_nenajdene" to "Video sa nenašlo",
@@ -484,8 +488,12 @@ object T {
         "zrusit" to "Zrušiť",
     )
     private val en = mapOf(
-        "dab_dva" to "Two voices – male and female",
-        "dab_dva_info" to "For each line the app detects from the original voice pitch whether a man or a woman speaks and uses a male or female voice.",
+        "dab_demucs" to "Downloading the voice/music separation model (~174 MB)… %1\$d %%",
+        "dab_oddelujem" to "Separating voices from music (AI) %1\$d / %2\$d",
+        "dab_hovoriaci_model" to "Downloading the speaker recognition model…",
+        "dab_hovoriaci" to "Finding out who speaks when…",
+        "dab_dva" to "Different voices for characters",
+        "dab_dva_info" to "AI recognizes who speaks when and every character gets its own voice – men Jirka (also deeper / higher), women Lili and others. A character sounds the same through the whole video.",
         "dab_hlas_muz" to "Male voice",
         "dab_hlas_zena" to "Female voice",
         "zavriet" to "Close",

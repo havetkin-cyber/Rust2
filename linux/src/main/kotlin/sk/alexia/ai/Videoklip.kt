@@ -119,6 +119,20 @@ object Videoklip {
 
     private fun priecinokSpevu() = File(Platforma.priecinok, "spev-modely").apply { mkdirs() }
 
+    /** modely Wav2Lip + detektor tváre (aj pre pery v dabingu); blokuje, vráti priečinok */
+    internal fun modelySpevu(p: (Float) -> Unit): File {
+        val dir = priecinokSpevu()
+        MODELY_SPEVU.forEachIndexed { idx, (meno, url) ->
+            val f = File(dir, meno)
+            if (!f.exists() || f.length() < 1_000_000) {
+                val tmp = File(dir, "$meno.part")
+                stiahni(url, tmp) { x -> p((idx + x) / MODELY_SPEVU.size) }
+                tmp.renameTo(f)
+            }
+        }
+        return dir
+    }
+
     /**
      * Postava z obrázka spieva skladbu: pery sa hýbu podľa spevu, pod tým pôvodná skladba.
      * Len obrázky vytvorené v Alexia AI (nie fotky skutočných ľudí). Beží v samostatnom procese na procesore.

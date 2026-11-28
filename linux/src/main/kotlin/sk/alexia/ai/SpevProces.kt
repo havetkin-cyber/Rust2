@@ -148,7 +148,7 @@ object SpevProces {
     // ---------- tvár ----------
 
     /** YOLOface 8n: 640×640, výstup [1, 20, 8400] (stred x, y, šírka, výška, skóre, 5 bodov). Vráti x1, y1, x2, y2. */
-    private fun najdiTvar(env: OrtEnvironment, s: OrtSession, img: BufferedImage): FloatArray? {
+    internal fun najdiTvar(env: OrtEnvironment, s: OrtSession, img: BufferedImage): FloatArray? {
         val k = 640f / maxOf(img.width, img.height)
         val nw = (img.width * k).roundToInt(); val nh = (img.height * k).roundToInt()
         val mensi = zmen(img, nw, nh)
@@ -180,7 +180,7 @@ object SpevProces {
     }
 
     /** Wav2Lip chce 6 kanálov: tvár so zakrytou spodnou polovicou + celá tvár, BGR, [0,1] */
-    private fun pripravTvar(v: BufferedImage): FloatArray {
+    internal fun pripravTvar(v: BufferedImage): FloatArray {
         val d = FloatArray(6 * 9216)
         for (y in 0 until 96) for (x in 0 until 96) {
             val c = v.getRGB(x, y)
@@ -194,7 +194,7 @@ object SpevProces {
     }
 
     /** oblasť úst: spodných ~55 % výrezu, mäkké okraje (inak by bol vidieť štvorec) */
-    private fun maskaUst(s: Int): FloatArray {
+    internal fun maskaUst(s: Int): FloatArray {
         val m = FloatArray(s * s)
         for (y in 0 until s) for (x in 0 until s) {
             val fy = y.toFloat() / s; val fx = x.toFloat() / s
@@ -205,7 +205,7 @@ object SpevProces {
         return m
     }
 
-    private fun zmen(src: BufferedImage, w: Int, h: Int): BufferedImage {
+    internal fun zmen(src: BufferedImage, w: Int, h: Int): BufferedImage {
         val d = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         d.createGraphics().apply {
             setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)

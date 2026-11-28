@@ -53,7 +53,7 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
   **češtiny alebo slovenčiny** chatovým modelom → dabing AI hlasom **Piper Jirka (CZ, muž)** alebo **Lili (SK, žena)**, pre slovenčinu aj
   hlasy Supertonic, načasovaný podľa pôvodných replík (dlhšie repliky sa zrýchlia). **Dva hlasy** (zapnuté): podľa výšky pôvodného hlasu v každej replike hovorí muž Jirka alebo žena Lili / Supertonic. Pôvodná hudba a zvuky ostanú v pozadí, hlasy sa stíšia;
   titulky .srt aj priamo v MP4. Hlasy hercov sa nenapodobňujú. Všetko potrebné si stiahne sám: Whisper turbo, hlas Piper, ffmpeg, yt-dlp (aktualizuje raz za týždeň) a ak nemáš chatový model, aj Qwen3-4B (~2,5 GB) na preklad. Len na vlastné pozeranie.
-- 🖥 **Dabing ako v kine** (vetva dabing-pro, zatiaľ nevydané):
+- 🖥 **Dabing ako v kine** (od verzie 1.2.138):
   - **Rôzne hlasy pre postavy** – AI rozpozná, kto kedy hovorí (sherpa-onnx pyannote + 3D-Speaker), každá postava dostane vlastný hlas
     (Jirka, hlbší/vyšší Jirka, Lili, Supertonic a varianty) a znie rovnako celé video.
   - **Emócie** – hlasitosť (krik / šepot) a výška hlasu (rozrušenie) sa preberú z originálu; hlas herca sa nekopíruje.

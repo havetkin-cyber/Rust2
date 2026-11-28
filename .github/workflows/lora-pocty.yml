@@ -1,0 +1,17 @@
+name: Pomocné – počty LoRA (dočasné)
+on:
+  push:
+    branches: [lora-katalog]
+    paths: ['.github/workflows/lora-pocty.yml']
+jobs:
+  pocty:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          set +e
+          for r in Tongyi-MAI/Z-Image-Turbo black-forest-labs/FLUX.1-schnell stable-diffusion-v1-5/stable-diffusion-v1-5 runwayml/stable-diffusion-v1-5 Wan-AI/Wan2.2-TI2V-5B Wan-AI/Wan2.2-TI2V-5B-Diffusers Wan-AI/Wan2.1-T2V-1.3B Wan-AI/Wan2.1-T2V-1.3B-Diffusers Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen2.5-7B-Instruct meta-llama/Llama-3.2-3B-Instruct; do
+            n=0; u="https://huggingface.co/api/models?filter=base_model:adapter:$r&limit=1000&full=true"
+            curl -sL "$u" > o.json
+            echo "$r: spolu $(jq length o.json), nsfw-znacka $(jq '[.[]|select(.tags|index("not-for-all-audiences"))]|length' o.json), safetensors $(jq '[.[]|select([.siblings[]?.rfilename]|any(endswith(".safetensors")))]|length' o.json), gguf $(jq '[.[]|select([.siblings[]?.rfilename]|any(endswith(".gguf")))]|length' o.json)"
+          done

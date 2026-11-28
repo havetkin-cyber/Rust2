@@ -82,6 +82,8 @@ fun main(args: Array<String>) {
     // pomocný proces „postava spieva“ – ten istý program spustený s --spev (balík appky nemá samostatný java.exe)
     if (args.firstOrNull() == "--spev") { SpevProces.main(args.drop(1).toTypedArray()); return }
     if (args.firstOrNull() == "--prepis") { PrepisProces.main(args.drop(1).toTypedArray()); return }
+    if (args.firstOrNull() == "--demucs") { DemucsProces.main(args.drop(1).toTypedArray()); return }
+    if (args.firstOrNull() == "--pery") { PeryProces.main(args.drop(1).toTypedArray()); return }
     Platforma.presunDoDokumentov()
     spustiLog()
     ChatJadro.init()
@@ -2689,6 +2691,7 @@ private fun DabingObrazovka(spat: () -> Unit) {
     var hlas by remember { mutableStateOf("jirka") }
     var pozadie by remember { mutableStateOf(true) }
     var dva by remember { mutableStateOf(true) }
+    var pery by remember { mutableStateOf(false) }
     var hlasMuz by remember { mutableStateOf("jirka") }
     var vysledok by remember { mutableStateOf<File?>(null) }
     var chyba by remember { mutableStateOf("") }
@@ -2752,6 +2755,13 @@ private fun DabingObrazovka(spat: () -> Unit) {
                     }
                     Switch(checked = pozadie, onCheckedChange = { pozadie = it }, enabled = !d.pracuje, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
                 }
+                Row(Modifier.fillMaxWidth().clickable(enabled = !d.pracuje) { pery = !pery }.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(T("dab_pery_volba"), color = Farby.text, fontSize = 14.sp)
+                        Text(T("dab_pery_info"), color = Farby.tlmene, fontSize = 12.sp)
+                    }
+                    Switch(checked = pery, onCheckedChange = { pery = it }, enabled = !d.pracuje, colors = SwitchDefaults.colors(checkedTrackColor = Farby.fialova, checkedThumbColor = Color.White))
+                }
                 Spacer(Modifier.height(8.dp))
                 if (d.pracuje) {
                     Text(d.cinnost, color = Farby.text, fontWeight = FontWeight.SemiBold)
@@ -2763,7 +2773,7 @@ private fun DabingObrazovka(spat: () -> Unit) {
                     GradientTlacidlo(T("dab_spustit"), Icons.Default.RecordVoiceOver, Modifier.fillMaxWidth(), enabled = odkaz.isNotBlank() || subor != null) {
                         chyba = ""; vysledok = null
                         val zena = if (dva && hlas == "jirka") "lili" else hlas
-                        d.spusti(subor?.path ?: odkaz.trim(), jazyk, zena, if (dva) hlasMuz else null, pozadie) { f, e -> if (f != null) vysledok = f else chyba = e }
+                        d.spusti(subor?.path ?: odkaz.trim(), jazyk, zena, if (dva) hlasMuz else null, pozadie, pery) { f, e -> if (f != null) vysledok = f else chyba = e }
                     }
                 }
                 if (chyba.isNotBlank()) Text("⚠ $chyba", color = Farby.cervena, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))

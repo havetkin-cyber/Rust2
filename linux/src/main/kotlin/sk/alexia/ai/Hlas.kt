@@ -304,9 +304,13 @@ object Hlas {
     }
 
     /** Lili: jeden kúsok cez Piper (surový 16-bit zvuk) */
-    private fun lili(kus: String, dlzka: Float, mdl: File = model()): Pair<FloatArray, Int> {
-        val pb = ProcessBuilder(program().path, "--model", mdl.path, "--output_raw", "--length_scale", "%.3f".format(java.util.Locale.ROOT, dlzka),
+    private fun lili(kus: String, dlzka: Float, mdl: File = model(), sum: Float? = null, sumW: Float? = null): Pair<FloatArray, Int> {
+        val argy = mutableListOf(program().path, "--model", mdl.path, "--output_raw", "--length_scale", "%.3f".format(java.util.Locale.ROOT, dlzka),
             "--espeak_data", File(program().parentFile, "espeak-ng-data").path)
+        // výraznosť (dabing): väčší šum = živší, menej monotónny prednes
+        sum?.let { argy += listOf("--noise_scale", "%.3f".format(java.util.Locale.ROOT, it)) }
+        sumW?.let { argy += listOf("--noise_w", "%.3f".format(java.util.Locale.ROOT, it)) }
+        val pb = ProcessBuilder(argy)
             .directory(program().parentFile)
         if (!Platforma.jeWindows) pb.environment()["LD_LIBRARY_PATH"] = program().parentFile.path
         pb.redirectError(File(Platforma.logy, "piper-chyba.log"))
@@ -423,13 +427,13 @@ object Hlas {
     }
 
     /** jedna replika dabingu → zvuk; [rychlost] > 1 = rýchlejšie */
-    fun syntetizuj(text: String, id: String, rychlost: Float, jazyk: String): Pair<FloatArray, Int> =
+    fun syntetizuj(text: String, id: String, rychlost: Float, jazyk: String, sum: Float? = null, sumW: Float? = null): Pair<FloatArray, Int> =
         if (jeSt(id)) {
             val m = stModel()
             val g = com.k2fsa.sherpa.onnx.GenerationConfig()
             g.sid = id.drop(2).toIntOrNull() ?: 0; g.speed = rychlost; g.numSteps = 8; g.extra = mapOf("lang" to jazyk)
             val a = m.generateWithConfig(text, g); a.samples to a.sampleRate
-        } else lili(text, 1f / rychlost, piperModel(id))
+        } else lili(text, 1f / rychlost, piperModel(id), sum, sumW)
 
     fun zastav() {
         hovori = null

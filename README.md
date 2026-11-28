@@ -60,6 +60,15 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
   - **Čisté pozadie** – AI oddelí hlasy od hudby (Demucs htdemucs ako v ALEXIA DJ): hudba a efekty ostanú, pôvodná reč zmizne;
     Whisper prepisuje už čisté hlasy (menej chýb a halucinácií).
   - **Preklad na dĺžku vety** – preklad sa píše tak, aby sa zmestil do času originálu (~14 znakov za sekundu), menej zrýchľovania.
+  - **Herecký prednes** – preklad určí pri každej replike emóciu (radosť, nadšenie, smútok, hnev, strach, šepot, krik) a hlas podľa nej
+    mení tempo, výšku, hlasitosť a živosť intonácie (Piper noise_scale / noise_w).
+  - **Smiech a vzdychy ostanú** – neverbálne zvuky (smiech, vzdych, „hmm“) sa nedabujú, zostane pôvodný zvuk z Demucsu.
+  - **Preklad s kontextom** – model si najprv prečíta celý prepis (o čom to je, postavy a ich pohlavie, tykanie / vykanie, mená a pojmy)
+    a pri každej dávke vidí aj posledné preložené repliky → rovnaké mená a správny rod celé video.
+  - **Skákanie do reči** – iná postava môže začať až 0,35 s pred koncom predošlej (ako v origináli), tá istá postava sa nikdy neprekrýva.
+  - **Vyrovnaná hlasitosť** – výsledný zvuk sa normalizuje na -16 LUFS (loudnorm), dabing nie je raz tichý a raz hlasný.
+  - **Pery (experimentálne, predvolene vypnuté)** – Wav2Lip prekreslí ústa hlavnej postavy podľa dabingu (len keď znie dabing);
+    video sa prekóduje na 25 snímok/s. Pri chybe ostane pôvodné video.
 - ✅🖥 **Sekcia Prompt** – model, ktorý vidí obrázky (Qwen3-VL 2B, ~1,8 GB, stiahne sa pri prvom použití), napíše z hocijakého obrázka –
   aj bežnej fotky – veľmi podrobný anglický prompt (štýl, postava, tvár, vlasy, oblečenie, póza, prostredie, svetlo, kamera, farby),
   alebo len opis štýlu. Beží na procesore, skutočných ľudí nepomenúva, explicitný obsah nespracuje. V mobile v Obrázkoch cez PC.

@@ -30,7 +30,22 @@ object Dabing {
     private const val SR_DAB = 24000       // výsledná stopa dabingu
 
     private class Replika(var od: Double, var po: Double, var text: String = "", var preklad: String = "", var muz: Boolean? = null,
-                          var hovoriaci: Int = -1, var db: Double = -30.0, var f0: Double? = null)
+                          var hovoriaci: Int = -1, var db: Double = -30.0, var f0: Double? = null, var emocia: String = "neutral")
+
+    /** prednes podľa emócie: rýchlosť, výška, hlasitosť, Piper noise_scale / noise_w (živosť intonácie) */
+    private data class Prednes(val rychlost: Float, val vyska: Float, val zisk: Float, val sum: Float?, val sumW: Float?)
+    private val PREDNES = mapOf(
+        "neutral" to Prednes(1f, 1f, 1f, null, null),
+        "happy" to Prednes(1.05f, 1.03f, 1.05f, 0.75f, 0.9f),
+        "excited" to Prednes(1.1f, 1.05f, 1.15f, 0.8f, 1f),
+        "sad" to Prednes(0.9f, 0.97f, 0.85f, 0.55f, 0.6f),
+        "angry" to Prednes(1.05f, 0.98f, 1.25f, 0.8f, 0.9f),
+        "scared" to Prednes(1.08f, 1.04f, 0.95f, 0.85f, 1f),
+        "whisper" to Prednes(0.95f, 1f, 0.55f, 0.5f, 0.5f),
+        "shout" to Prednes(1.05f, 1.03f, 1.35f, 0.85f, 1f),
+    )
+    /** citoslovcia bez prekladu (smiech, vzdych…) – nechá sa pôvodný zvuk z Demucsu */
+    private val CITOSLOVCIA = Regex("^(?:\\s|[.,!?…-])*(?:(?:ha|he|hi|ah|aah|oh|ooh|uh|um|umm|hmm|mm|mhm|wow|whoa|ow|ouch|eh|huh|oops|yay|ugh|aw|aww|ahh|ohh|uhh|hm)+(?:\\s|[.,!?…-])*)+$", RegexOption.IGNORE_CASE)
 
     /** hlas postavy: Piper/Supertonic id + posun výšky (1 = bez zmeny) */
     private data class Hlasovka(val id: String, val vyska: Float)
@@ -43,7 +58,11 @@ object Dabing {
         spusti(zdroj, jazyk, hlas, null, pozadie, hotovo)
 
     /** [hlasMuz] != null → dva hlasy: muž/žena podľa výšky pôvodného hlasu v každej replike ([hlas] = ženský) */
-    fun spusti(zdroj: String, jazyk: String, hlas: String, hlasMuz: String?, pozadie: Boolean, hotovo: (File?, String) -> Unit) {
+    fun spusti(zdroj: String, jazyk: String, hlas: String, hlasMuz: String?, pozadie: Boolean, hotovo: (File?, String) -> Unit) =
+        spusti(zdroj, jazyk, hlas, hlasMuz, pozadie, false, hotovo)
+
+    /** [pery] = experimentálne prekreslenie úst hlavnej postavy podľa dabingu (Wav2Lip) */
+    fun spusti(zdroj: String, jazyk: String, hlas: String, hlasMuz: String?, pozadie: Boolean, pery: Boolean, hotovo: (File?, String) -> Unit) {
         if (pracuje) return
         val postavy = hlasMuz != null
         pracuje = true; zrusit = false; priebeh = 0f; cinnost = T("dab_pripravujem")
@@ -150,7 +169,13 @@ object Dabing {
                     println("dabing: $posledna – skúšam ďalší model")
                 }
                 if (!hotovo) throw IllegalStateException(posledna.ifBlank { T("dab_whisper_chyba") })
-                val reci = repliky.filter { it.text.length >= 2 }
+                // neverbálne zvuky (smiech, vzdych, výkrik bez slov): nedabujú sa – ostane pôvodný hlas z Demucsu
+                val medDbVsetky = repliky.map { it.db }.sorted().let { if (it.isEmpty()) -30.0 else it[it.size / 2] }
+                val neverbalne = if (oddelene && pozadie) repliky.filter { r ->
+                    (r.text.isBlank() || CITOSLOVCIA.matches(r.text)) && r.db > medDbVsetky - 8 && r.po - r.od >= 0.25
+                } else emptyList()
+                println("dabing: neverbálnych úsekov ${neverbalne.size}")
+                val reci = repliky.filter { it.text.length >= 2 && !CITOSLOVCIA.matches(it.text) }
                 if (reci.isEmpty()) throw IllegalStateException(T("dab_bez_reci"))
 
                 // kto hovorí: podľa rozpoznania hovoriacich, inak aspoň muž/žena podľa výšky hlasu
@@ -167,52 +192,87 @@ object Dabing {
                 krok(0.5f, T("dab_prekladam", 0, reci.size))
                 pripravPrekladac { p -> Platforma.naHlavnom { priebeh = 0.5f; cinnost = T("dab_prekladac", (p * 100).toInt()) } }
                 if (!ChatJadro.cakajNaModel()) throw IllegalStateException(T("dab_treba_chat"))
-                prelozVsetko(reci, jazyk) { hotovych -> krok(0.5f + 0.2f * hotovych / reci.size, T("dab_prekladam", hotovych, reci.size)) }
+                krok(0.5f, T("dab_kontext"))
+                val kontext = runCatching { kontextPrekladu(reci, jazyk) }.onFailure { println("dabing: kontext: ${it.message}") }.getOrDefault("")
+                println("dabing: kontext prekladu:\n$kontext")
+                prelozVsetko(reci, jazyk, kontext) { hotovych -> krok(0.5f + 0.2f * hotovych / reci.size, T("dab_prekladam", hotovych, reci.size)) }
                 Platforma.naHlavnom { ChatJadro.uvolniPamat() }
 
-                // 5) dabing: repliky idú za sebou a NIKDY sa neprekrývajú; každá postava svoj hlas, hlasitosť a výška podľa originálu
+                // 5) dabing: repliky tej istej postavy sa neprekrývajú; iná postava môže skočiť do reči (max 0,35 s), ako v origináli
+                //    každá postava svoj hlas, hlasitosť, výška a prednes podľa originálu a emócie
                 val stopa = FloatArray((dlzka * SR_DAB).toInt() + SR_DAB * 30)
                 val medianDb = reci.map { it.db }.sorted().let { it[it.size / 2] }
                 val medianF0 = reci.groupBy { it.hovoriaci }.mapValues { (_, l) -> l.mapNotNull { it.f0 }.sorted().let { v -> if (v.isEmpty()) null else v[v.size / 2] } }
-                var kurzor = 0.0
+                var kurzor = 0.0; var predosly = -2
                 reci.forEachIndexed { i, r ->
                     krok(0.7f + 0.22f * i / reci.size, T("dab_hovorim", i + 1, reci.size))
                     if (r.preklad.isBlank()) return@forEachIndexed
-                    val start = maxOf(r.od, kurzor + 0.06)
+                    val inaPostava = postavy && r.hovoriaci >= 0 && predosly >= 0 && r.hovoriaci != predosly
+                    val start = if (inaPostava) maxOf(r.od, kurzor - 0.35) else maxOf(r.od, kurzor + 0.06)
+                    val pr = PREDNES[r.emocia] ?: PREDNES.getValue("neutral")
                     val dalsi = reci.getOrNull(i + 1)?.od ?: (dlzka + 1.0)
                     val miesto = (dalsi - start - 0.06).coerceAtLeast(0.5)
                     val zaklad = hlasy[r.hovoriaci] ?: if (postavy && r.muz == true) Hlasovka(hlasMuz ?: "jirka", 1f) else Hlasovka(hlas, 1f)
                     // rozrušenie: vyšší hlas ako je u postavy bežné → dabing o kúsok vyšší (a naopak)
                     val pomer = r.f0?.let { f -> medianF0[r.hovoriaci]?.let { m -> f / m } } ?: 1.0
-                    val vyska = zaklad.vyska * when { pomer > 1.15 -> 1.04f; pomer < 0.88 -> 0.97f; else -> 1f }
-                    var res = hovor(r.preklad, zaklad.id, vyska, 1f, jazyk)
+                    val vyska = zaklad.vyska * pr.vyska * when { pomer > 1.15 -> 1.04f; pomer < 0.88 -> 0.97f; else -> 1f }
+                    var res = hovor(r.preklad, zaklad.id, vyska, pr.rychlost, jazyk, pr.sum, pr.sumW)
                     val trvanie = res.size.toDouble() / SR_DAB
-                    if (trvanie > miesto) res = hovor(r.preklad, zaklad.id, vyska, (trvanie / miesto).coerceAtMost(1.8).toFloat(), jazyk)
-                    // krik / šepot: hlasitosť podľa originálu (zmiernená)
-                    val zisk = Math.pow(10.0, (r.db - medianDb) * 0.6 / 20).coerceIn(0.6, 1.45).toFloat()
+                    if (trvanie > miesto) res = hovor(r.preklad, zaklad.id, vyska, (pr.rychlost * trvanie / miesto).coerceAtMost(1.8).toFloat(), jazyk, pr.sum, pr.sumW)
+                    // krik / šepot: hlasitosť podľa originálu (zmiernená) a emócie
+                    val zisk = (Math.pow(10.0, (r.db - medianDb) * 0.6 / 20) * pr.zisk).coerceIn(0.45, 1.6).toFloat()
                     val od = (start * SR_DAB).toInt()
-                    for (j in res.indices) { val k = od + j; if (k < stopa.size) stopa[k] = jemnyLimit(res[j] * 0.92f * zisk) }
-                    kurzor = start + res.size.toDouble() / SR_DAB
+                    for (j in res.indices) { val k = od + j; if (k < stopa.size) stopa[k] = jemnyLimit(stopa[k] + res[j] * 0.92f * zisk) }
+                    kurzor = maxOf(kurzor, start + res.size.toDouble() / SR_DAB); predosly = r.hovoriaci
                 }
                 val dabWav = File(tmp, "dabing.wav"); zapisWav(dabWav, stopa, SR_DAB)
 
-                // 6) titulky + spojenie
-                krok(0.93f, T("dab_spajam"))
+                // 6) pery (experimentálne): ústa hlavnej postavy podľa dabingu
+                var videoPery: File? = null
+                if (pery) runCatching {
+                    krok(0.92f, T("dab_pery_modely"))
+                    val modely = Videoklip.modelySpevu { p -> Platforma.naHlavnom { priebeh = 0.92f; cinnost = T("dab_pery_modely") + " " + (p * 100).toInt() + " %" } }
+                    val dab16 = File(tmp, "dab16.f32"); zapisF32(dab16, prevzorkuj(stopa, SR_DAB, SR))
+                    val vp = File(tmp, "pery.mp4")
+                    val p = ProcessBuilder(Videoklip.pomocnyProces("sk.alexia.ai.PeryProces", "--pery",
+                        listOf(modely.path, video.path, dab16.path, ff, vp.path))).redirectErrorStream(true).start()
+                    proces = p
+                    p.inputStream.bufferedReader().forEachLine { l ->
+                        val m = Regex("^P (\\d+) (\\d+)$").find(l.trim())
+                        if (m != null) { val i = m.groupValues[1].toInt(); val n = maxOf(1, m.groupValues[2].toInt()); krok(0.92f + 0.05f * i / n, T("dab_pery", (100 * i / n).coerceAtMost(100))) }
+                        else println("pery: $l")
+                    }
+                    val kod = p.waitFor()
+                    if (zrusit) throw IllegalStateException(T("klip_zrusene"))
+                    if (kod == 0 && vp.length() > 10_000) videoPery = vp else println("dabing: pery zlyhali (kód $kod) – ostáva pôvodné video")
+                }.onFailure { if (zrusit) throw it; println("dabing: pery nejdú: ${it.message}") }
+
+                // 7) titulky + spojenie (+ neverbálne zvuky, vyrovnanie hlasitosti na -16 LUFS)
+                krok(0.97f, T("dab_spajam"))
                 val srt = File(tmp, "titulky.srt").apply { writeText(srt(reci)) }
                 val out = File(VideoJadro.priecinok().apply { mkdirs() }, "dabing_${jazyk}_${nazov}_${System.currentTimeMillis() / 1000}.mp4")
                 val jazykMeta = if (jazyk == "cs") "ces" else "slk"
-                val vstupy = mutableListOf("-i", video.path, "-i", dabWav.path, "-i", srt.path)
+                val vstupy = mutableListOf("-i", (videoPery ?: video).path, "-i", dabWav.path, "-i", srt.path)
+                var dalsi = 3
+                val origA = if (videoPery != null) { vstupy += listOf("-i", video.path); dalsi++ } else 0
+                val nvF = File(tmp, "neverbalne.s16")
+                val nvIdx = if (oddelene && pozadie && neverbalne.isNotEmpty() && runCatching { vystrihni(vocF, nvF, neverbalne) }.isSuccess) {
+                    vstupy += listOf("-f", "s16le", "-ar", "44100", "-ac", "2", "-i", nvF.path); dalsi++
+                } else -1
+                val nv = if (nvIdx >= 0) "[$nvIdx:a]aresample=48000,volume=0.9[nv];" else ""
+                val nvIn = if (nvIdx >= 0) "[nv]" else ""; val nvN = if (nvIdx >= 0) 1 else 0
                 val filter = when {
-                    !pozadie -> "[1:a]aresample=48000[a]"
+                    !pozadie -> "[1:a]aresample=48000[m]"
                     oddelene -> {
                         // čisté pozadie z Demucsu (bez reči) – pri dabingu sa len jemne stíši
                         vstupy += listOf("-f", "s16le", "-ar", "44100", "-ac", "2", "-i", bgF.path)
-                        "[1:a]aresample=48000,asplit=2[d][sc];[3:a]aresample=48000[p];[p][sc]sidechaincompress=threshold=0.03:ratio=3:attack=20:release=400[bg];[bg][d]amix=inputs=2:duration=longest:normalize=0[a]"
+                        nv + "[1:a]aresample=48000,asplit=2[d][sc];[$dalsi:a]aresample=48000[p];[p][sc]sidechaincompress=threshold=0.03:ratio=3:attack=20:release=400[bg];" +
+                            "[bg][d]${nvIn}amix=inputs=${2 + nvN}:duration=longest:normalize=0[m]"
                     }
                     // záloha: pôvodné hlasy sú zvyčajne v strede sterea → odčítaním kanálov zmiznú
-                    else -> "[1:a]aresample=48000,asplit=2[d][sc];[0:a]aresample=48000,aformat=channel_layouts=stereo,pan=stereo|c0=0.7*c0-0.7*c1|c1=0.7*c1-0.7*c0,volume=0.8[p];" +
-                        "[p][sc]sidechaincompress=threshold=0.01:ratio=20:attack=10:release=500[bg];[bg][d]amix=inputs=2:duration=first:normalize=0[a]"
-                }
+                    else -> "[1:a]aresample=48000,asplit=2[d][sc];[$origA:a]aresample=48000,aformat=channel_layouts=stereo,pan=stereo|c0=0.7*c0-0.7*c1|c1=0.7*c1-0.7*c0,volume=0.8[p];" +
+                        "[p][sc]sidechaincompress=threshold=0.01:ratio=20:attack=10:release=500[bg];[bg][d]amix=inputs=2:duration=first:normalize=0[m]"
+                } + ";[m]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[a]"
                 prikaz(listOf(ff, "-y", "-v", "error") + vstupy + listOf(
                     "-filter_complex", filter, "-map", "0:v:0", "-map", "[a]", "-map", "2:s:0",
                     "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-c:s", "mov_text", "-shortest",
@@ -220,7 +280,7 @@ object Dabing {
                     "-movflags", "+faststart", out.path))
                 srt.copyTo(File(out.path.removeSuffix(".mp4") + ".srt"), overwrite = true)
                 File(out.path + ".json").writeText(org.json.JSONObject().put("typ", "dabing").put("zdroj", zdroj).put("jazyk", jazyk)
-                    .put("hlas", hlas).put("hlas_muz", hlasMuz ?: "").put("replik", reci.size).put("trvanie", System.currentTimeMillis() - start).toString())
+                    .put("hlas", hlas).put("hlas_muz", hlasMuz ?: "").put("pery", videoPery != null).put("replik", reci.size).put("trvanie", System.currentTimeMillis() - start).toString())
                 vysledok = out
             }.onFailure { chyba = it.message ?: T("dab_chyba") }
             tmp.deleteRecursively()
@@ -258,14 +318,44 @@ object Dabing {
     }
 
     /** syntéza s posunom výšky: TTS rýchlejšie/pomalšie a prehratie r× → výška ×r, dĺžka podľa [rychlost] */
-    private fun hovor(text: String, id: String, vyska: Float, rychlost: Float, jazyk: String): FloatArray {
+    private fun hovor(text: String, id: String, vyska: Float, rychlost: Float, jazyk: String, sum: Float? = null, sumW: Float? = null): FloatArray {
         val r = vyska.toDouble()
-        val (x, sr) = Hlas.syntetizuj(Hlas.naCitanie(text), id, (rychlost / vyska).coerceIn(0.5f, 3f), jazyk)
+        val (x, sr) = Hlas.syntetizuj(Hlas.naCitanie(text), id, (rychlost / vyska).coerceIn(0.5f, 3f), jazyk, sum, sumW)
         val y = if (kotlin.math.abs(r - 1) < 0.005) x else FloatArray((x.size / r).toInt()) { i ->
             val t = i * r; val a = t.toInt(); val f = (t - a).toFloat()
             val v0 = x.getOrElse(a) { 0f }; val v1 = x.getOrElse(a + 1) { v0 }; v0 + (v1 - v0) * f
         }
         return prevzorkuj(y, sr, SR_DAB)
+    }
+
+    /** z hlasovej stopy Demucsu (s16 stereo 44,1 kHz) nechá len neverbálne úseky (s prelínaním), zvyšok ticho */
+    private fun vystrihni(voc: File, out: File, useky: List<Replika>) {
+        val fade = 0.04 * 44100
+        val us = useky.map { (it.od * 44100).toLong() to (it.po * 44100).toLong() }.sortedBy { it.first }
+        val buf = ByteArray(1 shl 20)
+        var i = 0L; var u = 0
+        voc.inputStream().buffered().use { vin -> out.outputStream().buffered().use { vout ->
+            while (true) {
+                val n = vin.readNBytes(buf, 0, buf.size); if (n <= 0) break
+                val bb = ByteBuffer.wrap(buf, 0, n).order(ByteOrder.LITTLE_ENDIAN)
+                for (k in 0 until n / 4) {
+                    while (u < us.size && us[u].second <= i) u++
+                    var g = 0.0
+                    var j = u
+                    while (j < us.size && us[j].first <= i) {
+                        val (a, e) = us[j]
+                        if (i < e) g = maxOf(g, minOf(1.0, (i - a + 1) / fade, (e - i) / fade))
+                        j++
+                    }
+                    if (g < 1.0) {
+                        bb.putShort(4 * k, (bb.getShort(4 * k) * g).toInt().toShort())
+                        bb.putShort(4 * k + 2, (bb.getShort(4 * k + 2) * g).toInt().toShort())
+                    }
+                    i++
+                }
+                vout.write(buf, 0, n - n % 4)
+            }
+        } }
     }
 
     private fun jemnyLimit(v: Float): Float = if (v > 0.9f) 0.9f + (v - 0.9f) / (1 + (v - 0.9f) * 10) else if (v < -0.9f) -0.9f + (v + 0.9f) / (1 - (v + 0.9f) * 10) else v
@@ -412,31 +502,68 @@ object Dabing {
         l.await()
     }
 
-    private fun prelozVsetko(reci: List<Replika>, jazyk: String, priebeh: (Int) -> Unit) {
+    /**
+     * Pred prekladom si model prečíta celý prepis: o čom to je, kto sú postavy (pohlavie, tykanie / vykanie)
+     * a ako preložiť mená a pojmy – aby boli rovnaké celé video.
+     */
+    private fun kontextPrekladu(reci: List<Replika>, jazyk: String): String {
         val jazykMeno = if (jazyk == "cs") "Czech" else "Slovak"
-        val sys = "You are a professional film dubbing translator writing a $jazykMeno dubbing script. Each input line is N|seconds|text, " +
-            "where seconds is how long the original line lasts. Translate into natural, spoken, colloquial $jazykMeno that a voice actor can say " +
+        val prepis = StringBuilder()
+        for (r in reci) { val l = "${spk(r)}: ${r.text}\n"; if (prepis.length + l.length > 7000) break; prepis.append(l) }
+        val sys = "You prepare a film dubbing into $jazykMeno. Read the transcript (speaker labels S1, S2… or ? when unknown) and reply in English, briefly, in exactly this form:\n" +
+            "SUMMARY: one or two sentences about what happens\n" +
+            "CHARACTERS: one line per speaker label – gender, role, how they address the others in $jazykMeno (informal ty / formal vy)\n" +
+            "GLOSSARY: names and key terms → how to write them in $jazykMeno (keep personal names unchanged), separated by semicolons\nNothing else."
+        val sb = StringBuilder()
+        ChatJadro.generujPreSiet(listOf("system" to sys, "user" to prepis.toString()), 450) { b -> sb.append(String(b, Charsets.UTF_8)); !zrusit }
+        return ChatJadro.ocistiPrompt(sb.toString()).trim().take(1800)
+    }
+
+    private fun spk(r: Replika) = if (r.hovoriaci >= 0) "S${r.hovoriaci + 1}" else "?"
+
+    private fun prelozVsetko(reci: List<Replika>, jazyk: String, kontext: String, priebeh: (Int) -> Unit) {
+        val jazykMeno = if (jazyk == "cs") "Czech" else "Slovak"
+        val emocie = PREDNES.keys.joinToString("/")
+        val sys = "You are a professional film dubbing translator writing a $jazykMeno dubbing script. Each input line is N|seconds|speaker|text, " +
+            "where seconds is how long the original line lasts and speaker is the character label. Translate into natural, spoken, colloquial $jazykMeno that a voice actor can say " +
             "comfortably within that time (about 14 characters per second) – shorten, simplify and rephrase when needed, keep the meaning, tone and emotion. " +
-            "Return exactly the same numbering, one line per number, in the format N|translation, nothing else."
+            "Use the correct grammatical gender of the speaker and keep ty / vy, names and terms consistent with the context. " +
+            "For every line also pick how it should be acted: one of $emocie. " +
+            "Return exactly the same numbering, one line per number, in the format N|emotion|translation, nothing else." +
+            (if (kontext.isNotBlank()) "\n\nContext of the whole video:\n$kontext" else "")
         var hotovych = 0
+        val hotove = mutableListOf<Replika>()
         for (davka in reci.chunked(12)) {
-            val vstup = davka.mapIndexed { i, r -> "${i + 1}|${"%.1f".format(java.util.Locale.ROOT, r.po - r.od)}|${r.text}" }.joinToString("\n")
+            val predtym = hotove.takeLast(3).filter { it.preklad.isNotBlank() }
+            val uvod = if (predtym.isEmpty()) "" else "Previous lines (already translated, for continuity only – do not output them):\n" +
+                predtym.joinToString("\n") { "${spk(it)}: ${it.text} → ${it.preklad}" } + "\n\nTranslate:\n"
+            val vstup = uvod + davka.mapIndexed { i, r -> "${i + 1}|${"%.1f".format(java.util.Locale.ROOT, r.po - r.od)}|${spk(r)}|${r.text}" }.joinToString("\n")
             val sb = StringBuilder()
-            ChatJadro.generujPreSiet(listOf("system" to sys, "user" to vstup), 1200) { b -> sb.append(String(b, Charsets.UTF_8)); !zrusit }
+            ChatJadro.generujPreSiet(listOf("system" to sys, "user" to vstup), 1400) { b -> sb.append(String(b, Charsets.UTF_8)); !zrusit }
             val riadky = ChatJadro.ocistiPrompt(sb.toString()).lines()
             for (l in riadky) {
                 val m = Regex("^\\s*(\\d+)\\s*[|:.)-]\\s*(.+)$").find(l) ?: continue
                 val i = m.groupValues[1].toInt() - 1
-                if (i in davka.indices) davka[i].preklad = m.groupValues[2].trim().replace(Regex("^[0-9]+([.,][0-9]+)?\\s*s?\\s*\\|\\s*"), "")
+                if (i !in davka.indices) continue
+                var t = m.groupValues[2].trim().replace(Regex("^[0-9]+([.,][0-9]+)?\\s*s?\\s*\\|\\s*"), "")
+                // ak model zopakoval označenie hovoriaceho
+                t = t.replace(Regex("^(S\\d+|\\?)\\s*\\|\\s*"), "")
+                // emócia
+                val e = Regex("^\\s*\\[?([A-Za-z]+)\\]?\\s*\\|\\s*(.+)$").find(t)
+                if (e != null && e.groupValues[1].lowercase() in PREDNES) { davka[i].emocia = e.groupValues[1].lowercase(); t = e.groupValues[2].trim() }
+                davka[i].preklad = t
             }
             // čo sa nepreložilo v dávke, skúsi sa po jednom
             for (r in davka.filter { it.preklad.isBlank() }) {
                 val s1 = StringBuilder()
-                ChatJadro.generujPreSiet(listOf("system" to "Translate into natural spoken $jazykMeno for film dubbing. Reply with the translation only.", "user" to r.text), 200) { b -> s1.append(String(b, Charsets.UTF_8)); !zrusit }
+                ChatJadro.generujPreSiet(listOf("system" to "Translate into natural spoken $jazykMeno for film dubbing. Reply with the translation only." +
+                    (if (kontext.isNotBlank()) "\nContext:\n$kontext" else ""), "user" to r.text), 200) { b -> s1.append(String(b, Charsets.UTF_8)); !zrusit }
                 r.preklad = ChatJadro.ocistiPrompt(s1.toString()).lines().firstOrNull { it.isNotBlank() }.orEmpty().trim()
             }
+            hotove += davka
             hotovych += davka.size; priebeh(hotovych)
         }
+        println("dabing: emócie ${reci.groupingBy { it.emocia }.eachCount()}")
     }
 
     // ---------------- pomocné ----------------

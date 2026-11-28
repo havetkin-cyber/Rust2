@@ -71,7 +71,7 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
     video sa prekóduje na 25 snímok/s. Pri chybe ostane pôvodné video.
 - ✅🖥 **Sekcia Prompt** – model, ktorý vidí obrázky (Qwen3-VL 2B, ~1,8 GB, stiahne sa pri prvom použití), napíše z hocijakého obrázka –
   aj bežnej fotky – veľmi podrobný anglický prompt (štýl, postava, tvár, vlasy, oblečenie, póza, prostredie, svetlo, kamera, farby),
-  alebo len opis štýlu. Beží na procesore, skutočných ľudí nepomenúva, explicitný obsah nespracuje. V mobile v Obrázkoch cez PC.
+  alebo len opis štýlu. Beží na procesore, skutočných ľudí nepomenúva, explicitný obsah (nahota) nespracuje – bežné portréty, šaty s výstrihom či čipkou áno. V mobile v Obrázkoch cez PC.
 - ✅🖥 **Prenos štýlu bez písania** – model videnia sám opíše štýl predlohy a pridá ho ku Kleinu (prepínač *Automatický opis štýlu*).
 - ✅🖥 **Stopky** – pri tvorbe obrázka, videa aj vylepšenia beží čas od 0:00, po dokončení ukáže *Hotovo za m:ss*
 - ✅🖥 **Údaje pod obrázkom** – prompt (tlačidlo *Kopírovať prompt*), seed, čas tvorby, rozmer a model sa uložia k obrázku a ukážu sa v detaile

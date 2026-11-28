@@ -48,4 +48,15 @@ object Podpis {
         "breast", "nipple", "butt ", "explicit", "striptíz", "striptiz", "striptease",
     )
     fun zakazane(t: String): Boolean { val x = " " + t.lowercase() + " "; return zakazaneSlova.any { x.contains(it) } }
+
+    /**
+     * Opis existujúceho obrázka (model videnia): blokuje sa len skutočná nahota / sexuálny obsah, celé slová.
+     * Bežné slová v opise portrétu („intimate lighting“, „lace neckline“, „chest-length hair“) nevadia.
+     * Vráti nájdené slovo alebo null.
+     */
+    private val explicitneSlova = Regex(
+        "\\b(nude|nudes|nudity|naked|topless|bottomless|nipples?|areolae?|genitals?|genitalia|vagina|penis|pornographic|porn|nsfw|" +
+            "intercourse|sexual act|sex act|masturbat\\w*|undress(ed|ing)?|lingerie|underwear|panties|thong|bra|bras|bare breasts?|exposed breasts?|" +
+            "nahá|nahý|nahé|nahota|porno|vyzlečen\\w*)\\b", RegexOption.IGNORE_CASE)
+    fun explicitnyOpis(t: String): String? = explicitneSlova.find(t)?.value
 }

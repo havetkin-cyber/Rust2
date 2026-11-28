@@ -15,7 +15,7 @@ import javax.imageio.ImageIO
  *  - sekcia **Prompt**: z obrázka napíše veľmi podrobný anglický prompt pre FLUX / Z-Image / Klein / SD,
  *  - **prenos štýlu**: sám opíše štýl predlohy, aby Klein netipoval.
  * Beží na procesore (grafiku nechá obrázkovému modelu), po každom opise sa uvoľní.
- * Výstup prejde rovnakým filtrom ako všetko ostatné (Podpis.zakazane) – explicitný obsah appka nespracuje.
+ * Výstup prejde rovnakým filtrom ako všetko ostatné (Podpis.explicitnyOpis) – explicitný obsah appka nespracuje.
  */
 object Videnie {
     enum class Rezim { PROMPT, STYL }
@@ -37,6 +37,7 @@ object Videnie {
 
     private const val SYS_PROMPT =
         "You are a world-class prompt engineer for AI image generators (FLUX, Z-Image, Stable Diffusion). " +
+        "Use neutral, non-sexual wording for bodies and clothing (e.g. neckline, bodice, silhouette). " +
         "Look at the image very carefully and write ONE extremely detailed English prompt that would recreate it as closely as possible. " +
         "Be exhaustive – describe everything you can see, in this order: " +
         "1) type of image and overall style (photo, anime, 3D render, oil painting, etc.), " +
@@ -79,7 +80,7 @@ object Videnie {
                     if (rezim == Rezim.STYL) 160 else 700, vlakna)
                     ?: throw IllegalStateException(Llama.chyba().ifBlank { T("vid_chyba") })
                 val t = String(b, Charsets.UTF_8).trim().trim('"').replace(Regex("\\s+"), " ")
-                if (Podpis.zakazane(t)) throw IllegalStateException(T("vid_zakazane"))
+                Podpis.explicitnyOpis(t)?.let { slovo -> println("videnie: zablokované slovo „$slovo“"); throw IllegalStateException(T("vid_zakazane")) }
                 text = t
             }.onFailure { chyba = it.message ?: T("vid_chyba") }
             val trvanie = System.currentTimeMillis() - start

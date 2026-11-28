@@ -2323,6 +2323,8 @@ private fun LoraObrazovka(spat: () -> Unit) {
                     }
                 }
             }
+            // katalóg z Hugging Face – všetky LoRA pre modely appky
+            LoraKatalogSekcia(kat) { f -> Lory.pridany(); Lory.prepni(kat, f.name, true) }
             // pridanie
             Sekcia(T("lora_pridat")) {
                 OutlinedTextField(value = odkaz, onValueChange = { odkaz = it }, singleLine = true, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().nadKlavesnicou(),
@@ -2365,6 +2367,88 @@ private fun LoraObrazovka(spat: () -> Unit) {
     }
 }
 
+
+/** Katalóg LoRA z Hugging Face pre kategóriu: výber základného modelu, hľadanie, stiahnutie jedným ťuknutím */
+@Composable
+private fun LoraKatalogSekcia(kat: String, pridana: (File) -> Unit) {
+    val zaklady = remember(kat) { LoraKatalog.ZAKLADY.filter { it.kat == kat } }
+    var zaklad by remember(kat) { mutableStateOf(zaklady.first()) }
+    var zoznam by remember(kat) { mutableStateOf<List<LoraKatalog.Polozka>?>(null) }
+    var nacitava by remember { mutableStateOf(false) }
+    var chyba by remember { mutableStateOf("") }
+    var hladaj by remember { mutableStateOf("") }
+    var ukaz by remember { mutableIntStateOf(40) }
+    var stahuje by remember { mutableStateOf<String?>(null) }
+    var priebeh by remember { mutableFloatStateOf(0f) }
+    var verzia by remember { mutableIntStateOf(0) }
+    fun nacitaj(nanovo: Boolean) {
+        val z = zaklad; nacitava = true; chyba = ""; ukaz = 40
+        thread {
+            val r = runCatching { LoraKatalog.nacitaj(z, nanovo) }
+            Platforma.naHlavnom {
+                nacitava = false
+                if (z == zaklad) { zoznam = r.getOrNull(); r.exceptionOrNull()?.let { chyba = T("lkat_chyba") + " " + (it.message ?: "") } }
+            }
+        }
+    }
+    Sekcia(T("lkat_nadpis"), ikona = Icons.Default.CloudDownload) {
+        Text(T("lkat_info"), color = Farby.tlmene, fontSize = 12.sp)
+        Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            zaklady.forEach { z ->
+                FilterChip(selected = zaklad == z, onClick = { if (zaklad != z) { zaklad = z; zoznam = null; nacitaj(false) } }, label = { Text(z.nazov) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Farby.fialova, selectedLabelColor = Color.White, labelColor = Farby.text))
+            }
+        }
+        LaunchedEffect(kat) { if (zoznam == null && !nacitava) nacitaj(false) }
+        OutlinedTextField(value = hladaj, onValueChange = { hladaj = it; ukaz = 40 }, singleLine = true, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().nadKlavesnicou(),
+            placeholder = { Text(T("lkat_hladaj"), color = Farby.tlmene, fontSize = 13.sp) }, shape = RoundedCornerShape(14.dp),
+            leadingIcon = { Icon(Icons.Default.Search, null, tint = Farby.tlmene) },
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Farby.fialova, unfocusedBorderColor = Farby.okraj, focusedTextColor = Farby.text, unfocusedTextColor = Farby.text))
+        if (nacitava) {
+            Text(T("lkat_nacitavam", zaklad.nazov), color = Farby.tlmene, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+            LinearProgressIndicator(modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = Farby.ruzova, trackColor = Farby.plocha2)
+        }
+        if (chyba.isNotBlank()) Text(chyba, color = Farby.cervena, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+        val vsetky = zoznam
+        if (vsetky != null) {
+            val slova = hladaj.trim().lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
+            val filtr = remember(vsetky, hladaj) { vsetky.filter { p -> slova.all { p.repo.lowercase().contains(it) } } }
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(T("lkat_pocet", filtr.size, zaklad.nazov), color = Farby.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { nacitaj(true) }, enabled = !nacitava) { Text(T("lora_obnovit"), color = Farby.ruzova) }
+            }
+            if (filtr.isEmpty() && !nacitava) Text(T("lkat_prazdne"), color = Farby.tlmene, fontSize = 13.sp)
+            filtr.take(ukaz).forEach { p ->
+                val mam = remember(p, verzia, Lory.verzia) { LoraKatalog.mam(kat, p) }
+                Column(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Farby.plocha2).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(p.meno, color = Farby.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${p.autor} · ⬇ ${p.stiahnutia} · ♥ ${p.paci} · ${p.zmenene}", color = Farby.tlmene, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        IconButton(onClick = { Platforma.otvorOdkaz("https://huggingface.co/${p.repo}") }) { Icon(Icons.Default.OpenInNew, T("lkat_stranka"), tint = Farby.tlmene) }
+                        when {
+                            mam -> Icon(Icons.Default.CheckCircle, T("lkat_mam"), tint = Farby.ruzova, modifier = Modifier.padding(end = 10.dp))
+                            stahuje == p.repo -> CircularProgressIndicator(progress = { priebeh }, modifier = Modifier.size(28.dp).padding(end = 4.dp), color = Farby.ruzova, strokeWidth = 3.dp)
+                            else -> IconButton(onClick = {
+                                stahuje = p.repo; priebeh = 0f; chyba = ""
+                                thread {
+                                    val r = runCatching { LoraKatalog.stiahni(kat, p) { x -> Platforma.naHlavnom { priebeh = x } } }
+                                    Platforma.naHlavnom {
+                                        stahuje = null; verzia++
+                                        r.getOrNull()?.let(pridana)
+                                        r.exceptionOrNull()?.let { chyba = T("lora_chyba") + ": " + (it.message ?: "") }
+                                    }
+                                }
+                            }, enabled = stahuje == null) { Icon(Icons.Default.Download, T("stiahnut"), tint = Farby.ruzova) }
+                        }
+                    }
+                }
+            }
+            if (filtr.size > ukaz) TextButton(onClick = { ukaz += 40 }) { Text(T("lkat_dalsie", filtr.size - ukaz), color = Farby.ruzova) }
+        }
+    }
+}
 
 @Composable
 private fun PrenosStyluKarta() {

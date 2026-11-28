@@ -163,6 +163,8 @@ F(jintArray, generujEx)(JNIEnv* env, jobject, jlong h, jstring prompt, jstring n
                   && ok(sd_opt_set_int(o, "sample.steps", kroky))
                   && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg)) && kruhove(o) && lory(o)
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
+                  // VAE po kúskoch: dekódovanie (najmä úprava Kleinom) sa zmestí aj do spoločnej pamäte Legionu / 6 GB grafiky
+                  && ((void)sd_opt_set_bool(o, "vae_tiling.enabled", true), true)
                   && ok(sd_generate_image(ctx, o, &res));
     sd_opt_free(o);
     if (!good || !res || sd_result_get_image_count(res) == 0) { sd_result_free(res); if (g_chyba.empty()) g_chyba = "Obrázok sa nepodarilo vytvoriť"; return nullptr; }
@@ -213,6 +215,8 @@ F(jintArray, generujZPredlohy)(JNIEnv* env, jobject, jlong h, jstring prompt, js
                   // sila = skutočná úroveň šumu (0.4 = 60 % predlohy ostane). Bez toho by pri Z-Image/FLUX
                   // aj „0.6“ začínalo takmer z čistého šumu a vznikol by úplne nový obrázok.
                   && ok(sd_opt_set_string(o, "sample.args", "strength_as_noise_level=true,force_first_sigma=true"))
+                  // VAE po kúskoch: dekódovanie (najmä úprava Kleinom) sa zmestí aj do spoločnej pamäte Legionu / 6 GB grafiky
+                  && ((void)sd_opt_set_bool(o, "vae_tiling.enabled", true), true)
                   && ok(sd_generate_image(ctx, o, &res));
     sd_opt_free(o);
     if (t) sd_tensor_free(t);
@@ -269,6 +273,8 @@ F(jintArray, generujSReferenciami)(JNIEnv* env, jobject, jlong h, jstring prompt
                   && ok(sd_opt_set_float(o, "sample.guidance.txt_cfg", cfg)) && lory(o)
                   && (m.empty() || m == "auto" || ok(sd_opt_set_string(o, "sample.method", m.c_str())))
                   && (tenzory.empty() || ok(sd_opt_set_tensors(o, "ref_images", tenzory.data(), tenzory.size())))
+                  // VAE po kúskoch: dekódovanie (najmä úprava Kleinom) sa zmestí aj do spoločnej pamäte Legionu / 6 GB grafiky
+                  && ((void)sd_opt_set_bool(o, "vae_tiling.enabled", true), true)
                   && ok(sd_generate_image(ctx, o, &res));
     sd_opt_free(o);
     for (auto* t : tenzory) if (t) sd_tensor_free(t);

@@ -49,6 +49,7 @@ Všetky obrazovky sú **rozbaľovacie** ako otázky a odpovede: vidno len nadpis
   a model ich prekreslí do jednej scény). Windows aj Linux; v mobile cez PC. Len obrázky z Alexia AI.
 - 🖥 **Prehrávač priamo v appke** (PC a Linux) – videá (AI video, videoklip, spev, dabing) sa prehrajú v okne Alexia AI:
   play/pauza, posúvanie, hlasitosť, tlačidlo na otvorenie v inom prehrávači. Netreba inštalovať VLC – obraz aj zvuk dekóduje ffmpeg.
+- 🖥 **Úpravy bez pádu na Legione** – obrázok sa na konci skladá po kúskoch (VAE tiling), úprava Kleinom sa zmestí aj do spoločnej pamäte.
 - 🖥 **Celá šírka okna** (PC a Linux) – obsah appky sa roztiahne na celé okno, nie je len úzky stĺpec v strede.
 - 🖥 **Dabing videa** (PC a Linux) – odkaz z YouTube alebo video zo súboru → prepis reči (**Whisper large-v3-turbo**, ~1 GB, presnejší ako malý model; aj čínština) → preklad do
   **češtiny alebo slovenčiny** chatovým modelom → dabing AI hlasom **Piper Jirka (CZ, muž)** alebo **Lili (SK, žena)**, pre slovenčinu aj

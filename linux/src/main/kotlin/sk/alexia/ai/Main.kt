@@ -178,7 +178,7 @@ private fun Appka() {
         val n = ChatJadro.nastavenia
         val spodok by androidx.compose.animation.core.animateDpAsState(
             if (n.posunKlavesnica && Klavesnica.pise) maxHeight * (n.vyskaKlavesnice / 100f) else 0.dp, label = "klavesnica")
-        Column(Modifier.fillMaxHeight().widthIn(max = 960.dp).fillMaxWidth().align(Alignment.TopCenter).padding(bottom = spodok)) {
+        Column(Modifier.fillMaxHeight().fillMaxWidth().padding(horizontal = 12.dp).align(Alignment.TopCenter).padding(bottom = spodok)) {
         if (Sifra.zamknute) { Odomknutie(); return@Column }
         Zalozky(obrazovka) { obrazovka = it }
         Box(Modifier.weight(1f)) {
